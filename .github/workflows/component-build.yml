@@ -115,6 +115,11 @@ jobs:
         with:
           name: native-ipk-candidates
           path: dist
+      - name: Install OpenWrt-compatible musl runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl
+          test -e /lib/ld-musl-aarch64.so.1
       - name: Verify native ARM64 executable version for each candidate
         run: |
           set -euo pipefail
