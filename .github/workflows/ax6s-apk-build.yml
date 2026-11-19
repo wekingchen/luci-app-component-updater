@@ -228,6 +228,9 @@ jobs:
             test "$source_root" = 94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861
             printf "\n# local-user-config-test\n" >> /etc/config/naiveproxy
             config_sha=$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")
+            world_sha=$(sha256sum /etc/apk/world | awk "{print \$1}")
+            echo "APK world before native component update:"
+            cat /etc/apk/world
             /usr/sbin/component-updaterctl check
             test -s /tmp/component-updater/plan.json
             cp /tmp/component-acceptance-fixtures/candidate.apk /tmp/good-candidate.apk
@@ -245,6 +248,9 @@ jobs:
             test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
             test ! -r /etc/component-updater/transaction.json
             test -s /etc/component-updater/installed/naiveproxy-active.apk
+            echo "APK world after native component update:"
+            cat /etc/apk/world
+            test "$(sha256sum /etc/apk/world | awk "{print \$1}")" = "$world_sha"
             /usr/sbin/component-updaterctl rollback
             test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r1"
             test "$(sha256sum /usr/bin/naive | awk "{print \$1}")" = "$source_root"
