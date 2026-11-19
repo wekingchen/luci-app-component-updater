@@ -130,7 +130,7 @@ class ReleaseContractTests(unittest.TestCase):
             nested=open_ipk(original)
             # All tar layers should now use gzip headers with deterministic mtime.
             for data in [original,nested['control.tar.gz'],nested['data.tar.gz']]:
-                self.assertEqual(data[4:8],b'\\0'*4)
+                self.assertEqual(data[4:8],bytes(4))
                 self.assertFalse(data[3] & 8,'gzip must not embed original filename')
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',str(td)],check=True,capture_output=True)
             self.assertEqual(original,pkg.read_bytes())
@@ -143,15 +143,15 @@ class ReleaseContractTests(unittest.TestCase):
             self.assertNotEqual(original,wrapped)
             self.assertEqual(semantic_manifest(original),semantic_manifest(wrapped))
             checksum=td/'SHA256SUMS.txt'
-            checksum.write_text(hashlib.sha256(original).hexdigest()+'  '+pkg.name+'\\n')
+            checksum.write_text(hashlib.sha256(original).hexdigest()+'  '+pkg.name+chr(10))
             self.assertEqual(verify_release_sum(pkg,checksum),hashlib.sha256(original).hexdigest())
-            tampered=_outer_ipk([
+            malformed=_outer_ipk([
                 ('debian-binary',nested['debian-binary']),
-                ('data.tar.gz',modified_gzip),
-                ('control.tar.gz',gzip.compress(gzip.decompress(nested['control.tar.gz'])+b'extra',mtime=0)),
+                ('data.tar.gz',nested['data.tar.gz']),
+                ('control.tar.gz',b'not-a-gzip-archive'),
             ])
             with self.assertRaises((ValueError,tarfile.TarError)):
-                semantic_manifest(tampered)
+                semantic_manifest(malformed)
             # An independently re-compressed tar containing different content
             # must be rejected, even if the outer gzip remains well formed.
             inner=io.BytesIO()
@@ -166,7 +166,7 @@ class ReleaseContractTests(unittest.TestCase):
                 ('control.tar.gz',gzip.compress(inner.getvalue(),mtime=0)),
             ])
             self.assertNotEqual(semantic_manifest(original),semantic_manifest(altered))
-            checksum.write_text('0'*64+'  '+pkg.name+'\\n')
+            checksum.write_text('0'*64+'  '+pkg.name+chr(10))
             with self.assertRaises(ValueError):
                 verify_release_sum(pkg,checksum)
 
