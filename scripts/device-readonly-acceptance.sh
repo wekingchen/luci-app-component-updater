@@ -42,56 +42,7 @@ if command -v opkg >/dev/null 2>&1; then
     else
         fail "libgcc_s.so.1 unavailable in standard loader paths"
     fi
-    if opkg files naiveproxy 2>/dev/null | grep -q '^/usr/bin/naive
-        pass "naive binary is owned by opkg package"
-    else
-        fail "opkg ownership of /usr/bin/naive not confirmed"
-    fi
-fi
-if [ -x /usr/sbin/component-updaterctl ]; then
-    pass "component-updaterctl installed"
-    /usr/sbin/component-updaterctl status
-else
-    fail "component-updaterctl not installed"
-fi
-if [ -x /usr/libexec/rpcd/component-updater ]; then
-    pass "rpcd executable plugin present"
-    /usr/libexec/rpcd/component-updater list
-else
-    fail "rpcd executable plugin absent"
-fi
-if ubus -v list component-updater >/dev/null 2>&1; then
-    pass "ubus registered component-updater"
-    ubus -v list component-updater
-    ubus call component-updater status
-else
-    fail "rpcd component-updater not registered (check /etc/init.d/rpcd)"
-fi
-if [ -r /www/luci-static/resources/view/component-updater/overview.js ] &&
-   [ -r /www/luci-static/resources/view/component-updater/settings.js ]; then
-    pass "LuCI overview/settings JS installed"
-else
-    fail "LuCI JavaScript missing"
-fi
-if [ -r /usr/share/luci/menu.d/luci-app-component-updater.json ] &&
-   [ -r /usr/share/rpcd/acl.d/luci-app-component-updater.json ]; then
-    pass "LuCI menu and rpcd ACL installed"
-else
-    fail "LuCI menu or ACL missing"
-fi
-if [ -x /usr/bin/naive ] && [ ! -L /usr/bin/naive ]; then
-    pass "naive executable detected"
-    /usr/bin/naive --version 2>&1 | head -n 2
-    sha256sum /usr/bin/naive
-    ls -l /usr/bin/naive /tmp/etc/passwall/bin/naive 2>/dev/null || true
-    printf 'Active naive PIDs: '; pidof naive 2>/dev/null || true
-else
-    fail "/usr/bin/naive missing or unexpectedly symlinked"
-fi
-df -h /overlay /tmp 2>/dev/null || true
-printf '\nAcceptance summary: PASS=%s BLOCK=%s (read-only; no update performed)\n' "$ok" "$failed"
-[ "$failed" -eq 0 ]
-; then
+    if opkg files naiveproxy 2>/dev/null | grep -q '^/usr/bin/naive$'; then
         pass "naive binary is owned by opkg package"
     else
         fail "opkg ownership of /usr/bin/naive not confirmed"
