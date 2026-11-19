@@ -1,7 +1,8 @@
 """AX6S 2026-11-17 release support: APK is not opkg, fail closed.
 
-These checks deliberately do not claim native APK NaiveProxy updates are live
-until package-owned config, init scripts and rollback are tested on hardware.
+Native APK update support is gated on exact firmware, package ownership,
+verified source and rollback. Cloud chroot verification cannot replace a
+live AX6S device acceptance.
 """
 from pathlib import Path
 import re
@@ -35,12 +36,12 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
         self.assertIn('[ "$(package_manager)" = opkg ]',BACKEND)
         self.assertIn('status) status;;',BACKEND)
 
-    def test_chinese_ui_is_readonly_for_native_apk(self):
+    def test_chinese_ui_supports_native_apk_and_rejects_unknown_firmware(self):
         self.assertIn("status.package_manager === 'apk'", UI)
         self.assertIn("已识别红米 AX6S", UI)
         self.assertIn('apkGuard', UI)
         self.assertIn('APK 软件包',UI)
-        self.assertIn("Native APK firmware requires a verified",UI)
+        self.assertIn("Verified native APK is ready",UI)
 
     def test_signed_release_does_not_enable_unsafe_install(self):
         self.assertIn('"$APK_TOOL" mkpkg',MANAGER)
@@ -52,8 +53,8 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
                          'Packaging must not silently install anything on the device')
         self.assertIn('apk adbdump --format json',CI)
         self.assertIn('dist/*.apk',CI)
-        self.assertIn('luci-app-component-updater-v0.4.0-rc1',CI)
-        self.assertIn('APK NaiveProxy install and rollback remain locked',CI)
+        self.assertIn('luci-app-component-updater-v0.5.0-rc1',CI)
+        self.assertIn('Physical AX6S device and live PassWall traffic validation remain outstanding',CI)
 
     def test_readonly_preflight_never_modifies_packages_or_services(self):
         self.assertEqual(PREFLIGHT,BUNDLED)
