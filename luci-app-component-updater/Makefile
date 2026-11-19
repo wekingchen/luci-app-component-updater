@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-component-updater
-PKG_VERSION:=0.3.0
+PKG_VERSION:=0.4.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=wekingchen
@@ -37,6 +37,7 @@ define Package/luci-app-component-updater/install
 	$(INSTALL_DIR) $(1)/etc/component-updater
 	$(INSTALL_BIN) ./root/usr/sbin/component-updaterctl $(1)/usr/sbin/component-updaterctl
 	$(INSTALL_BIN) ./root/usr/libexec/rpcd/component-updater $(1)/usr/libexec/rpcd/component-updater
+	$(INSTALL_BIN) ./root/usr/libexec/component-updater/device-ax6s-apk-preflight.sh $(1)/usr/libexec/component-updater/device-ax6s-apk-preflight.sh
 endef
 
 $(eval $(call BuildPackage,luci-app-component-updater))

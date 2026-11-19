@@ -115,6 +115,24 @@ async function main() {
   nodes = dashboard.renderContent({...status,job_state:'recovery_required'}, {ready:'false'});
   assert(visibleText(nodes).includes('需要恢复'));
 
+  // A native APK device must NEVER see enabled opkg IPK actions,
+  // even if a stale valid IPK plan remains from an earlier firmware.
+  const ax6s = {...status, package_manager:'apk', compatibility:'ax6s-apk-readonly',
+    firmware_target:'mediatek/mt7622', check_state:'ready'};
+  const apkNodes = dashboard.renderContent(ax6s, plan);
+  assert(visibleText(apkNodes).includes('已识别红米 AX6S'));
+  assert(visibleText(apkNodes).includes('原生 APK'));
+  assert(!visibleText(apkNodes).includes('新版本已准备就绪'));
+  for (const caption of ['检查官方更新','下载并更新','恢复上一个版本'])
+    assert.strictEqual(disabledInRealDom(button(apkNodes,caption)),true, 'APK: '+caption);
+  dashboard.currentStatus = ax6s;
+  dashboard.currentPlan = plan;
+  modal = null;
+  dashboard.confirmInstall();
+  dashboard.confirmRollback();
+  assert.strictEqual(modal,null,'APK protection must reject direct modal invocations');
+  dashboard.currentStatus = status;
+
   // Never surface raw English diagnostic messages in white LuCI toast boxes.
   dashboard.notify({status:'up_to_date',message:'Installed native IPK matches the latest official build'});
   assert(visibleText(dashboard.renderContent(status,plan)).includes('当前安装版本与官方最新构建一致'));

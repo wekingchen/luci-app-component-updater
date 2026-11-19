@@ -48,6 +48,7 @@ var CHECK_TEXT = {
     'Previous IPK transaction needs manual rollback': '存在未完成的更新事务，请先恢复旧版本。',
     'Already updating': '已有更新任务正在运行。',
     'Check for updates before installing': '请先检查更新，再执行安装。',
+    'Native APK firmware requires a verified APK package and rollback workflow; no changes made': '已识别 APK 软件包环境；原生 APK 更新与回滚尚未完成验收，未修改任何文件。',
     'libgcc1 must already be installed': '缺少必要的运行依赖。'
 };
 var JOB_TEXT = {
@@ -151,6 +152,10 @@ return view.extend({
     statusModel: function(status, plan) {
         var checkState = status.check_state || '';
         var jobState = status.job_state || 'idle';
+        if (status.package_manager === 'apk')
+            return status.compatibility === 'ax6s-apk-readonly' ?
+                {tone:'warn', label:'适配预检', title:'已识别红米 AX6S', description:'当前固件采用原生 APK 软件包。管理界面与只读诊断可用；完整安装、备份和回滚尚未通过验证，更新操作暂时锁定。'} :
+                {tone:'error', label:'暂不支持', title:'当前 APK 环境未适配', description:'已识别 APK 软件包管理器，但设备不属于已知 AX6S 环境。不会执行 IPK 安装。'};
         if (jobState === 'recovery_required' || checkState === 'recovery_required')
             return {tone:'error', label:'需要恢复', title:'上一次更新需要处理', description:'检测到未完成的更新事务。请优先恢复旧版本，避免重复安装。'};
         if (this.isBusy(status))
@@ -176,11 +181,14 @@ return view.extend({
         var self = this;
         var state = this.statusModel(status, plan);
         var busy = this.isBusy(status);
-        var ready = (plan.ready === 'true' || plan.ready === true) && !this.isCurrent(status);
+        var apkGuard = status.package_manager === 'apk';
+        var ready = !apkGuard && (plan.ready === 'true' || plan.ready === true) && !this.isCurrent(status);
         var extraRows = [
             this.row('已安装软件包', status.package_version),
             this.row('设备架构', status.architecture),
-            this.row('安装方式', '系统原生 IPK · opkg'),
+            this.row('软件包管理器', apkGuard ? '原生 APK' : 'opkg'),
+            this.row('固件平台', status.firmware_target || '尚未识别'),
+            this.row('安装方式', apkGuard ? 'APK（仅开放只读预检）' : '系统原生 IPK · opkg'),
             this.row('运行中进程', status.runtime_processes === '' || status.runtime_processes === undefined ? '未检测' : status.runtime_processes + ' 个'),
             this.row('下载连接', this.proxyLabel(status))
         ];
@@ -208,14 +216,14 @@ return view.extend({
                 ])
             ]),
             E('div', {'class': 'cu-actions'}, [
-                E('button', {'class': 'cu-btn', type: 'button', disabled: busy ? true : null,
+                E('button', {'class': 'cu-btn', type: 'button', disabled: (busy || apkGuard) ? true : null,
                     click: function() { return self.handleCheck(); }}, '检查官方更新'),
-                E('button', {'class': 'cu-btn cu-btn-primary', type: 'button', disabled: (!ready || busy) ? true : null,
+                E('button', {'class': 'cu-btn cu-btn-primary', type: 'button', disabled: (!ready || busy || apkGuard) ? true : null,
                     click: function() { return self.confirmInstall(); }}, '下载并更新'),
-                E('button', {'class': 'cu-btn cu-btn-subtle', type: 'button', disabled: busy ? true : null,
+                E('button', {'class': 'cu-btn cu-btn-subtle', type: 'button', disabled: (busy || apkGuard) ? true : null,
                     click: function() { return self.confirmRollback(); }}, '恢复上一个版本')
             ]),
-            E('p', {'class': 'cu-mini-note'}, '安装前自动准备恢复包 · 不主动重启 PassWall · 已运行连接可能继续使用旧进程')
+            E('p', {'class': 'cu-mini-note'}, apkGuard ? '原生 APK 环境尚未开启安装；请先完成只读兼容性报告与真实回滚验收。' : '安装前自动准备恢复包 · 不主动重启 PassWall · 已运行连接可能继续使用旧进程')
         ]);
         var overview = E('section', {'class': 'cu-panel', 'aria-label': '设备与安装信息'}, [
             E('div', {'class': 'cu-section-head'}, [
@@ -244,7 +252,7 @@ return view.extend({
             content.push(notice);
         content.push(hero, overview, details,
             E('div', {'class': 'cu-footer'}, [
-                E('span', {}, '组件更新器 · v0.3.0 · 首批支持 NaiveProxy'),
+                E('span', {}, '组件更新器 · v0.4.0 · NaiveProxy / AX6S 环境识别'),
                 E('a', {href: L.url('admin/system/component-updater/settings')}, 'GitHub 下载与反代设置')
             ]));
         return content;
@@ -333,6 +341,7 @@ return view.extend({
     confirmInstall: function() {
         var self = this;
         if (self.isBusy(self.currentStatus || {}) ||
+            (self.currentStatus || {}).package_manager === 'apk' ||
             !(self.currentPlan && (self.currentPlan.ready === 'true' || self.currentPlan.ready === true)) ||
             self.isCurrent(self.currentStatus || {}))
             return;
@@ -351,7 +360,7 @@ return view.extend({
 
     confirmRollback: function() {
         var self = this;
-        if (self.isBusy(self.currentStatus || {}))
+        if ((self.currentStatus || {}).package_manager === 'apk' || self.isBusy(self.currentStatus || {}))
             return;
         ui.showModal('恢复上一个版本', [
             E('p', {}, '将尝试通过先前生成的恢复包还原软件包与程序文件。仅在存在有效备份时才能恢复；更新器不会主动重启 PassWall。'),

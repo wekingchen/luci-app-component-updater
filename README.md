@@ -1,14 +1,18 @@
 # luci-app-component-updater
 
-> **V0.3.0 RC1 · 中文产品化界面**：首页改为组件状态、版本对比、三项主要操作和折叠的诊断详情；下载设置独立成页。响应式布局覆盖手机与桌面，后端英文状态统一映射为中文，操作反馈以内嵌提示替代低对比度通知。保留 V0.2.3 的旧版 LuCI 按钮兼容修复及已验证的原生 IPK 安装与恢复后端。
+> **V0.4.0 RC1 / 红米 AX6S 固件兼容性预览**：针对 [AX6S-MTK 2026.11.17-2044](https://github.com/golldenstj/AX6Sproject/releases/tag/2026.11.17-2044-AX6S-MTK) 增加原生 APKv3 LuCI 管理包、真实 APK 系统识别、中文兼容性提示和只读设备诊断。**AX6S 的 NaiveProxy 更新与回滚尚未完成验收，按钮会保持禁用**，请勿把本仓库的原生 IPK 强制安装到 APK 固件。原有 MT3600BE / N1 opkg 工作流程不变。详见 [AX6S 兼容性说明与上机检查](docs/ax6s-apk-compatibility.md)。
 
-OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 `--lzma --best` 压缩，然后生成**OpenWrt 原生 gzip(tar) 格式 opkg IPK**，分架构发布到 Releases。
+
+
+> **V0.3.0 历史版本 · 中文产品化界面**：首页改为组件状态、版本对比、三项主要操作和折叠的诊断详情；下载设置独立成页。响应式布局覆盖手机与桌面，后端英文状态统一映射为中文，操作反馈以内嵌提示替代低对比度通知。保留 V0.2.3 的旧版 LuCI 按钮兼容修复及已验证的原生 IPK 安装与恢复后端。
+
+OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。V0.4.0 提供 opkg 管理包（IPK）与 APK 固件用的只读预览管理包（APKv3）；不应跨包管理器混装。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 `--lzma --best` 压缩，然后生成**OpenWrt 原生 gzip(tar) 格式 opkg IPK**，分架构发布到 Releases。
 
 ## 设备与边界
 
 - GL-MT3600BE：GL.iNet 4.x 定制 OpenWrt 21.02，`aarch64_cortex-a53`
 - Phicomm N1：LEDE/OpenWrt 24.10，`aarch64_generic`
-- 当前仅支持已由 **opkg** 安装、且只拥有 `/usr/bin/naive` 一个文件的 `naiveproxy` 软件包。其他程序未来需新增适配器和组件定义，不接收任意 Shell 命令。
+- 自动更新当前仅支持已由 **opkg** 安装、且只拥有 `/usr/bin/naive` 一个文件的 `naiveproxy` 软件包。其他程序未来需新增适配器和组件定义，不接收任意 Shell 命令。
 - 不更新固件、不替换 PassWall 设置、不主动重启 PassWall；旧的正在运行的进程可能要待服务下次重载才能使用新文件。
 
 ## 更新流程

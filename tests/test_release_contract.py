@@ -105,13 +105,14 @@ class ReleaseContractTests(unittest.TestCase):
         manager=(ROOT/'luci-app-component-updater/Makefile').read_text()
         wrapper=(ROOT/'tools/package_ipk.py').read_text()
         workflow=(ROOT/'.github/workflows/ci.yml').read_text()
-        self.assertIn('PKG_VERSION:=0.3.0',manager)
+        self.assertIn('PKG_VERSION:=0.4.0',manager)
         self.assertIn('PKG_RELEASE:=1',manager)
-        self.assertIn('VERSION = "0.3.0-1"',wrapper)
-        self.assertIn('luci-app-component-updater_0.3.0-1_all.ipk',workflow)
-        self.assertIn('pkg=luci-app-component-updater_0.3.0-1_all.ipk',workflow)
-        self.assertIn('sha256sum "$pkg"',workflow)
-        self.assertIn('gh release download "$tag" --pattern "$pkg" --pattern SHA256SUMS.txt',workflow)
+        self.assertIn('VERSION = "0.4.0-1"',wrapper)
+        self.assertIn('luci-app-component-updater_0.4.0-1_all.ipk',workflow)
+        self.assertIn('pkg=luci-app-component-updater_0.4.0-1_all.ipk',workflow)
+        self.assertIn('sha256sum "$pkg" "$manager_apk"',workflow)
+        self.assertIn('gh release download "$tag" --pattern "$pkg" --pattern "$manager_apk"',workflow)
+        self.assertIn('luci-app-component-updater-0.4.0-r1.apk',workflow)
         self.assertIn('python3 tools/compare_ipk_payloads.py',workflow)
         self.assertIn('Published release has identical package contents',workflow)
         self.assertNotIn('gh release delete',workflow)
@@ -125,7 +126,7 @@ class ReleaseContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             td=Path(td)
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',str(td)],check=True,capture_output=True)
-            pkg=td/'luci-app-component-updater_0.3.0-1_all.ipk'
+            pkg=td/'luci-app-component-updater_0.4.0-1_all.ipk'
             original=pkg.read_bytes()
             nested=open_ipk(original)
             # All tar layers should now use gzip headers with deterministic mtime.
@@ -173,7 +174,7 @@ class ReleaseContractTests(unittest.TestCase):
     def test_offline_ipk_contains_required_files_and_permissions(self):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,capture_output=True,text=True)
-            pkg=Path(td)/'luci-app-component-updater_0.3.0-1_all.ipk'
+            pkg=Path(td)/'luci-app-component-updater_0.4.0-1_all.ipk'
             self.assertTrue(pkg.is_file())
             self.assertTrue(pkg.read_bytes().startswith(bytes((0x1f,0x8b))))
             with tarfile.open(pkg,mode='r:gz') as archive:
