@@ -36,3 +36,10 @@ GitHub Actions 单测与基础 UPX 测试通过只能进入候选状态。V0.2.x
 - 最初的 Debian ar 外层 IPK 被真实 OpenWrt 21.02 opkg 判定为 Malformed package；已经统一切换为 OpenWrt 官方 `gzip(tar)` 外层 IPK，涵盖 LuCI 包、NaiveProxy 包和恢复包。
 - 真实 OpenWrt 21.02.5 opkg（2021-06-13 版本）及 OpenWrt 24.10.5 opkg 在隔离 rootfs 内，均通过旧版安装、升级、同版本强制重装与降级回滚；测试文件和版本哈希一致。
 - 它们不等于 GL-MT3600BE 定制固件与 N1 LEDE 定制固件的真机验收。PR 保持 Draft，未装真机。
+
+## 2026-11-19 · LuCI 安装与配置保留验收
+
+- 发现 CI 生成的 LuCI IPK 没有显式列出父目录；真实 OpenWrt opkg 首装时报 `wfopen: No such file or directory`，已改成先打入所需目录。
+- SDK Makefile 和 CI IPK 均声明 `/etc/config/component-updater` 为 opkg conffile，避免升级管理器时覆盖 GitHub 反代等用户设置。
+- 使用 21.02.5、24.10.5 官方隔离 rootfs 的原生 opkg 成功安装 LuCI 测试包，检查可执行文件、ACL/menu、rpcd 插件 `list` 输出；修改反代配置并强制重装后修改仍然存在。
+- 隔离 rootfs 里为测试文件安装行为使用了 `--force-depends`，**不证明 LuCI 依赖完整或 rpcd 运行时注册可用**。真机安装时禁止使用该参数，尚须真实固件和 LuCI 界面验收。
