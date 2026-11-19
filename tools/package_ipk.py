@@ -16,11 +16,31 @@ VERSION = "0.2.1-1"
 
 
 def create_tar(path: Path, files: list[tuple[str, bytes, int]]) -> None:
+    """OpenWrt opkg does not create every missing parent directory for tar files.
+
+    Emit explicit directory entries before files to permit fresh installations
+    into a minimal rootfs (not merely extraction by Python tarfile).
+    """
+    directories=set()
+    for name, _, _ in files:
+        if not name.startswith("./") or "/../" in name or name.endswith("/"):
+            raise ValueError("unsafe package file target")
+        parts=name[2:].split("/")
+        if not all(parts):
+            raise ValueError("empty package file path")
+        for i in range(1,len(parts)):
+            directories.add("./"+"/".join(parts[:i]))
     with tarfile.open(path, "w:gz") as t:
+        for name in sorted(directories,key=lambda x:(x.count("/"),x)):
+            entry=tarfile.TarInfo(name+"/")
+            entry.type=tarfile.DIRTYPE
+            entry.mode=0o755
+            entry.uid=entry.gid=entry.mtime=0
+            t.addfile(entry)
         for name, data, mode in files:
-            entry = tarfile.TarInfo(name)
-            entry.size, entry.mode, entry.uid, entry.gid, entry.mtime = len(data), mode, 0, 0, 0
-            t.addfile(entry, io.BytesIO(data))
+            entry=tarfile.TarInfo(name)
+            entry.size,entry.mode,entry.uid,entry.gid,entry.mtime=len(data),mode,0,0,0
+            t.addfile(entry,io.BytesIO(data))
 
 
 def main():
