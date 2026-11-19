@@ -8,6 +8,7 @@ on:
       - 'tools/component_builder.py'
       - 'tools/package_component_ipk.py'
       - 'tools/validate_artifacts.py'
+      - 'tools/smoke_arm64.py'
   schedule:
     # Cloud-side prebuild; router does not wait for compression.
     - cron: '7,27,47 * * * *'
@@ -17,6 +18,7 @@ on:
       - 'components/**'
       - 'tools/component_builder.py'
       - 'tools/validate_artifacts.py'
+      - 'tools/smoke_arm64.py'
       - 'tests/**'
   workflow_dispatch:
     inputs:
@@ -80,28 +82,42 @@ jobs:
             [[ "$(cat "$OUT/release-tag.txt")" == "$TAG" ]] || exit 1
             python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
           done
-      - name: Emulate packaged ARM64 executables before release publication
-        run: |
-          set -euo pipefail
-          mapfile -t manifests < <(find dist -mindepth 2 -maxdepth 2 -type f -name manifest.json | sort)
-          if [ "${#manifests[@]}" -gt 0 ]; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq qemu-user
-            for manifest in "${manifests[@]}"; do
-              python3 tools/smoke_arm64.py --manifest "$manifest"
-            done
-          else
-            echo "No new IPK candidates to emulate"
-          fi
       - uses: actions/upload-artifact@v4
         with:
           name: native-ipk-candidates
           path: dist/
           if-no-files-found: error
 
+  native-smoke:
+    name: Execute real UPX binaries on native ARM64 runner
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-ipk-candidates
+          path: dist
+      - name: Verify native ARM64 executable version for each candidate
+        run: |
+          set -euo pipefail
+          mapfile -t manifests < <(find dist -mindepth 2 -maxdepth 2 -type f -name manifest.json | sort)
+          if [ "${#manifests[@]}" -eq 0 ]; then
+            echo "No new components this cycle"
+          fi
+          for manifest in "${manifests[@]}"; do
+            python3 tools/validate_artifacts.py --manifest "$manifest"
+            python3 tools/smoke_arm64.py --manifest "$manifest"
+          done
+
   publish:
     name: Revalidate and publish verified native IPKs
-    needs: build
+    needs: [build, native-smoke]
     if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push' || inputs.publish == true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20

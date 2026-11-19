@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Execute both reviewed AArch64 native-IPK payloads under QEMU user emulation.
+"""Execute both reviewed AArch64 native-IPK payloads on native ARM64 GitHub Actions runners.
 
-A QEMU --version smoke test is not a replacement for real GL-MT3600BE/N1
+A native Linux ARM64 --version smoke test is not a replacement for real GL-MT3600BE/N1
 runtime acceptance, but it catches unusable UPX stubs and ABI regressions
 before Release publication.
 """
 import argparse
 import json
+import platform
 import re
 import subprocess
 import tempfile
@@ -29,12 +30,16 @@ def verify(manifest: Path) -> None:
             program=Path(td)/'naive'
             program.write_bytes(binary)
             program.chmod(0o755)
-            result=subprocess.run(['qemu-aarch64',str(program),'--version'],
-                        capture_output=True,text=True,timeout=45,check=True)
+            if platform.machine().lower() not in ('aarch64','arm64'):
+                raise RuntimeError('Native ARM64 runner required')
+            result=subprocess.run([str(program),'--version'],capture_output=True,text=True,timeout=45)
+            if result.returncode:
+                raise RuntimeError(f'Native ARM64 execution failed (exit={result.returncode}) '
+                                   f'stdout={result.stdout!r}, stderr={result.stderr!r}')
             displayed=(result.stdout+result.stderr).strip().splitlines()
             if not displayed or displayed[0]!=f'naive {expected}':
-                raise ValueError(f'QEMU version mismatch for {key}: {displayed!r}')
-        print('QEMU AArch64 verified',key,expected,flush=True)
+                raise ValueError(f'Native ARM64 version mismatch for {key}: {displayed!r}')
+        print('Native AArch64 verified',key,expected,flush=True)
 
 if __name__=='__main__':
     ap=argparse.ArgumentParser()
