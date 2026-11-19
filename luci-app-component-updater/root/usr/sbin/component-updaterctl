@@ -74,7 +74,7 @@ check_sha() { [ "$(sha256sum "$1" 2>/dev/null | awk '{print $1}')" = "$2" ]; }
 space_ok() {
     tf=$(df -Pk /tmp 2>/dev/null | awk 'NR==2 {print $4}')
     of=$(df -Pk /etc 2>/dev/null | awk 'NR==2 {print $4}')
-    case "$tf:$of" in *[!0-9:]*|'') return 1;; esac
+    case "$tf:$of" in *[!0-9:]*) return 1;; esac
     [ "${tf:-0}" -ge 16384 ] && [ "${of:-0}" -ge 16384 ]
 }
 # Optional HTTPS GitHub download prefix; never permits an arbitrary remote URL.
@@ -289,7 +289,7 @@ make_rollback_ipk() {
     version=$(package_version)
     architecture=$(package_arch)
     dependencies=$(package_depends)
-    case "$version:$architecture" in ''|*[!A-Za-z0-9.+_~:-]*) return 1;; esac
+    case "$version:$architecture" in *[!A-Za-z0-9.+_~:-]*) return 1;; esac
     [ -n "$version" ] && [ -n "$architecture" ] || return 1
     # Existing opkg dependencies are metadata from a local trusted database.
     if printf '%s' "$dependencies" | grep -Eq '[^A-Za-z0-9+._,=<> ()-]'; then return 1; fi
@@ -403,7 +403,7 @@ perform_install() {
     job_record completed 'Native IPK installed; existing PassWall processes not restarted'
     ls -1 "$BACKUPS" 2>/dev/null | sort -r | awk 'NR>2' | while IFS= read -r obsolete; do
         case "$obsolete" in ''|*[!0-9-]*) continue;; esac
-        rm -rf "$BACKUPS/$obsolete"
+        rm -rf "${BACKUPS:?}/$obsolete"
     done
 }
 run() {
