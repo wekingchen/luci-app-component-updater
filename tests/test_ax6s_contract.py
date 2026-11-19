@@ -15,6 +15,9 @@ CI=(ROOT/'.github/workflows/ci.yml').read_text()
 PREFLIGHT=(ROOT/'scripts/device-ax6s-apk-preflight.sh').read_text()
 BUNDLED=(ROOT/'luci-app-component-updater/root/usr/libexec/component-updater/device-ax6s-apk-preflight.sh').read_text()
 UI=(ROOT/'luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/overview.js').read_text()
+NATIVE=(ROOT/'luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh').read_text()
+BUILDER=(ROOT/'tools/build_ax6s_apk_assets.py').read_text()
+APKACTION=(ROOT/'.github/workflows/ax6s-apk-build.yml').read_text()
 
 
 class Ax6sApkCompatibilityTests(unittest.TestCase):
@@ -55,6 +58,29 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
         self.assertIn('dist/*.apk',CI)
         self.assertIn('luci-app-component-updater-v0.5.0-rc1',CI)
         self.assertIn('Physical AX6S device and live PassWall traffic validation remain outstanding',CI)
+
+    def test_world_constraints_remain_unchanged_after_native_apk_transactions(self):
+        self.assertIn('cp -p /etc/apk/world "$bak/world"',NATIVE)
+        self.assertIn('cp -p "$bak/world" /etc/apk/world',NATIVE)
+        self.assertIn('cp -p "$rd/world" /etc/apk/world',NATIVE)
+        self.assertIn('check_sha /etc/apk/world "$worldsum"',NATIVE)
+        self.assertIn('world world.sha256',NATIVE)
+        self.assertIn('--no-network --allow-untrusted --no-scripts --no-commit-hooks',NATIVE)
+        self.assertNotIn('/etc/init.d/passwall restart',NATIVE)
+
+    def test_future_release_cloud_build_and_hardware_release_gate(self):
+        self.assertIn('workflow_run:',APKACTION)
+        self.assertIn("head_branch == 'main'",APKACTION)
+        self.assertIn("head_repository.full_name == github.repository",APKACTION)
+        self.assertIn("github.event.workflow_run.event != 'pull_request'",APKACTION)
+        self.assertIn("AX6S_APK_AUTO_PUBLISH == 'true'",APKACTION)
+        self.assertIn('native-arm64-controller:',APKACTION)
+        self.assertIn('component-naiveproxy-$upstream-upx521-r3',APKACTION)
+        self.assertIn('source/manifest.json',APKACTION)
+        self.assertIn('apk-tools',APKACTION)
+        self.assertIn('BASE_SHA',BUILDER)
+        self.assertIn('apk_restore',NATIVE)
+        self.assertIn('apk_rollback',NATIVE)
 
     def test_readonly_preflight_never_modifies_packages_or_services(self):
         self.assertEqual(PREFLIGHT,BUNDLED)
