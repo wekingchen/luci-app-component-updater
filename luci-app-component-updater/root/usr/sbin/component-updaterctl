@@ -14,10 +14,21 @@ TXN=$BASE/transaction.json
 GITHUB=wekingchen/luci-app-component-updater
 UPSTREAM=klzgrad/naiveproxy
 BINARY=/usr/bin/naive
+TRUST_KEY=/usr/share/component-updater/trust.pub
 
 [ -r /usr/share/libubox/jshn.sh ] || { echo '{"error":"missing jshn"}'; exit 1; }
 # shellcheck source=/dev/null
 . /usr/share/libubox/jshn.sh
+
+config_get() {
+    key=$1 default=$2
+    val=$(uci -q get "component-updater.main.$key" 2>/dev/null || true)
+    [ -n "$val" ] && printf '%s\n' "$val" || printf '%s\n' "$default"
+}
+
+trust_ready() {
+    [ -s "$TRUST_KEY" ] && command -v usign >/dev/null 2>&1
+}
 
 jsonval() {
     file=$1 expr=$2
@@ -111,6 +122,8 @@ status() {
     runtime_count=$(pidof naive 2>/dev/null | wc -w | tr -d ' ')
     json_init
     json_add_string component naiveproxy
+    json_add_string github_proxy_mode "$(config_get github_proxy_mode off)"
+    if trust_ready; then json_add_string signing_status configured; else json_add_string signing_status missing_key_or_usign; fi
     json_add_string installed_version "$installed"
     json_add_string package_version "$pkg"
     json_add_string installed_upstream_tag "$receipt_tag"
@@ -129,14 +142,31 @@ status() {
     echo
 }
 
-download() {
-    url=$1 dest=$2
-    case "$url" in
-        https://api.github.com/repos/klzgrad/naiveproxy/releases/latest|https://github.com/wekingchen/luci-app-component-updater/releases/download/*) ;;
+# The proxy only changes the HTTPS transport, never the source-of-trust.
+# URL patterns are hard-coded and no request parameter controls destinations.
+proxy_target() {
+    original=$1
+    mode=$(config_get github_proxy_mode off)
+    case "$mode" in off) return 1;; assets|all) ;; *) return 1;; esac
+    case "$original" in
+        https://api.github.com/*) [ "$mode" = all ] || return 1;;
+        https://github.com/*) ;;
         *) return 1;;
     esac
+    prefix=$(config_get github_proxy_prefix '')
+    case "$prefix" in https://*/*) ;; *) return 1;; esac
+    rest=${prefix#https://}
+    host=${rest%%/*}
+    suffix=${rest#*/}
+    case "$host" in ''|localhost|*.localhost|*:*|*[!a-zA-Z0-9.-]*) return 1;; esac
+    case "$suffix" in *[!a-zA-Z0-9._~/-]*|*..*|*//* ) return 1;; esac
+    printf '%s%s\n' "$prefix" "$original"
+}
+
+download_once() {
+    url=$1 dest=$2
     if command -v curl >/dev/null 2>&1; then
-        curl -fSL --connect-timeout 10 --max-time 120 --retry 2 --output "$dest" "$url" >/dev/null 2>&1
+        curl -fSL --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 120 --retry 2 --output "$dest" "$url" >/dev/null 2>&1
     elif command -v uclient-fetch >/dev/null 2>&1; then
         uclient-fetch -T 120 -O "$dest" "$url" >/dev/null 2>&1
     elif command -v wget >/dev/null 2>&1; then
@@ -144,6 +174,32 @@ download() {
     else
         return 1
     fi
+}
+
+download() {
+    url=$1 dest=$2
+    case "$url" in
+        https://api.github.com/repos/klzgrad/naiveproxy/releases/latest|https://github.com/wekingchen/luci-app-component-updater/releases/download/*) ;;
+        *) return 1;;
+    esac
+    mode=$(config_get github_proxy_mode off)
+    case "$mode" in off|assets|all) ;; *) return 1;; esac
+    if [ "$mode" != off ]; then
+        via=$(proxy_target "$url") || {
+            # Invalid proxy configuration must fail explicitly, not silently.
+            case "$url:$mode" in
+                https://api.github.com/*:assets) ;;
+                *) return 1;;
+            esac
+            via=''
+        }
+        if [ -n "${via:-}" ]; then
+            if download_once "$via" "$dest"; then return 0; fi
+            rm -f "$dest"
+            [ "$(config_get github_proxy_fallback 1)" = 1 ] || return 1
+        fi
+    fi
+    download_once "$url" "$dest"
 }
 
 space_ok() {
@@ -176,7 +232,25 @@ check_update() {
         check_msg pending 'official release found; verified precompressed build not available'
         return 0
     fi
+    # Verify the raw manifest BEFORE consuming any of its fields. A mirror can
+    # replace bytes but cannot produce a valid signature for the pinned key.
+    if ! trust_ready; then
+        rm -f "$PLAN" "$CACHE/manifest.tmp"
+        check_msg trust_unconfigured 'Trusted public key or usign missing; installation is disabled'
+        return 1
+    fi
+    if ! download "$manifest_url.sig" "$CACHE/manifest.sig.tmp"; then
+        rm -f "$PLAN" "$CACHE/manifest.tmp"
+        check_msg signature_error 'Signed manifest missing from release'
+        return 1
+    fi
+    if ! usign -V -q -m "$CACHE/manifest.tmp" -p "$TRUST_KEY" -x "$CACHE/manifest.sig.tmp" >/dev/null 2>&1; then
+        rm -f "$PLAN" "$CACHE/manifest.tmp" "$CACHE/manifest.sig.tmp"
+        check_msg signature_error 'Manifest signature verification failed'
+        return 1
+    fi
     mv -f "$CACHE/manifest.tmp" "$CACHE/manifest.json"
+    mv -f "$CACHE/manifest.sig.tmp" "$CACHE/manifest.json.sig"
     recorded_tag=$(jsonval "$CACHE/manifest.json" '@.upstream_tag')
     recorded_build=$(jsonval "$CACHE/manifest.json" '@.release_tag')
     component=$(jsonval "$CACHE/manifest.json" '@.component')
