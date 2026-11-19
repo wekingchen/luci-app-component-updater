@@ -1,5 +1,5 @@
 """Native IPK artifact validation including negative digest and metadata cases."""
-import hashlib, json, sys, tempfile, unittest
+import hashlib, io, json, sys, tarfile, tempfile, unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from package_component_ipk import build_ipk, inspect_ipk, open_ipk
@@ -27,20 +27,13 @@ class NativeArtifactTests(unittest.TestCase):
         self.assertEqual(verify_manifest(self.manifest)['component'],'naiveproxy')
         ctl,b=inspect_ipk(self.asset.read_bytes(),'/usr/bin/naive')
         self.assertEqual(ctl['Version'],self.ver);self.assertEqual(b,self.bin)
-    def test_ancient_opkg_uses_exact_ar_names_without_slash(self):
+    def test_official_openwrt_gzip_tar_outer_container(self):
         blob=self.asset.read_bytes()
-        self.assertTrue(blob.startswith(b'!<arch>\n'))
-        pos=8
-        names=[]
-        while pos < len(blob):
-            header=blob[pos:pos+60]
-            self.assertEqual(header[58:],b'`\n')
-            member=header[:16].decode('ascii').rstrip(' ')
-            self.assertFalse(member.endswith('/'),member)
-            names.append(member)
-            n=int(header[48:58].decode('ascii').strip())
-            pos+=60+n+(n%2)
-        self.assertEqual(names,['debian-binary','control.tar.gz','data.tar.gz'])
+        self.assertTrue(blob.startswith(bytes((0x1f,0x8b))))
+        with tarfile.open(fileobj=io.BytesIO(blob),mode='r:gz') as archive:
+            self.assertEqual(archive.getnames(),[
+                './debian-binary','./data.tar.gz','./control.tar.gz'])
+            self.assertTrue(all(e.isfile() for e in archive.getmembers()))
 
     def test_reproducible_package(self):
         kw=dict(package='naiveproxy',version=self.ver,architecture=self.arch,target='/usr/bin/naive',binary=self.bin)

@@ -106,17 +106,11 @@ class ReleaseContractTests(unittest.TestCase):
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,capture_output=True,text=True)
             pkg=Path(td)/'luci-app-component-updater_0.2.1-1_all.ipk'
             self.assertTrue(pkg.is_file())
-            members=subprocess.check_output(['ar','t',str(pkg)],text=True).splitlines()
-            self.assertEqual(members,['debian-binary','control.tar.gz','data.tar.gz'])
-            raw=pkg.read_bytes()
-            pos=8
-            while pos < len(raw):
-                head=raw[pos:pos+60]
-                self.assertNotEqual(head[:16].strip()[-1:],b'/',
-                                    'GL 21.02 opkg rejects GNU ar member name slash')
-                size=int(head[48:58].decode().strip())
-                pos+=60+size+(size%2)
-            data=subprocess.check_output(['ar','p',str(pkg),'data.tar.gz'])
+            self.assertTrue(pkg.read_bytes().startswith(bytes((0x1f,0x8b))))
+            with tarfile.open(pkg,mode='r:gz') as archive:
+                self.assertEqual(archive.getnames(),[
+                    './debian-binary','./data.tar.gz','./control.tar.gz'])
+                data=archive.extractfile('./data.tar.gz').read()
             with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as t:
                 names=set(t.getnames())
                 for path in [
