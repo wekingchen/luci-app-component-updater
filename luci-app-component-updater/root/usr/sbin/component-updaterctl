@@ -158,7 +158,7 @@ proxy_target() {
     rest=${prefix#https://}
     host=${rest%%/*}
     suffix=${rest#*/}
-    case "$host" in ''|localhost|*.localhost|*:*|*[!a-zA-Z0-9.-]*) return 1;; esac
+    case "$host" in ''|localhost|*.localhost|127.*|10.*|192.168.*|172.16.*|172.17.*|172.18.*|172.19.*|172.2?.*|172.30.*|172.31.*|[0-9]*|*:*|*[!a-zA-Z0-9.-]*) return 1;; esac
     case "$suffix" in *[!a-zA-Z0-9._~/-]*|*..*|*//* ) return 1;; esac
     printf '%s%s\n' "$prefix" "$original"
 }

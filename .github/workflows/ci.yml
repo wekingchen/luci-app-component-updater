@@ -13,7 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install static checks
-        run: sudo apt-get update && sudo apt-get install -y shellcheck jq busybox
+        run: sudo apt-get update && sudo apt-get install -y shellcheck jq busybox cmake gcc
+      - name: Verify actual usign Ed25519 signing and tamper rejection
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/openwrt/usign.git /tmp/component-usign
+          git -C /tmp/component-usign checkout --quiet c4c72b1b07945ee192361dc751291a7c98d6adcd
+          cmake -S /tmp/component-usign -B /tmp/component-usign/build -DUSE_LIBUBOX=OFF
+          cmake --build /tmp/component-usign/build -j2
+          sudo install -m755 /tmp/component-usign/build/usign /usr/local/bin/usign
+          sh tests/usign_signing_smoke.sh
       - name: Validate component definitions and tests
         run: |
           python3 -m unittest discover -s tests -v
@@ -27,7 +36,9 @@ jobs:
           sh -n luci-app-component-updater/root/usr/sbin/component-updaterctl
           sh -n luci-app-component-updater/root/usr/libexec/rpcd/component-updater
           shellcheck -S warning luci-app-component-updater/root/usr/sbin/component-updaterctl luci-app-component-updater/root/usr/libexec/rpcd/component-updater
-          node -e "const fs=require('fs');new Function(fs.readFileSync('luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/overview.js','utf8'));console.log('LuCI JS parse OK')"
+          for path in luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/*.js; do
+            JS_FILE="$path" node -e "const fs=require('fs');new Function(fs.readFileSync(process.env.JS_FILE,'utf8'));console.log(process.env.JS_FILE,'LuCI JS parse OK')"
+          done
       - name: Build installable IPK
         run: python3 tools/package_ipk.py --out dist
       - uses: actions/upload-artifact@v4

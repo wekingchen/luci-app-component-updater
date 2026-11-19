@@ -22,7 +22,7 @@ return view.extend({
         prefix.depends('github_proxy_mode', 'assets');
         prefix.depends('github_proxy_mode', 'all');
         prefix.validate = function(section_id, value) {
-            if (!value || !/^https:\/\/[A-Za-z0-9.-]+\/[A-Za-z0-9._~\/-]*\/$/.test(value) ||
+            if (!value || !/^https:\/\/[A-Za-z0-9.-]+(?:\/[A-Za-z0-9._~\/-]*)?$/.test(value) || !value.endsWith('/') ||
                 value.indexOf('..') >= 0 || value.indexOf('//', 8) >= 0)
                 return '必须填写合法的 HTTPS 前缀，且以 / 结尾，不包含参数、凭证或路径跳转';
             return true;
