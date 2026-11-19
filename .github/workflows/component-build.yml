@@ -132,10 +132,18 @@ jobs:
           done
 
   legacy-opkg:
-    name: OpenWrt 21.02.5 native opkg install and rollback
+    name: OpenWrt ${{ matrix.version }} native opkg install and rollback
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: '21.02.5'
+            sha256: '99d3c353b214304b24ec28a6499715a1b00fad7eabb34e55b2db5f90440646cf'
+          - version: '24.10.5'
+            sha256: 'fb3245bce37575f1fc9cc467909c37c5b12e49bf7993a34cd19893511bccf40e'
     permissions:
       contents: read
     steps:
@@ -148,9 +156,9 @@ jobs:
           set -euo pipefail
           ROOTFS="$(mktemp -d)"
           echo "ROOTFS=$ROOTFS" >> "$GITHUB_ENV"
-          ROOTFS_URL=https://downloads.openwrt.org/releases/21.02.5/targets/x86/64/openwrt-21.02.5-x86-64-rootfs.tar.gz
+          ROOTFS_URL=https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/x86/64/openwrt-${{ matrix.version }}-x86-64-rootfs.tar.gz
           curl -fL --retry 3 --connect-timeout 15 --max-time 120 "$ROOTFS_URL" -o /tmp/openwrt-legacy-rootfs.tar.gz
-          echo '99d3c353b214304b24ec28a6499715a1b00fad7eabb34e55b2db5f90440646cf  /tmp/openwrt-legacy-rootfs.tar.gz' | sha256sum -c
+          echo '${{ matrix.sha256 }}  /tmp/openwrt-legacy-rootfs.tar.gz' | sha256sum -c
           sudo tar -xzf /tmp/openwrt-legacy-rootfs.tar.gz -C "$ROOTFS"
           sudo install -d -m 1777 "$ROOTFS/tmp"
           sudo install -d -m 755 "$ROOTFS/dev"
