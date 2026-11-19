@@ -27,9 +27,9 @@ V0.1 安装事务只接受通过 **usign (Ed25519)** 验证的 Manifest。原始
 
 - GL-MT3600BE / 定制 21.02 / aarch64_cortex-a53：检查已有 LuCI JS、rpcd executable plugin、usign、UCI 和 opkg，留存完整安装和回滚报告。
 - N1 / LEDE 24.10 / aarch64_generic：重复同一套验收，不因为架构同属 ARM64 而跳过。
-- 在安装 IPK 后运行 `sh scripts/device-readonly-acceptance.sh`（只读）。此脚本不重启服务、不下载新程序、不修改 `/usr/bin/naive`。
+- 在安装 IPK 后运行 `sh /usr/libexec/component-updater/device-readonly-acceptance.sh`（只读）。此脚本不重启服务、不下载新程序、不修改 `/usr/bin/naive`。
 - 桌面/手机分别打开 LuCI，核对组件列表、反代配置、版本字段和 ACL 权限。只读脚本不能代替 UI 交互验收。
-- 确认有物理或独立 LAN 管理方式后，明确设置 `COMPONENT_ACCEPT_LIVE=I_UNDERSTAND`，运行 `sh scripts/device-live-acceptance.sh --install-and-rollback`。此脚本真实替换并回滚当前程序，**不自动重启 PassWall**，失败时必须保留现场和日志。
+- 确认有物理或独立 LAN 管理方式后，明确设置 `COMPONENT_ACCEPT_LIVE=I_UNDERSTAND`，运行 `sh /usr/libexec/component-updater/device-live-acceptance.sh --install-and-rollback`。此脚本真实替换并回滚当前程序，**不自动重启 PassWall**，失败时必须保留现场和日志。
 - 若官方最新与当前二进制完全一致，或云端签名产物尚未就绪，应记录 **NOT_TESTED**，不能称为成功验收。
 
 ### G0-G4 发布判定

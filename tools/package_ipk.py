@@ -45,7 +45,7 @@ def main():
         for path in (APP / "root").rglob("*"):
             if path.is_file():
                 target = path.relative_to(APP / "root").as_posix()
-                mode = 0o755 if target in ("usr/sbin/component-updaterctl", "usr/libexec/rpcd/component-updater") else 0o644
+                mode = 0o755 if target in ("usr/sbin/component-updaterctl", "usr/libexec/rpcd/component-updater", "usr/libexec/component-updater/device-readonly-acceptance.sh", "usr/libexec/component-updater/device-live-acceptance.sh") else 0o644
                 data.append(("./" + target, path.read_bytes(), mode))
         for path in (APP / "htdocs").rglob("*"):
             if path.is_file():

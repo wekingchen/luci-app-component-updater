@@ -53,6 +53,8 @@ class RpcdCompatibilityTests(unittest.TestCase):
                 members=set(tar.getnames())
             self.assertIn('./www/luci-static/resources/view/component-updater/settings.js',members)
             self.assertIn('./etc/config/component-updater',members)
+            self.assertIn('./usr/libexec/component-updater/device-readonly-acceptance.sh',members)
+            self.assertIn('./usr/libexec/component-updater/device-live-acceptance.sh',members)
 
 if __name__=='__main__':
     unittest.main()
