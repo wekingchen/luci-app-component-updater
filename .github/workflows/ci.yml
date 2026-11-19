@@ -31,6 +31,7 @@ jobs:
           for path in luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/*.js; do
             JS_FILE="$path" node -e "const fs=require('fs');new Function(fs.readFileSync(process.env.JS_FILE,'utf8'));console.log(process.env.JS_FILE,'LuCI JS parse OK')"
           done
+          node tests/luci_ui_smoke.js
       - name: Build installable IPK
         run: python3 tools/package_ipk.py --out dist
       - uses: actions/upload-artifact@v4
