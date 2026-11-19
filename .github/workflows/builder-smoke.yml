@@ -5,6 +5,8 @@ on:
       - 'components/**'
       - 'tools/component_builder.py'
       - 'tools/validate_artifacts.py'
+      - 'tools/smoke_arm64.py'
+      - 'tools/runtime-smoke.Dockerfile'
       - 'tests/**'
       - '.github/workflows/builder-smoke.yml'
   workflow_dispatch:
@@ -27,6 +29,10 @@ jobs:
           x=json.loads(Path('dist/manifest.json').read_text())
           assert set(x['assets']) == {'aarch64_cortex_a53','aarch64_generic'}
           assert all(v['validation']['round_trip']=='passed' for v in x['assets'].values())
+          for item in x['assets'].values():
+              assert item['format']=='ipk'
+              assert (Path('dist')/item['filename']).is_file()
+              assert item['filename'].endswith('_'+item['package_arch']+'.ipk')
           print('Real upstream artifacts: verified')
           PY
           python3 tools/validate_artifacts.py --manifest dist/manifest.json
@@ -34,6 +40,28 @@ jobs:
         with:
           name: verified-naiveproxy-candidates
           path: |
-            dist/*.tar.xz
+            dist/*.ipk
             dist/manifest.json
           if-no-files-found: error
+
+  native-runtime:
+    name: Run packaged NaiveProxy on native ARM64 Ubuntu
+    needs: build-real-assets
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-naiveproxy-candidates
+          path: dist
+      - name: Build isolated ARM64 musl and libgcc runtime
+        run: docker build --file tools/runtime-smoke.Dockerfile --tag component-updater-arm64-smoke:alpine-3.22 tools/
+      - name: Validate actual compressed executable from both IPKs
+        run: |
+          python3 tools/validate_artifacts.py --manifest dist/manifest.json
+          python3 tools/smoke_arm64.py --manifest dist/manifest.json

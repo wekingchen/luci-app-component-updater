@@ -39,16 +39,25 @@ class RpcdCompatibilityTests(unittest.TestCase):
         menu=json.loads((APP/'root/usr/share/luci/menu.d/luci-app-component-updater.json').read_text())
         self.assertIn('admin/system/component-updater/settings',menu)
 
-    def test_opkg_package_requires_usign_and_includes_proxy_ui(self):
+    def test_opkg_package_requires_opkg_and_includes_proxy_ui(self):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,
                            stdout=subprocess.DEVNULL)
-            p=Path(td)/'luci-app-component-updater_0.2.0-1_all.ipk'
-            control=subprocess.check_output(['ar','p',str(p),'control.tar.gz'])
+            p=Path(td)/'luci-app-component-updater_0.2.1-1_all.ipk'
+            with tarfile.open(p,mode='r:gz') as outer:
+                self.assertEqual(outer.getnames(),[
+                    './debian-binary','./data.tar.gz','./control.tar.gz'])
+                control=outer.extractfile('./control.tar.gz').read()
+                data=outer.extractfile('./data.tar.gz').read()
             with tarfile.open(fileobj=io.BytesIO(control),mode='r:gz') as tar:
                 dep=tar.extractfile('./control').read().decode()
             self.assertIn('opkg',dep)
-            data=subprocess.check_output(['ar','p',str(p),'data.tar.gz'])
+            self.assertNotIn('usign',dep)
+            with tarfile.open(fileobj=io.BytesIO(control),mode='r:gz') as ct:
+                self.assertEqual(
+                    ct.extractfile('./conffiles').read(),
+                    b'/etc/config/component-updater\n'
+                )
             with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as tar:
                 members=set(tar.getnames())
             self.assertIn('./www/luci-static/resources/view/component-updater/settings.js',members)

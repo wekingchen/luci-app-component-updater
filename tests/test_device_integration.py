@@ -1,12 +1,12 @@
 """Production POSIX backend simulated against a real native-IPK opkg test double."""
-import hashlib,json,os,re,shlex,shutil,subprocess,sys,tempfile,time,unittest
+import hashlib,io,json,os,re,shlex,shutil,subprocess,sys,tarfile,tempfile,time,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from package_component_ipk import build_ipk,inspect_ipk
 ROOT=Path(__file__).resolve().parents[1]
 SOURCE=ROOT/'luci-app-component-updater/root/usr/sbin/component-updaterctl'
-TAG='v154.0.8037.49-5';BUILD=f'component-naiveproxy-{TAG}-upx521-r2'
-ARCH='aarch64_cortex-a53';NEW='154.0.8037.49.5-r2';OLD='150.0.7871.63.1-r1'
+TAG='v154.0.8037.49-5';BUILD=f'component-naiveproxy-{TAG}-upx521-r3'
+ARCH='aarch64_cortex-a53';NEW='154.0.8037.49.5-r3';OLD='150.0.7871.63.1-r1'
 FILE=f'naiveproxy_{NEW}_{ARCH}.ipk'
 def sha(b):return hashlib.sha256(b).hexdigest()
 def binary(v):return f'#!/bin/sh\necho "naive {v}"\n'.encode()
@@ -16,7 +16,7 @@ class NativeTransactions(unittest.TestCase):
         t=tempfile.TemporaryDirectory();self.addCleanup(t.cleanup)
         self.root=Path(t.name);self.base=self.root/'state';self.cache=self.root/'cache'
         self.bin=self.root/'usr/bin/naive';self.bin.parent.mkdir(parents=True)
-        self.old=binary('154.0.8037.49');self.new=binary('154.0.8037.49')
+        self.old=binary('154.0.8037.49')+b'# manually packed prior build\n';self.new=binary('154.0.8037.49')
         self.bin.write_bytes(self.old);self.bin.chmod(0o755)
         self.pkg=self.root/'package.json';self.pkg.write_text(json.dumps(dict(version=OLD,arch=ARCH)))
         self.release=self.root/'openwrt_release';self.release.write_text("DISTRIB_ARCH='aarch64_cortex-a53'\n")
@@ -45,7 +45,10 @@ from pathlib import Path
 from package_component_ipk import inspect_ipk
 st=Path(os.environ['TEST_PKG']);s=json.loads(st.read_text())
 a=sys.argv[1:];cmd=a[0] if a else ''
-if cmd=='status':
+if cmd=='status' and len(a)>1 and a[1]=='libgcc1':
+ if os.environ.get('TEST_MISSING_LIBGCC'): sys.exit(1)
+ print('Package: libgcc1\nStatus: install user installed')
+elif cmd=='status':
  print('Package: naiveproxy\nVersion: '+s['version']+'\nArchitecture: '+s['arch']+'\nDepends: libc')
 elif cmd=='files':
  print('Package naiveproxy files:\n/usr/bin/naive')
@@ -57,6 +60,8 @@ elif cmd=='install':
  try:
   c,b=inspect_ipk(Path(a[-1]).read_bytes(),'/usr/bin/naive')
   assert c['Package']=='naiveproxy' and c['Architecture']==s['arch']
+  if c['Version']==s['version'] and '--force-reinstall' not in a:
+   sys.exit(0) # realistic no-op: an already-installed version isn't rewritten
   target=Path(os.environ['TEST_BINARY'])
   target.write_bytes(b);target.chmod(0o755)
   s['version']=c['Version']
@@ -92,12 +97,12 @@ else:sys.exit(2)
         p=self.mockbin/name;p.write_text(data);p.chmod(0o755)
     def build_fixture(self,b=None,hash_override=None):
         b=self.new if b is None else b
-        blob=build_ipk(package='naiveproxy',version=NEW,architecture=ARCH,target='/usr/bin/naive',binary=b)
+        blob=build_ipk(package='naiveproxy',version=NEW,architecture=ARCH,target='/usr/bin/naive',binary=b,depends=['libc','libgcc1'])
         (self.fixture/'update.ipk').write_bytes(blob)
         (self.fixture/'official.json').write_text(json.dumps(dict(tag_name=TAG)))
         m=dict(schema=1,component='naiveproxy',upstream_tag=TAG,release_tag=BUILD,
           assets={'aarch64_cortex_a53':dict(filename=FILE,format='ipk',package='naiveproxy',
-          package_arch=ARCH,package_version=NEW,sha256=hash_override or sha(blob),
+          package_arch=ARCH,package_version=NEW,dependencies=['libc','libgcc1'],sha256=hash_override or sha(blob),
           binary_sha256=sha(b))})
         raw=json.dumps(m).encode()
         (self.fixture/'manifest.json').write_bytes(raw)
@@ -126,13 +131,41 @@ else:sys.exit(2)
         rc,out=self.call('run');self.assertEqual(rc,0,out)
         self.assertEqual(json.loads(self.pkg.read_text())['version'],NEW)
         self.assertEqual(self.bin.read_bytes(),self.new)
+        self.assertNotEqual(sha(self.old),sha(self.new),'test fixture must exercise changed bytes')
         oldpack=list((self.base/'backups/naiveproxy').glob('*/previous.ipk'))
         self.assertEqual(len(oldpack),1)
+        # Old OpenWrt opkg accepts gzip(tar) of the official three members.
+        recovery=oldpack[0].read_bytes()
+        self.assertTrue(recovery.startswith(bytes((0x1f,0x8b))))
+        with tarfile.open(fileobj=io.BytesIO(recovery),mode='r:gz') as archive:
+            self.assertEqual(archive.getnames(),[
+                './debian-binary','./data.tar.gz','./control.tar.gz'])
         control,raw=inspect_ipk(oldpack[0].read_bytes(),'/usr/bin/naive')
         self.assertEqual(control['Version'],OLD);self.assertEqual(raw,self.old)
         rc,out=self.call('rollback');self.assertEqual(rc,0,out)
         self.assertEqual(json.loads(self.pkg.read_text())['version'],OLD)
         self.assertEqual(self.bin.read_bytes(),self.old)
+    def test_same_package_version_repairs_manually_replaced_binary(self):
+        self.pkg.write_text(json.dumps(dict(version=NEW,arch=ARCH)))
+        self.bin.write_bytes(binary('150.0.7871.63'))
+        self.bin.chmod(0o755)
+        self.checked()
+        rc,out=self.call('run')
+        self.assertEqual(rc,0,out)
+        self.assertEqual(self.bin.read_bytes(),self.new)
+        self.assertEqual(json.loads(self.pkg.read_text())['version'],NEW)
+        rc,out=self.call('rollback')
+        self.assertEqual(rc,0,out)
+        self.assertEqual(self.bin.read_bytes(),binary('150.0.7871.63'))
+        self.assertEqual(json.loads(self.pkg.read_text())['version'],NEW)
+
+    def test_missing_libgcc_dependency_blocks_before_download_and_install(self):
+        rc,out=self.call('check',{'TEST_MISSING_LIBGCC':'1'})
+        self.assertNotEqual(rc,0,out)
+        self.assertEqual(out['status'],'unsupported')
+        self.assertFalse((self.cache/'plan.json').exists())
+        self.assertEqual(json.loads(self.pkg.read_text())['version'],OLD)
+
     def test_corrupt_ipk_never_installs(self):
         self.checked()
         (self.fixture/'update.ipk').write_bytes(b'tampered')

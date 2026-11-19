@@ -8,6 +8,9 @@ on:
       - 'tools/component_builder.py'
       - 'tools/package_component_ipk.py'
       - 'tools/validate_artifacts.py'
+      - 'tools/smoke_arm64.py'
+      - 'tools/legacy_opkg_fixture.py'
+      - 'tools/runtime-smoke.Dockerfile'
   schedule:
     # Cloud-side prebuild; router does not wait for compression.
     - cron: '7,27,47 * * * *'
@@ -17,6 +20,7 @@ on:
       - 'components/**'
       - 'tools/component_builder.py'
       - 'tools/validate_artifacts.py'
+      - 'tools/smoke_arm64.py'
       - 'tests/**'
   workflow_dispatch:
     inputs:
@@ -73,6 +77,18 @@ jobs:
             )
             if gh release view "$TAG" >/dev/null 2>&1; then
               echo "Published artifact exists: $TAG"
+              # Recheck existing pre-releases when source code changes or when
+              # manually dispatched; scheduled polling can skip unchanged assets.
+              case "$GITHUB_EVENT_NAME" in
+                push|workflow_dispatch|pull_request)
+                  OUT="dist/$COMPONENT_ID"
+                  mkdir -p "$OUT"
+                  gh release download "$TAG" --dir "$OUT" --pattern "*.ipk"
+                  gh release download "$TAG" --dir "$OUT" --pattern "manifest.json"
+                  printf '%s\n' "$TAG" > "$OUT/release-tag.txt"
+                  python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
+                  ;;
+              esac
               continue
             fi
             OUT="dist/$COMPONENT_ID"
@@ -86,9 +102,176 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  native-smoke:
+    name: Execute real UPX binaries on native ARM64 runner
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-ipk-candidates
+          path: dist
+      - name: Prepare isolated ARM64 musl and libgcc runtime
+        run: docker build --file tools/runtime-smoke.Dockerfile --tag component-updater-arm64-smoke:alpine-3.22 tools/
+      - name: Verify native ARM64 executable version for each candidate
+        run: |
+          set -euo pipefail
+          mapfile -t manifests < <(find dist -mindepth 2 -maxdepth 2 -type f -name manifest.json | sort)
+          if [ "${#manifests[@]}" -eq 0 ]; then
+            echo "No new components this cycle"
+          fi
+          for manifest in "${manifests[@]}"; do
+            python3 tools/validate_artifacts.py --manifest "$manifest"
+            python3 tools/smoke_arm64.py --manifest "$manifest"
+          done
+
+  legacy-opkg:
+    name: OpenWrt ${{ matrix.version }} native opkg install and rollback
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: '21.02.5'
+            sha256: '99d3c353b214304b24ec28a6499715a1b00fad7eabb34e55b2db5f90440646cf'
+          - version: '24.10.5'
+            sha256: 'fb3245bce37575f1fc9cc467909c37c5b12e49bf7993a34cd19893511bccf40e'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download hash-verified official OpenWrt 21.02.5 x86_64 rootfs
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS="$(mktemp -d)"
+          echo "ROOTFS=$ROOTFS" >> "$GITHUB_ENV"
+          ROOTFS_URL=https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/x86/64/openwrt-${{ matrix.version }}-x86-64-rootfs.tar.gz
+          curl -fL --retry 3 --connect-timeout 15 --max-time 120 "$ROOTFS_URL" -o /tmp/openwrt-legacy-rootfs.tar.gz
+          echo '${{ matrix.sha256 }}  /tmp/openwrt-legacy-rootfs.tar.gz' | sha256sum -c
+          sudo tar -xzf /tmp/openwrt-legacy-rootfs.tar.gz -C "$ROOTFS"
+          sudo install -d -m 1777 "$ROOTFS/tmp"
+          sudo install -d -m 755 "$ROOTFS/dev"
+          if [ ! -e "$ROOTFS/dev/null" ]; then sudo mknod -m 666 "$ROOTFS/dev/null" c 1 3; fi
+          # Rootfs archives omit the devtmpfs devices available on real routers.
+          [ -e "$ROOTFS/dev/urandom" ] || sudo mknod -m 666 "$ROOTFS/dev/urandom" c 1 9
+          [ -e "$ROOTFS/dev/random" ] || sudo mknod -m 666 "$ROOTFS/dev/random" c 1 8
+          [ -e "$ROOTFS/dev/zero" ] || sudo mknod -m 666 "$ROOTFS/dev/zero" c 1 5
+
+          sudo chroot "$ROOTFS" /bin/sh -c 'command -v opkg && opkg --version'
+          sudo chroot "$ROOTFS" /bin/sh -c 'mkdir -p /var/lock /var/run && test -d /var/lock'
+          sed -n '/^make_rollback_ipk() {/,/^}/p' luci-app-component-updater/root/usr/sbin/component-updaterctl > /tmp/real-rollback-function.sh
+          test -s /tmp/real-rollback-function.sh
+          sudo cp /tmp/real-rollback-function.sh "$ROOTFS/tmp/real-rollback-function.sh"
+      - name: Create isolated upgrade, force-reinstall and downgrade IPKs
+        run: python3 tools/legacy_opkg_fixture.py --root "$ROOTFS"
+      - name: Native OpenWrt 21.02 opkg contract test (isolated rootfs only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chroot "$ROOTFS" /bin/sh -eu -c '
+            opkg install /tmp/naive-old.ipk
+            sha256sum -c /tmp/naive-old.sha
+            opkg status naiveproxy | grep -Fx "Version: 150.0.7871.63.1-r1"
+            # Run the actual production make_rollback_ipk() implementation.
+            BINARY=/usr/bin/naive
+            package_version() { opkg status naiveproxy | sed -n "s/^Version: //p" | head -n 1; }
+            package_arch() { opkg status naiveproxy | sed -n "s/^Architecture: //p" | head -n 1; }
+            package_depends() { opkg status naiveproxy | sed -n "s/^Depends: //p" | head -n 1; }
+            . /tmp/real-rollback-function.sh
+            mkdir -p /tmp/native-rollback
+            make_rollback_ipk /tmp/native-rollback
+            test -s /tmp/native-rollback/previous.ipk
+            opkg install /tmp/naive-new.ipk
+            sha256sum -c /tmp/naive-new.sha
+            opkg status naiveproxy | grep -Fx "Version: 154.0.8037.49.5-r3"
+            opkg install --force-reinstall /tmp/naive-repair.ipk
+            sha256sum -c /tmp/naive-repair.sha
+            opkg status naiveproxy | grep -Fx "Version: 154.0.8037.49.5-r3"
+            opkg install --force-downgrade --force-reinstall /tmp/native-rollback/previous.ipk
+            sha256sum -c /tmp/naive-old.sha
+            opkg status naiveproxy | grep -Fx "Version: 150.0.7871.63.1-r1"
+          '
+      - name: Verify native opkg installs LuCI manager and preserves UCI configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/package_ipk.py --out /tmp/manager-build
+          sudo cp /tmp/manager-build/luci-app-component-updater_0.2.1-1_all.ipk "$ROOTFS/tmp/manager.ipk"
+          sudo chroot "$ROOTFS" /bin/sh -eu -c '
+            # The clean rootfs deliberately lacks LuCI dependencies; force-depends
+            # tests package installation semantics only, not full UI/runtime.
+            opkg install --force-depends /tmp/manager.ipk
+            test -x /usr/sbin/component-updaterctl
+            test -x /usr/libexec/rpcd/component-updater
+            test -r /usr/share/rpcd/acl.d/luci-app-component-updater.json
+            test -r /usr/share/luci/menu.d/luci-app-component-updater.json
+            /usr/libexec/rpcd/component-updater list | grep -q rollback
+            grep -q "config updater" /etc/config/component-updater
+            echo "    option github_proxy_mode '\''assets'\''" >> /etc/config/component-updater
+            opkg install --force-depends --force-reinstall /tmp/manager.ipk
+            grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
+          '
+
+      - name: Verify installed rpcd handler works directly before ubus integration
+        run: |
+          sudo chroot "$ROOTFS" /bin/sh -c '
+            echo "== jshn paths =="
+            ls -l /usr/share/libubox/jshn.sh /usr/bin/jshn 2>&1 || true
+            echo "== controller status =="
+            /usr/sbin/component-updaterctl status
+          '
+      - name: Test real rpcd executable plugin over ubus on OpenWrt
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chroot "$ROOTFS" /sbin/ubusd -s /tmp/component-ubus.sock > /tmp/component-ubusd.log 2>&1 &
+          ubusd_pid=$!
+          rpcd_pid=''
+          cleanup() {
+            [ -z "$rpcd_pid" ] || sudo kill "$rpcd_pid" >/dev/null 2>&1 || true
+            sudo kill "$ubusd_pid" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 60); do
+            [ -S "$ROOTFS/tmp/component-ubus.sock" ] && break
+            sleep 0.1
+          done
+          test -S "$ROOTFS/tmp/component-ubus.sock" || {
+            echo "::error::Isolated ubusd did not create its socket"
+            cat /tmp/component-ubusd.log
+            exit 1
+          }
+          sudo chroot "$ROOTFS" /sbin/rpcd -s /tmp/component-ubus.sock > /tmp/component-rpcd.log 2>&1 &
+          rpcd_pid=$!
+          for i in $(seq 1 60); do
+            if sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-ubus.sock -v list component-updater > /tmp/component-rpcd-methods.json 2>/dev/null; then break; fi
+            sleep 0.1
+          done
+          cat /tmp/component-rpcd-methods.json
+          grep -q rollback /tmp/component-rpcd-methods.json || {
+            echo "::error::Real rpcd plugin not registered"
+            cat /tmp/component-rpcd.log
+            exit 1
+          }
+          sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-ubus.sock call component-updater status > /tmp/component-rpcd-status.json
+          cat /tmp/component-rpcd-status.json
+          grep -q '"component": "naiveproxy"' /tmp/component-rpcd-status.json
+          sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-ubus.sock call component-updater plan > /tmp/component-rpcd-plan.json
+          grep -q unavailable /tmp/component-rpcd-plan.json
   publish:
     name: Revalidate and publish verified native IPKs
-    needs: build
+    needs: [build, native-smoke, legacy-opkg]
     if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push' || inputs.publish == true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -116,8 +299,8 @@ jobs:
             TAG=$(cat "$OUT/release-tag.txt")
             [[ "$TAG" == component-* && "$TAG" != *'/'* ]] || exit 1
             if gh release view "$TAG" >/dev/null 2>&1; then
-              echo "::error::Release appeared during build: $TAG. Refusing to overwrite."
-              exit 1
+              echo "Existing release verified and left immutable: $TAG"
+              continue
             fi
             gh release create "$TAG" "$OUT"/*.ipk "$MANIFEST" \
               --title "$TAG" --latest=false --prerelease \

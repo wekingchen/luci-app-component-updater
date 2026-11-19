@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-component-updater
-PKG_VERSION:=0.2.0
+PKG_VERSION:=0.2.1
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=wekingchen
@@ -16,6 +16,10 @@ define Package/luci-app-component-updater
   TITLE:=Generic component updater (NaiveProxy first)
   PKGARCH:=all
   DEPENDS:=+luci-base +rpcd +jsonfilter +libubox +opkg
+endef
+
+define Package/luci-app-component-updater/conffiles
+/etc/config/component-updater
 endef
 
 define Package/luci-app-component-updater/description

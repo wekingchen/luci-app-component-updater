@@ -87,7 +87,7 @@ class ReleaseContractTests(unittest.TestCase):
             ctl,packaged=inspect_ipk(archive.read_bytes(),'/usr/bin/naive')
             self.assertEqual(ctl['Package'],'naiveproxy')
             self.assertEqual(ctl['Architecture'],'aarch64_cortex-a53')
-            self.assertEqual(ctl['Version'],'154.0.8037.49.5-r2')
+            self.assertEqual(ctl['Version'],'154.0.8037.49.5-r3')
             self.assertEqual(packaged,elf)
             self.assertEqual(result['source_sha256'],hashlib.sha256(blob).hexdigest())
             self.assertEqual(result['validation']['device_runtime'],'unverified')
@@ -104,11 +104,13 @@ class ReleaseContractTests(unittest.TestCase):
     def test_offline_ipk_contains_required_files_and_permissions(self):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,capture_output=True,text=True)
-            pkg=Path(td)/'luci-app-component-updater_0.2.0-1_all.ipk'
+            pkg=Path(td)/'luci-app-component-updater_0.2.1-1_all.ipk'
             self.assertTrue(pkg.is_file())
-            members=subprocess.check_output(['ar','t',str(pkg)],text=True).splitlines()
-            self.assertEqual(members,['debian-binary','control.tar.gz','data.tar.gz'])
-            data=subprocess.check_output(['ar','p',str(pkg),'data.tar.gz'])
+            self.assertTrue(pkg.read_bytes().startswith(bytes((0x1f,0x8b))))
+            with tarfile.open(pkg,mode='r:gz') as archive:
+                self.assertEqual(archive.getnames(),[
+                    './debian-binary','./data.tar.gz','./control.tar.gz'])
+                data=archive.extractfile('./data.tar.gz').read()
             with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as t:
                 names=set(t.getnames())
                 for path in [

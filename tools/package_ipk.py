@@ -6,21 +6,41 @@ from pathlib import Path
 import argparse
 import io
 import tarfile
-import subprocess
+from package_component_ipk import _outer_ipk
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "luci-app-component-updater"
 NAME = "luci-app-component-updater"
-VERSION = "0.2.0-1"
+VERSION = "0.2.1-1"
 
 
 def create_tar(path: Path, files: list[tuple[str, bytes, int]]) -> None:
+    """OpenWrt opkg does not create every missing parent directory for tar files.
+
+    Emit explicit directory entries before files to permit fresh installations
+    into a minimal rootfs (not merely extraction by Python tarfile).
+    """
+    directories=set()
+    for name, _, _ in files:
+        if not name.startswith("./") or "/../" in name or name.endswith("/"):
+            raise ValueError("unsafe package file target")
+        parts=name[2:].split("/")
+        if not all(parts):
+            raise ValueError("empty package file path")
+        for i in range(1,len(parts)):
+            directories.add("./"+"/".join(parts[:i]))
     with tarfile.open(path, "w:gz") as t:
+        for name in sorted(directories,key=lambda x:(x.count("/"),x)):
+            entry=tarfile.TarInfo(name+"/")
+            entry.type=tarfile.DIRTYPE
+            entry.mode=0o755
+            entry.uid=entry.gid=entry.mtime=0
+            t.addfile(entry)
         for name, data, mode in files:
-            entry = tarfile.TarInfo(name)
-            entry.size, entry.mode, entry.uid, entry.gid, entry.mtime = len(data), mode, 0, 0, 0
-            t.addfile(entry, io.BytesIO(data))
+            entry=tarfile.TarInfo(name)
+            entry.size,entry.mode,entry.uid,entry.gid,entry.mtime=len(data),mode,0,0,0
+            t.addfile(entry,io.BytesIO(data))
 
 
 def main():
@@ -40,7 +60,11 @@ def main():
                     "rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true\n"
                     "[ ! -x /etc/init.d/rpcd ] || /etc/init.d/rpcd restart >/dev/null 2>&1 || true\n"
                     "exit 0\n")
-        create_tar(folder / "control.tar.gz", [("./control", control.encode(), 0o644), ("./postinst", postinst.encode(), 0o755)])
+        create_tar(folder / "control.tar.gz", [
+            ("./control", control.encode(), 0o644),
+            ("./conffiles", b"/etc/config/component-updater\n", 0o644),
+            ("./postinst", postinst.encode(), 0o755),
+        ])
         data = []
         for path in (APP / "root").rglob("*"):
             if path.is_file():
@@ -53,7 +77,11 @@ def main():
                 data.append(("./" + target, path.read_bytes(), 0o644))
         create_tar(folder / "data.tar.gz", sorted(data))
         dest = output / f"{NAME}_{VERSION}_all.ipk"
-        subprocess.run(["ar", "r", str(dest.resolve()), "debian-binary", "control.tar.gz", "data.tar.gz"], cwd=folder, check=True)
+        dest.write_bytes(_outer_ipk([
+            ("debian-binary", (folder/"debian-binary").read_bytes()),
+            ("data.tar.gz", (folder/"data.tar.gz").read_bytes()),
+            ("control.tar.gz", (folder/"control.tar.gz").read_bytes()),
+        ]))
         print(dest)
 
 

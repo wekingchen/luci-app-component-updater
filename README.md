@@ -1,6 +1,6 @@
 # luci-app-component-updater
 
-OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 `--lzma --best` 压缩，然后生成**标准 opkg IPK**，分架构发布到 Releases。
+OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 `--lzma --best` 压缩，然后生成**OpenWrt 原生 gzip(tar) 格式 opkg IPK**，分架构发布到 Releases。
 
 ## 设备与边界
 
@@ -27,7 +27,7 @@ LuCI：官方版本 → Release API digest → 下载并校验 Manifest / IPK
 验证实际二进制版本、SHA256、opkg Version → 保存记录
 ```
 
-官方 Tag `v154.0.8037.49-5` 对应 package `154.0.8037.49.5-r2`，其中最后一位 `5` 保留官方修订，`-r2` 标识我们的包构建修订。原先手工复制 NaiveProxy 到 `/usr/bin/naive` 不会更新软件包数据库；现在通过 `opkg install` 正常升级，解决这个问题。
+官方 Tag `v154.0.8037.49-5` 对应 package `154.0.8037.49.5-r3`，其中最后一位 `5` 保留官方修订，`-r3` 标识我们的包构建修订。原先手工复制 NaiveProxy 到 `/usr/bin/naive` 不会更新软件包数据库；现在通过 `opkg install` 正常升级，解决这个问题。
 
 更新前生成由当前二进制和当前 opkg 版本/架构/依赖组成的本地恢复 IPK。回滚通过 `opkg install --force-downgrade --force-reinstall` 恢复之前的二进制哈希和 opkg 记录。原先手动覆盖过二进制的旧状态，在回滚后仍可能呈现不同的实际程序版本与 opkg Version，这是对更新前状态的忠实恢复。IPK 更新可能触发原包已有的维护脚本，设备实测前不能保证代理连接绝对无中断。
 
@@ -44,6 +44,8 @@ LuCI → 系统 → 组件更新 → GitHub 下载设置：
 
 ## 开发与验收
 
+发布门禁会使用 SHA256 固定的官方 OpenWrt 21.02.5 和 24.10.5 rootfs，运行两代真正的 opkg：从旧版安装、升级、同版本强制重装，再降级恢复并核对 SHA256 与 opkg 数据库版本；这并不等于 GL/N1 定制固件真机已经验证。
+
 ```sh
 python3 -m unittest discover -s tests -v
 python3 tools/component_builder.py --component naiveproxy --dry-run
@@ -52,7 +54,7 @@ python3 tools/validate_artifacts.py --manifest dist/manifest.json
 python3 tools/package_ipk.py --out dist
 ```
 
-通用构建工作流预先发布两个设备架构的 NaiveProxy 原生 IPK；LuCI 更新时**不会等待现场 UPX 压缩**。初始只有开发分支及 Draft PR 时，默认分支定时发布尚未启用。
+通用构建工作流预先发布两个设备架构的 NaiveProxy 原生 IPK；LuCI 更新时**不会等待现场 UPX 压缩**。默认分支已经启用定时提前构建；本轮 r3 开发候选仍留在 Draft PR，不会从 PR 发布生产 Release。
 
 ### 真机只读检查
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Component Updater / native opkg IPK adapter. Fixed component and package ID.
 # NEVER executes remote scripts and NEVER restarts PassWall.
-set -u
+# OpenWrt jshn.sh (especially 21.02) uses unset globals; nounset breaks RPC calls.
 umask 077
 
 BASE=/etc/component-updater
@@ -148,7 +148,7 @@ build_version() {
     core=${tag#v}
     case "$core" in *-*) base=${core%-*}; rev=${core##*-};; *) return 1;; esac
     case "$base:$rev" in *[!0-9.:]*) return 1;; esac
-    printf '%s.%s-r2\n' "$base" "$rev"
+    printf '%s.%s-r3\n' "$base" "$rev"
 }
 status() {
     v=$(current_version); [ -n "$v" ] || v=not-installed
@@ -178,6 +178,11 @@ status() {
     json_add_string ready "${r:-false}"
     json_dump; echo
 }
+runtime_dep_ok() {
+    # Never let opkg auto-install dependency packages from unknown/stale feeds
+    # during a NaiveProxy update. Require the local libgcc1 runtime beforehand.
+    opkg status libgcc1 2>/dev/null | grep -q '^Status: .*installed'
+}
 check_update() {
     create_dirs || return 1
     rm -f "$PLAN"
@@ -186,6 +191,7 @@ check_update() {
     a=$(arch) || { check_msg unsupported 'Unsupported OpenWrt architecture'; return 1; }
     [ -x "$BINARY" ] && [ ! -L "$BINARY" ] || { check_msg unsupported 'Existing naive binary is missing or symlinked'; return 1; }
     [ -n "$(package_version)" ] || { check_msg unsupported 'naiveproxy must already be installed through opkg'; return 1; }
+    runtime_dep_ok || { check_msg unsupported 'Missing installed libgcc1 runtime dependency; no package changes made'; return 1; }
     space_ok || { check_msg unsupported 'Insufficient tmp or overlay space'; return 1; }
     download https://api.github.com/repos/klzgrad/naiveproxy/releases/latest "$CACHE/official.tmp" ||
         { check_msg error 'Official GitHub API unavailable'; return 1; }
@@ -193,7 +199,7 @@ check_update() {
     tag=$(jsonval "$CACHE/official.json" '@.tag_name')
     valid_tag "$tag" || { check_msg error 'Unexpected official release tag'; return 1; }
     version=$(build_version "$tag") || { check_msg error 'Unsupported release version format'; return 1; }
-    build_tag="component-naiveproxy-$tag-upx521-r2"
+    build_tag="component-naiveproxy-$tag-upx521-r3"
     api="https://api.github.com/repos/$GITHUB/releases/tags/$build_tag"
     download "$api" "$CACHE/release.tmp" ||
         { check_msg pending 'Official update found; native IPKs are being prepared'; return 0; }
@@ -257,7 +263,7 @@ has_valid_plan() {
     tag=$(jsonval "$PLAN" '@.upstream_tag')
     valid_tag "$tag" || return 1
     version=$(build_version "$tag") || return 1
-    [ "$(jsonval "$PLAN" '@.build_tag')" = "component-naiveproxy-$tag-upx521-r2" ] || return 1
+    [ "$(jsonval "$PLAN" '@.build_tag')" = "component-naiveproxy-$tag-upx521-r3" ] || return 1
     [ "$(jsonval "$PLAN" '@.filename')" = "naiveproxy_${version}_${a}.ipk" ] || return 1
     [ "$(jsonval "$PLAN" '@.package_version')" = "$version" ] || return 1
     valid_hash "$(jsonval "$PLAN" '@.sha256')" || return 1
@@ -276,13 +282,6 @@ snapshot_owner_ok() {
         esac
     done
     [ "$seen" -eq 1 ]
-}
-ar_member() {
-    name=$1 source=$2 output=$3
-    nbytes=$(wc -c < "$source" | tr -d ' ')
-    printf '%-16s%-12s%-6s%-6s%-8s%-10s\140\n' "$name/" 0 0 0 100644 "$nbytes" >> "$output"
-    cat "$source" >> "$output"
-    [ $((nbytes%2)) -eq 0 ] || printf '\n' >> "$output"
 }
 make_rollback_ipk() {
     dst=$1
@@ -305,10 +304,8 @@ make_rollback_ipk() {
     (cd "$staging/root" && tar -czf "$staging/data.tar.gz" ./usr/bin/naive) || return 1
     printf '2.0\n' > "$staging/debian-binary"
     rollback=$dst/previous.ipk
-    printf '!<arch>\n' > "$rollback"
-    ar_member debian-binary "$staging/debian-binary" "$rollback" || return 1
-    ar_member control.tar.gz "$staging/control.tar.gz" "$rollback" || return 1
-    ar_member data.tar.gz "$staging/data.tar.gz" "$rollback" || return 1
+    # OpenWrt IPKs use gzip(tar); the outer archive is not Debian ar.
+    (cd "$staging" && tar -czf "$rollback" ./debian-binary ./data.tar.gz ./control.tar.gz) || return 1
     rm -rf "$staging"
     [ -s "$rollback" ] || return 1
 }
@@ -336,6 +333,7 @@ perform_install() {
     [ -x "$BINARY" ] && [ ! -L "$BINARY" ] && snapshot_owner_ok ||
         { job_record failed 'Package ownership is unsafe or includes additional files'; return 1; }
     space_ok || { job_record failed 'Not enough storage'; return 1; }
+    runtime_dep_ok || { job_record failed 'libgcc1 must already be installed'; return 1; }
     build_tag=$(jsonval "$PLAN" '@.build_tag')
     filename=$(jsonval "$PLAN" '@.filename')
     desired=$(jsonval "$PLAN" '@.package_version')
@@ -371,7 +369,11 @@ perform_install() {
     mv -f "$TXN.tmp.$$" "$TXN" || return 1
     sync
     job_record installing 'Installing native IPK via opkg; PassWall will not be restarted by this updater'
-    if ! opkg install "$work/update.ipk" > "$work/opkg.log" 2>&1 ||
+    # A manually overwritten same-version executable requires an actual reinstall,
+    # not opkg's normal "already installed" early-exit.
+    reinstall=''
+    [ "$(package_version)" != "$desired" ] || reinstall='--force-reinstall'
+    if ! opkg install $reinstall "$work/update.ipk" > "$work/opkg.log" 2>&1 ||
        [ "$(package_version)" != "$desired" ] ||
        ! check_sha "$BINARY" "$binhash"; then
         if restore_previous "$id"; then
