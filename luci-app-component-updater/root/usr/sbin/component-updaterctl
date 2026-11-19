@@ -167,6 +167,11 @@ check_update() {
     done
     [ -x "$BINARY" ] || { json_msg unsupported 'existing naive binary not found'; return 1; }
     space_ok || { json_msg unsupported 'insufficient temporary or persistent storage'; return 1; }
+    if [ "$(jsonval "$RECEIPT" '@.upstream_tag')" = "$tag" ] && check_sha256 "$BINARY" "$binary_sum"; then
+        rm -f "$PLAN"
+        json_msg up_to_date 'Installed binary matches the newest recorded official build'
+        return 0
+    fi
     json_init
     json_add_string component naiveproxy
     json_add_string upstream_tag "$tag"
