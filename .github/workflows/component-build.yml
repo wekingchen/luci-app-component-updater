@@ -17,7 +17,7 @@ on:
         type: string
         default: all
       publish:
-        description: Publish signed assets after validation
+        description: Publish native IPKs after validation
         type: boolean
         default: true
 
@@ -64,11 +64,7 @@ jobs:
           PY
             )
             if gh release view "$TAG" >/dev/null 2>&1; then
-              if ! gh release view "$TAG" --json assets -q '.assets[].name' | grep -Fxq 'manifest.json.sig'; then
-                echo "::error::Unsigned legacy release $TAG; bump component revision, never silently reuse unsigned assets."
-                exit 1
-              fi
-              echo "Already has a signed release: $TAG"
+              echo "Published artifact exists: $TAG"
               continue
             fi
             OUT="dist/$COMPONENT_ID"
@@ -78,12 +74,12 @@ jobs:
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: unsigned-component-candidates
+          name: validated-ipk-candidates
           path: dist/
           if-no-files-found: error
 
-  sign-and-publish:
-    name: Separately sign and publish verified candidates
+  publish:
+    name: Revalidate and publish verified native IPKs
     needs: build
     if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish == true) }}
     runs-on: ubuntu-24.04
@@ -96,29 +92,11 @@ jobs:
         with:
           name: unsigned-component-candidates
           path: dist
-      - name: Install pinned OpenWrt usign on isolated publish runner
-        run: |
-          set -euo pipefail
-          git clone --quiet https://github.com/openwrt/usign.git /tmp/component-usign
-          git -C /tmp/component-usign checkout --quiet c4c72b1b07945ee192361dc751291a7c98d6adcd
-          cmake -S /tmp/component-usign -B /tmp/component-usign/build -DUSE_LIBUBOX=OFF
-          cmake --build /tmp/component-usign/build -j2
-          sudo install -m755 /tmp/component-usign/build/usign /usr/local/bin/usign
-      - name: Validate once more, sign and release
+      - name: Validate once more and publish native IPKs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SIGNING_KEY_B64: ${{ secrets.COMPONENT_USIGN_PRIVATE_KEY_B64 }}
         run: |
           set -euo pipefail
-          PUBKEY="luci-app-component-updater/root/usr/share/component-updater/trust.pub"
-          if [[ -z "$SIGNING_KEY_B64" || ! -s "$PUBKEY" ]]; then
-            echo '::error::Missing private signing key GitHub Secret or pinned public key. Unsigned publication refused.'
-            exit 1
-          fi
-          umask 077
-          PRIVATE=$(mktemp)
-          trap 'rm -f "$PRIVATE"' EXIT
-          printf '%s' "$SIGNING_KEY_B64" | base64 -d > "$PRIVATE"
           mapfile -t MANIFESTS < <(find dist -mindepth 2 -maxdepth 2 -name manifest.json -type f | sort)
           if [[ "${#MANIFESTS[@]}" -eq 0 ]]; then
             echo 'Nothing new to sign or publish'
@@ -133,9 +111,7 @@ jobs:
               echo "::error::Release appeared during build: $TAG. Refusing to overwrite."
               exit 1
             fi
-            usign -S -m "$MANIFEST" -s "$PRIVATE" -x "$OUT/manifest.json.sig"
-            usign -V -q -m "$MANIFEST" -p "$PUBKEY" -x "$OUT/manifest.json.sig"
-            gh release create "$TAG" "$OUT"/*.tar.xz "$MANIFEST" "$OUT/manifest.json.sig" \
+            gh release create "$TAG" "$OUT"/*.ipk "$MANIFEST" \
               --title "$TAG" --latest=false --prerelease \
-              --notes "Signed candidate: pinned usign/Ed25519 manifest; official asset digests and UPX round-trip checked. Device proxy functionality requires separate real-router acceptance."
+              --notes "Native OpenWrt IPK candidate: verified official Release asset SHA256, UPX round-trip, IPK package contents and architecture. No detached signature: install is user-confirmed and downloads are verified against GitHub Release API digest. Router functional test still required."
           done
