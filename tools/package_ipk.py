@@ -6,7 +6,7 @@ from pathlib import Path
 import argparse
 import io
 import tarfile
-import subprocess
+from package_component_ipk import _ar
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +53,11 @@ def main():
                 data.append(("./" + target, path.read_bytes(), 0o644))
         create_tar(folder / "data.tar.gz", sorted(data))
         dest = output / f"{NAME}_{VERSION}_all.ipk"
-        subprocess.run(["ar", "r", str(dest.resolve()), "debian-binary", "control.tar.gz", "data.tar.gz"], cwd=folder, check=True)
+        dest.write_bytes(_ar([
+            ("debian-binary", (folder/"debian-binary").read_bytes()),
+            ("control.tar.gz", (folder/"control.tar.gz").read_bytes()),
+            ("data.tar.gz", (folder/"data.tar.gz").read_bytes()),
+        ]))
         print(dest)
 
 

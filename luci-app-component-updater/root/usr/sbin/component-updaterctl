@@ -280,7 +280,7 @@ snapshot_owner_ok() {
 ar_member() {
     name=$1 source=$2 output=$3
     nbytes=$(wc -c < "$source" | tr -d ' ')
-    printf '%-16s%-12s%-6s%-6s%-8s%-10s\140\n' "$name/" 0 0 0 100644 "$nbytes" >> "$output"
+    printf '%-16s%-12s%-6s%-6s%-8s%-10s\140\n' "$name" 0 0 0 100644 "$nbytes" >> "$output"
     cat "$source" >> "$output"
     [ $((nbytes%2)) -eq 0 ] || printf '\n' >> "$output"
 }

@@ -2,7 +2,7 @@
 import hashlib, json, sys, tempfile, unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from package_component_ipk import build_ipk, inspect_ipk
+from package_component_ipk import build_ipk, inspect_ipk, open_ipk
 from validate_artifacts import verify_manifest
 def sha(blob): return hashlib.sha256(blob).hexdigest()
 class NativeArtifactTests(unittest.TestCase):
@@ -27,6 +27,21 @@ class NativeArtifactTests(unittest.TestCase):
         self.assertEqual(verify_manifest(self.manifest)['component'],'naiveproxy')
         ctl,b=inspect_ipk(self.asset.read_bytes(),'/usr/bin/naive')
         self.assertEqual(ctl['Version'],self.ver);self.assertEqual(b,self.bin)
+    def test_ancient_opkg_uses_exact_ar_names_without_slash(self):
+        blob=self.asset.read_bytes()
+        self.assertTrue(blob.startswith(b'!<arch>\\n'))
+        pos=8
+        names=[]
+        while pos < len(blob):
+            header=blob[pos:pos+60]
+            self.assertEqual(header[58:],b'`\\n')
+            member=header[:16].decode('ascii').rstrip(' ')
+            self.assertFalse(member.endswith('/'),member)
+            names.append(member)
+            n=int(header[48:58].decode('ascii').strip())
+            pos+=60+n+(n%2)
+        self.assertEqual(names,['debian-binary','control.tar.gz','data.tar.gz'])
+
     def test_reproducible_package(self):
         kw=dict(package='naiveproxy',version=self.ver,architecture=self.arch,target='/usr/bin/naive',binary=self.bin)
         self.assertEqual(build_ipk(**kw),build_ipk(**kw))

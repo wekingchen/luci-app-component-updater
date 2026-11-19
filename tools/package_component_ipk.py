@@ -39,7 +39,7 @@ def _ar(members: list[tuple[str,bytes]]) -> bytes:
     for name,data in members:
         if len(name)>15 or not re.fullmatch(r"[A-Za-z0-9.-]+",name):
             raise ValueError("invalid ar member")
-        header=(f"{name+'/':<16}{0:<12}{0:<6}{0:<6}{'100644':<8}{len(data):<10}`\n").encode("ascii")
+        header=(f"{name:<16}{0:<12}{0:<6}{0:<6}{'100644':<8}{len(data):<10}`\n").encode("ascii")
         if len(header)!=60:
             raise ValueError("invalid ar header")
         out.write(header)
