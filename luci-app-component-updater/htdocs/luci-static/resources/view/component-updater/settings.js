@@ -4,8 +4,7 @@
 
 return view.extend({
     render: function() {
-        var m = new form.Map('component-updater', '下载连接设置',
-            '选择官方直连或可信的下载中转服务。设置仅影响更新器的连接方式，不会改变 NaiveProxy 的官方来源或自动触发安装。');
+        var m = new form.Map('component-updater', null, null);
         var s = m.section(form.NamedSection, 'main', 'updater', '网络连接');
         s.anonymous = true;
 
@@ -52,7 +51,7 @@ return view.extend({
                 E('header', {'class': 'cu-settings-heading'}, [
                     E('a', {'class': 'cu-back', href: L.url('admin/system/component-updater')}, '‹ 返回组件更新'),
                     E('h2', {}, 'GitHub 下载设置'),
-                    E('p', {}, '根据当前网络选择合适的下载方式。选项会保存到设备本地，可以随时切换。')
+                    E('p', {}, '根据当前网络选择官方直连或可信的下载中转服务。设置保存在设备本地，不改变官方来源，也不会自动安装更新。')
                 ]),
                 E('div', {'class': 'cu-settings-form'}, formNode),
                 E('div', {'class': 'cu-settings-note'}, [
