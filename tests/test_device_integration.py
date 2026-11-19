@@ -131,6 +131,19 @@ else:sys.exit(2)
         self.assertNotEqual(sha(self.old),sha(self.new),'test fixture must exercise changed bytes')
         oldpack=list((self.base/'backups/naiveproxy').glob('*/previous.ipk'))
         self.assertEqual(len(oldpack),1)
+        # Older 21.02-era GL.iNet opkg requires exact archive member names:
+        # GNU ar-style suffix '/' makes even a valid IPK unparsable.
+        recovery=oldpack[0].read_bytes()
+        self.assertTrue(recovery.startswith(b'!<arch>\\n'))
+        pos=8; members=[]
+        while pos<len(recovery):
+            header=recovery[pos:pos+60]
+            name=header[:16].decode('ascii').rstrip(' ')
+            self.assertFalse(name.endswith('/'),name)
+            members.append(name)
+            count=int(header[48:58].decode('ascii').strip())
+            pos+=60+count+(count%2)
+        self.assertEqual(members,['debian-binary','control.tar.gz','data.tar.gz'])
         control,raw=inspect_ipk(oldpack[0].read_bytes(),'/usr/bin/naive')
         self.assertEqual(control['Version'],OLD);self.assertEqual(raw,self.old)
         rc,out=self.call('rollback');self.assertEqual(rc,0,out)
