@@ -43,7 +43,7 @@ class RpcdCompatibilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,
                            stdout=subprocess.DEVNULL)
-            p=Path(td)/'luci-app-component-updater_0.1.0-1_all.ipk'
+            p=Path(td)/'luci-app-component-updater_0.2.0-1_all.ipk'
             control=subprocess.check_output(['ar','p',str(p),'control.tar.gz'])
             with tarfile.open(fileobj=io.BytesIO(control),mode='r:gz') as tar:
                 dep=tar.extractfile('./control').read().decode()

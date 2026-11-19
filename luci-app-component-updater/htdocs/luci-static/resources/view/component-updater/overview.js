@@ -149,7 +149,7 @@ return view.extend({
         poll.add(this.refresh.bind(this), 5);
         return E('div', {}, [
             E('h2', {}, '组件更新'),
-            E('p', {}, '通用组件更新引擎 · V1.0 首批支持 NaiveProxy'),
+            E('p', {}, '通用组件更新引擎 · V0.2 首批支持 NaiveProxy'),
             this.page
         ]);
     }

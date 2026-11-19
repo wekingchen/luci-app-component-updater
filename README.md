@@ -1,98 +1,71 @@
 # luci-app-component-updater
 
-OpenWrt 通用组件更新平台：**配置驱动的 GitHub Actions 构建器 + 独立组件定义 + LuCI 设备更新器**。V0.1 首个适配组件是 NaiveProxy，其余组件按需新增，而不是复制构建工作流。
+OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 \`--lzma --best\` 压缩，然后生成**标准 opkg IPK**，分架构发布到 Releases。
 
-> 当前为首版开发候选（pre-release）。已完成本地 Python 单测和 IPK 打包，**尚未经过 GL-MT3600BE / Phicomm N1 的真实安装验收**。未经验证，请不要在远程唯一网络通道上执行替换。
+## 设备与边界
 
-## 目标设备
+- GL-MT3600BE：GL.iNet 4.x 定制 OpenWrt 21.02，\`aarch64_cortex-a53\`
+- Phicomm N1：LEDE/OpenWrt 24.10，\`aarch64_generic\`
+- 当前仅支持已由 **opkg** 安装、且只拥有 \`/usr/bin/naive\` 一个文件的 \`naiveproxy\` 软件包。其他程序未来需新增适配器和组件定义，不接收任意 Shell 命令。
+- 不更新固件、不替换 PassWall 设置、不主动重启 PassWall；旧的正在运行的进程可能要待服务下次重载才能使用新文件。
 
-- GL.iNet GL-MT3600BE：运行 OpenWrt 21.02-SNAPSHOT 定制系统，opkg `aarch64_cortex-a53`，内核 5.4.281。
-- Phicomm N1：OpenWrt/LEDE 24.10.x，`aarch64_generic`。
+## 更新流程
 
-IPK 属于 `all` 架构。是否兼容具体固件的旧版 LuCI / rpcd，必须在设备上进一步测试。
+\`\`\`text
+components/*.json
+      |
+通用 Actions：官方 Release + SHA256 → UPX → ELF / 往返测试
+      |
+按架构生成 naiveproxy_<version>_<arch>.ipk + manifest.json
+      |
+GitHub Release（提前发布）
+      |
+LuCI：官方版本 → Release API digest → 下载并校验 Manifest / IPK
+      |
+备份当前文件与 opkg 元数据 → 生成本地回滚 IPK → opkg install
+      |
+验证实际二进制版本、SHA256、opkg Version → 保存记录
+\`\`\`
 
-## 架构
+官方 Tag \`v154.0.8037.49-5\` 对应 package \`154.0.8037.49.5-r2\`，其中最后一位 \`5\` 保留官方修订，\`-r2\` 标识我们的包构建修订。原先手工复制 NaiveProxy 到 \`/usr/bin/naive\` 不会更新软件包数据库；现在通过 \`opkg install\` 正常升级，解决这个问题。
 
-```text
-components/*.json                  单一组件定义及架构资源规则
-           │
-           ├── tools/component_builder.py
-           │     官方 Releases → digest 校验 → ELF → UPX → 回解校验
-           │     → manifest.json / tar.xz / 来源哈希
-           │
-           └── device adapter (V0.1 NaiveProxy)
-                 ├── /usr/sbin/component-updaterctl
-                 ├── /usr/libexec/rpcd/component-updater
-                 ├── LuCI 原生 JS 页面
-                 └── 备份 / 原子替换 / 手动回滚
-```
+更新前生成由当前二进制和当前 opkg 版本/架构/依赖组成的本地恢复 IPK。回滚通过 \`opkg install --force-downgrade --force-reinstall\` 恢复之前的二进制哈希和 opkg 记录。原先手动覆盖过二进制的旧状态，在回滚后仍可能呈现不同的实际程序版本与 opkg Version，这是对更新前状态的忠实恢复。IPK 更新可能触发原包已有的维护脚本，设备实测前不能保证代理连接绝对无中断。
 
-## GitHub Actions
+## GitHub 反代
 
-- **Component Updater / CI & IPK**：单测、Shell/JS 静态检查、通用 `all.ipk` 构建，PR 会运行。CI Artifacts 中可获取安装包。
-- **Component Builder / Official Releases & UPX**：每 20 分钟检查最新官方 Release，也可手动执行。上游未变化且已有同名 Release 时跳过。对 NaiveProxy 提取两个 OpenWrt ARM64 官方资源，严格验证 GitHub Release 中的 `digest`，使用 UPX **5.2.1** `--lzma --best` 压缩、`upx -t` 校验及解压往返字节比较，生成包含双架构资源的 `manifest.json`。首次构建只代表基础验证，不代表通过设备真实代理连接测试。
+LuCI → 系统 → 组件更新 → GitHub 下载设置：
 
-以后增加程序，应提供新 `components/<id>.json`，构建器当前已有配置化来源、架构、解包、压缩/不压缩支持；若新程序运行协议、软件包管理或服务健康检查不同，则新增适配器。V0.1 的设备更新器只允许 NaiveProxy，不会执行任意组件提供的 Shell 指令。
+- **关闭（默认）**：全部走 GitHub 官方域名；
+- **仅下载文件**：官方 Release API 直连，Manifest 与 IPK 走 HTTPS 反代；
+- **API + 文件**：查询与下载均经 HTTPS 反代；只有在信任该反代服务时使用。
+- 失败直连回退可单独开关。路由器侧不需要 UPX，也不需要管理签名私钥。
 
-### 手动本地测试
+不采用独立 usign 签名，但下载仍对比 GitHub Release API 提供的各资产 \`digest\`，校验 Manifest 和 IPK SHA256。**哈希不是数字签名**：如果代理同时伪造 GitHub API 和文件，或仓库发布权限被入侵，无法提供端到端真实性保证。因此首版仅手动确认安装，不开启无人值守更新。
 
-```sh
+## 开发与验收
+
+\`\`\`sh
 python3 -m unittest discover -s tests -v
 python3 tools/component_builder.py --component naiveproxy --dry-run
 python3 tools/component_builder.py --component naiveproxy --output dist
+python3 tools/validate_artifacts.py --manifest dist/manifest.json
 python3 tools/package_ipk.py --out dist
-```
+\`\`\`
 
-后两项涉及 GitHub 外部网络；`package_ipk.py` 可离线运行。正式软件包也可用根目录内 `luci-app-component-updater/Makefile` 在 OpenWrt SDK 构建。
+通用构建工作流预先发布两个设备架构的 NaiveProxy 原生 IPK；LuCI 更新时**不会等待现场 UPX 压缩**。初始只有开发分支及 Draft PR 时，默认分支定时发布尚未启用。
 
-## 设备端
+### 真机只读检查
 
-安装开发版 IPK 后可使用：
+安装测试版 LuCI IPK 后：
 
-```sh
-component-updaterctl status
-component-updaterctl check
-component-updaterctl plan
-component-updaterctl start
-component-updaterctl status
-component-updaterctl rollback
-```
+\`\`\`sh
+sh /usr/libexec/component-updater/device-readonly-acceptance.sh
+\`\`\`
 
-LuCI → 系统 → 组件更新 → GitHub 下载设置：关闭反代（默认）、仅 Release 下载反代、API 与 Release 都反代；支持 HTTPS 自定义前缀及失败时直连回退。反代不会替代本机 usign 公钥验签。设备端需要可用的 HTTPS、CA 证书、usign 及支持 xz 的 tar 命令；条件不满足不会跳过校验。详见 [签名/反代/真机验收手册](docs/signing-proxy-device-acceptance.md)。
+真实安装/回滚测试需要备用管理通道、签署明确确认，并在两台设备分别执行：
 
-### MT3600BE 已知安装方式
+\`\`\`sh
+COMPONENT_ACCEPT_LIVE=I_UNDERSTAND sh /usr/libexec/component-updater/device-live-acceptance.sh --install-and-rollback
+\`\`\`
 
-- `/usr/bin/naive` 由 opkg naiveproxy 软件包登记。
-- PassWall 的 `/tmp/etc/passwall/bin/naive` 为指向 `/usr/bin/naive` 的符号链接。
-- 用户手动用 UPX 压缩并覆盖后，**`naive --version` 与 `opkg status naiveproxy` 不同属正常情况**。
-- 更新器只修改持久化二进制文件，不更新 `opkg` 的版本数据库；只显示真实版本和本工具记录的完整上游 Tag。更新后不会重启 PassWall，旧运行进程可能继续使用旧 inode。
-
-## 安全边界
-
-- 固定可信的上游仓库和构建仓库，不接受浏览器传入的任意 URL、执行路径、组件 ID 或命令参数。
-- 校验官方资产 SHA256、设备下载资产 SHA256、二进制 SHA256、实际可执行版本；更新前必须有可读备份与磁盘空间。
-- 固定主程序路径 `/usr/bin/naive`，不跟随其软链接写入，临时文件在目标目录创建并通过 `mv` 替换。
-- 安装与回滚不会主动重启 PassWall 或修改节点配置。
-- **Manifest 签名验证已采用固定公钥 usign/Ed25519，GitHub Actions 的签名发布阶段与 UPX 构建阶段相互隔离。** 发布私钥必须由维护者单独设置到仓库 Secret，公钥须随 IPK 固定打包。任一缺失时设备拒绝安装，工作流拒绝无签名发布。暂未完成密钥初始化和真机验收，因此保持开发候选、无自动安装。
-- GitHub Actions 流水线及 IPK 构建与路由器真机兼容、代理实际功能测试是不同等级的验收，不能等同。
-
-## 扩展组件
-
-参照 `components/naiveproxy.json` 定义版本来源、资源匹配、归档成员、架构和压缩策略。构建器支持 `.tar.xz`、`.tar.gz`、`.zip` 源文件、`upx` 与 `none` 策略；设备端新增安装适配器仍需要人工审查，不允许直接执行组件配置中的任意程序。
-
-## 自动化单元测试与实机验收门禁
-
-详见 [`docs/acceptance-gates.md`](docs/acceptance-gates.md)。G0 离线单元与模拟路由器事务测试、G1 真实官方 Release 构建与产物验证均必须完成，G2/G3 需要 MT3600BE、N1 各自实机验收，G4 才允许正式稳定发布。CI 通过并不表示已经通过真机。
-
-**体验：路由器点击“更新”不会现场等待 UPX。** 默认分支的定时 Actions 提前发现上游版本（每 20 分钟检查一次，GitHub 可能延迟），压缩并发布候选；若尚未完成则显示 `pending`，不可更新。查看官方最新版本与下载可安装的最新构建是两个不同的状态。
-
-## 进度
-
-- [x] 空仓库初始化、通用构建器、NaiveProxy 定义、两目标构建矩阵
-- [x] LuCI 页面、rpcd Shell 兼容接口、基本安装回滚事务
-- [x] 离线单元测试、IPK 组包
-- [x] GitHub Actions 两个 ARM64 官方文件实际 UPX 5.2.1 压缩成功（仅基础验证）
-- [ ] MT3600BE / N1 真机安装、服务验证及断电恢复测试
-- [x] usign 签名验签、反代控制、独立签名发布 Job 和异常拦截代码
-- [ ] 维护者提供公钥 + GitHub Secret，发布首个真实签名产物
-- [ ] 两台真机 LuCI/rpcd、真实更新与回滚正式验收后发布稳定版
+详见 [验收门禁](docs/acceptance-gates.md) 和 [GitHub 反代 / 回滚细节](docs/signing-proxy-device-acceptance.md)。**CI 成功不代表两台真机已经验收。**

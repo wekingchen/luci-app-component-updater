@@ -13,16 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install static checks
-        run: sudo apt-get update && sudo apt-get install -y shellcheck jq busybox cmake gcc
-      - name: Verify actual usign Ed25519 signing and tamper rejection
-        run: |
-          set -euo pipefail
-          git clone --quiet https://github.com/openwrt/usign.git /tmp/component-usign
-          git -C /tmp/component-usign checkout --quiet c4c72b1b07945ee192361dc751291a7c98d6adcd
-          cmake -S /tmp/component-usign -B /tmp/component-usign/build -DUSE_LIBUBOX=OFF
-          cmake --build /tmp/component-usign/build -j2
-          sudo install -m755 /tmp/component-usign/build/usign /usr/local/bin/usign
-          sh tests/usign_signing_smoke.sh
+        run: sudo apt-get update && sudo apt-get install -y shellcheck jq busybox
       - name: Validate component definitions and tests
         run: |
           python3 -m unittest discover -s tests -v
