@@ -60,6 +60,8 @@ return view.extend({
             this.row('本工具安装的完整版本', currentTag),
             this.row('opkg / apk 记录', status.package_version),
             this.row('设备软件架构', status.architecture),
+            this.row('GitHub 反代', status.github_proxy_mode === 'off' ? '关闭（直连）' : (status.github_proxy_mode === 'assets' ? '仅下载包' : '查询与下载')),
+            this.row('可信签名', status.signing_status === 'configured' ? '公钥及 usign 已配置' : '缺少可信公钥或 usign，禁止安装'),
             this.row('运行中 NaiveProxy 进程', status.runtime_processes),
             this.row('当前任务状态', progress),
             this.row('最近检查结果', checkMessage),
@@ -78,9 +80,9 @@ return view.extend({
             this.row('构建来源', 'wekingchen/luci-app-component-updater'),
             this.row('构建版本', plan.build_tag || '尚未获取'),
             this.row('下载资源', plan.filename || '尚未获取'),
-            E('p', {'class':'description'}, 'GitHub Actions 对官方二进制执行 UPX --lzma --best；由云端每 20 分钟轮询官方版本（调度可能延迟）。安装前校验 SHA256 和程序可执行性；该构建尚未完成签名与代理功能真机测试。')
+            E('p', {'class':'description'}, 'GitHub Actions 对官方二进制执行 UPX --lzma --best；由云端每 20 分钟轮询官方版本（调度可能延迟）。安装前必须验证 usign/Ed25519 签名、SHA256 和程序可执行性；真机代理功能需要单独验收。')
         ]);
-        return [section, extra];
+        return [section, extra, E('p', {}, E('a', {href: L.url('admin/system/component-updater/settings')}, 'GitHub 反代及下载设置'))];
     },
 
     refresh: function() {

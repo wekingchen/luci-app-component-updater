@@ -3,13 +3,26 @@
     "description": "Read component status and manage explicitly approved updates",
     "read": {
       "ubus": {
-        "component-updater": ["status", "check", "plan"]
-      }
+        "component-updater": [
+          "status",
+          "check",
+          "plan"
+        ]
+      },
+      "uci": [
+        "component-updater"
+      ]
     },
     "write": {
       "ubus": {
-        "component-updater": ["start", "rollback"]
-      }
+        "component-updater": [
+          "start",
+          "rollback"
+        ]
+      },
+      "uci": [
+        "component-updater"
+      ]
     }
   }
 }

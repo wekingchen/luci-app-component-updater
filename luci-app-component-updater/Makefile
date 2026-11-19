@@ -15,7 +15,7 @@ define Package/luci-app-component-updater
   SUBMENU:=3. Applications
   TITLE:=Generic component updater (NaiveProxy first)
   PKGARCH:=all
-  DEPENDS:=+luci-base +rpcd +jsonfilter +libubox
+  DEPENDS:=+luci-base +rpcd +jsonfilter +libubox +usign
 endef
 
 define Package/luci-app-component-updater/description

@@ -7,7 +7,22 @@
       "path": "component-updater/overview"
     },
     "depends": {
-      "acl": ["luci-app-component-updater"]
+      "acl": [
+        "luci-app-component-updater"
+      ]
+    }
+  },
+  "admin/system/component-updater/settings": {
+    "title": "GitHub 下载设置",
+    "order": 2,
+    "action": {
+      "type": "view",
+      "path": "component-updater/settings"
+    },
+    "depends": {
+      "acl": [
+        "luci-app-component-updater"
+      ]
     }
   }
 }

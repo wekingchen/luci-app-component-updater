@@ -4,3 +4,8 @@ config updater 'main'
     option keep_backups '2'
     option upstream_repo 'klzgrad/naiveproxy'
     option build_repo 'wekingchen/luci-app-component-updater'
+
+    # off / assets / all. GitHub reverse proxy is transport-only; never a trust source.
+    option github_proxy_mode 'off'
+    option github_proxy_prefix ''
+    option github_proxy_fallback '1'

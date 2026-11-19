@@ -122,5 +122,8 @@ class ReleaseContractTests(unittest.TestCase):
                 rules=acl['luci-app-component-updater']
                 self.assertEqual(rules['read']['ubus']['component-updater'],['status','check','plan'])
                 self.assertEqual(rules['write']['ubus']['component-updater'],['start','rollback'])
+                self.assertEqual(rules['read']['uci'],['component-updater'])
+                self.assertEqual(rules['write']['uci'],['component-updater'])
+                self.assertIn('./www/luci-static/resources/view/component-updater/settings.js',names)
 
 if __name__=='__main__':unittest.main()
