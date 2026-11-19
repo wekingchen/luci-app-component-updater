@@ -1,0 +1,449 @@
+#!/bin/sh
+# Component Updater / native opkg IPK adapter. Fixed component and package ID.
+# NEVER executes remote scripts and NEVER restarts PassWall.
+set -u
+umask 077
+
+BASE=/etc/component-updater
+CACHE=/tmp/component-updater
+BACKUPS=$BASE/backups/naiveproxy
+RECEIPT=$BASE/installed/naiveproxy.json
+PLAN=$CACHE/plan.json
+JOB=$CACHE/job.json
+TXN=$BASE/transaction.json
+BINARY=/usr/bin/naive
+GITHUB=wekingchen/luci-app-component-updater
+
+[ -r /usr/share/libubox/jshn.sh ] || { echo '{"error":"missing jshn"}'; exit 1; }
+. /usr/share/libubox/jshn.sh
+
+jsonval() { jsonfilter -i "$1" -e "$2" 2>/dev/null | head -n 1; }
+config_get() {
+    got=$(uci -q get "component-updater.main.$1" 2>/dev/null || true)
+    [ -n "$got" ] && printf '%s\n' "$got" || printf '%s\n' "$2"
+}
+json_msg() {
+    json_init
+    json_add_string status "$1"
+    json_add_string message "$2"
+    json_dump
+    echo
+}
+create_dirs() {
+    mkdir -p "$CACHE" "$BASE/installed" "$BACKUPS" || return 1
+    chmod 700 "$CACHE" "$BASE" "$BASE/installed" "$BACKUPS" 2>/dev/null || true
+}
+check_msg() {
+    create_dirs || return 1
+    json_init
+    json_add_string status "$1"
+    json_add_string message "$2"
+    json_add_string checked_at "$(date +%s)"
+    json_dump > "$CACHE/check-state.$$"
+    mv -f "$CACHE/check-state.$$" "$CACHE/check-state.json"
+    cat "$CACHE/check-state.json"
+    echo
+}
+job_record() {
+    create_dirs || return 1
+    json_init
+    json_add_string state "$1"
+    json_add_string message "$2"
+    json_add_string updated "$(date +%s)"
+    json_dump > "$JOB.$$"
+    mv -f "$JOB.$$" "$JOB"
+}
+arch() {
+    a=$(sed -n "s/^DISTRIB_ARCH='\([^']*\)'.*/\1/p" /etc/openwrt_release 2>/dev/null | head -n 1)
+    case "$a" in aarch64_cortex-a53|aarch64_generic) printf '%s\n' "$a";; *) return 1;; esac
+}
+current_version() {
+    [ -x "$BINARY" ] && "$BINARY" --version 2>/dev/null | head -n 1 | sed 's/^naive //' || true
+}
+package_version() { opkg status naiveproxy 2>/dev/null | sed -n 's/^Version: //p' | head -n 1; }
+package_arch() { opkg status naiveproxy 2>/dev/null | sed -n 's/^Architecture: //p' | head -n 1; }
+package_depends() { opkg status naiveproxy 2>/dev/null | sed -n 's/^Depends: //p' | head -n 1; }
+valid_tag() {
+    case "$1" in v[0-9]*) case "$1" in *[!A-Za-z0-9.+_-]*) return 1;; esac;; *) return 1;; esac
+}
+valid_hash() {
+    [ "${#1}" -eq 64 ] || return 1
+    case "$1" in *[!0-9a-f]*) return 1;; esac
+}
+check_sha() { [ "$(sha256sum "$1" 2>/dev/null | awk '{print $1}')" = "$2" ]; }
+space_ok() {
+    tf=$(df -Pk /tmp 2>/dev/null | awk 'NR==2 {print $4}')
+    of=$(df -Pk /etc 2>/dev/null | awk 'NR==2 {print $4}')
+    case "$tf:$of" in *[!0-9:]*) return 1;; esac
+    [ "${tf:-0}" -ge 16384 ] && [ "${of:-0}" -ge 16384 ]
+}
+# Optional HTTPS GitHub download prefix; never permits an arbitrary remote URL.
+proxy_target() {
+    url=$1
+    mode=$(config_get github_proxy_mode off)
+    case "$mode" in off) return 1;; assets|all) ;; *) return 1;; esac
+    case "$url" in
+        https://api.github.com/*) [ "$mode" = all ] || return 1;;
+        https://github.com/*) ;;
+        *) return 1;;
+    esac
+    prefix=$(config_get github_proxy_prefix '')
+    case "$prefix" in https://*/*) ;; *) return 1;; esac
+    host=${prefix#https://}; host=${host%%/*}
+    case "$host" in ''|localhost|*.localhost|127.*|10.*|192.168.*|172.16.*|172.17.*|172.18.*|172.19.*|172.2?.*|172.30.*|172.31.*|[0-9]*|*:*|*[!A-Za-z0-9.-]*) return 1;; esac
+    suffix=${prefix#https://*/}
+    case "$suffix" in *[!A-Za-z0-9._~/-]*|*..*|*//*) return 1;; esac
+    printf '%s%s\n' "$prefix" "$url"
+}
+download_once() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fSL --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 120 --retry 2 --output "$2" "$1" >/dev/null 2>&1
+    elif command -v uclient-fetch >/dev/null 2>&1; then
+        uclient-fetch -T 120 -O "$2" "$1" >/dev/null 2>&1
+    else return 1; fi
+}
+download() {
+    case "$1" in
+        https://api.github.com/repos/klzgrad/naiveproxy/releases/latest|https://api.github.com/repos/wekingchen/luci-app-component-updater/releases/tags/component-naiveproxy-*)
+          ;;
+        https://github.com/wekingchen/luci-app-component-updater/releases/download/component-naiveproxy-*)
+          ;;
+        *) return 1;;
+    esac
+    mode=$(config_get github_proxy_mode off)
+    case "$mode" in off|assets|all) ;; *) return 1;; esac
+    if [ "$mode" != off ]; then
+        via=$(proxy_target "$1") || {
+            case "$1:$mode" in https://api.github.com/*:assets) via='';; *) return 1;; esac
+        }
+        if [ -n "$via" ]; then
+            if download_once "$via" "$2"; then return 0; fi
+            rm -f "$2"
+            [ "$(config_get github_proxy_fallback 1)" = 1 ] || return 1
+        fi
+    fi
+    download_once "$1" "$2"
+}
+# GitHub Release API returns a SHA256 digest for each uploaded asset.
+# Using a third-party API reverse proxy weakens authenticity without signatures.
+release_digest() {
+    metadata=$1
+    filename=$2
+    i=0
+    while [ "$i" -lt 80 ]; do
+        n=$(jsonval "$metadata" "@.assets[$i].name")
+        [ -n "$n" ] || break
+        if [ "$n" = "$filename" ]; then
+            d=$(jsonval "$metadata" "@.assets[$i].digest")
+            case "$d" in sha256:*) printf '%s\n' "${d#sha256:}"; return 0;; esac
+            return 1
+        fi
+        i=$((i+1))
+    done
+    return 1
+}
+build_version() {
+    tag=$1
+    valid_tag "$tag" || return 1
+    core=${tag#v}
+    case "$core" in *-*) base=${core%-*}; rev=${core##*-};; *) return 1;; esac
+    case "$base:$rev" in *[!0-9.:]*) return 1;; esac
+    printf '%s.%s-r2\n' "$base" "$rev"
+}
+status() {
+    v=$(current_version); [ -n "$v" ] || v=not-installed
+    a=$(arch 2>/dev/null || true)
+    j=$(jsonval "$JOB" '@.state')
+    m=$(jsonval "$JOB" '@.message')
+    if [ -r "$TXN" ]; then j=recovery_required; m='Previous IPK transaction needs manual rollback'; fi
+    r=$(jsonval "$PLAN" '@.ready')
+    [ ! -r "$TXN" ] || r=false
+    json_init
+    json_add_string component naiveproxy
+    json_add_string installed_version "$v"
+    json_add_string package_version "$(package_version)"
+    json_add_string installed_upstream_tag "$(jsonval "$RECEIPT" '@.upstream_tag')"
+    json_add_string official_tag "$(jsonval "$CACHE/official.json" '@.tag_name')"
+    json_add_string architecture "$a"
+    json_add_string binary_path "$BINARY"
+    json_add_string package_owner "$(opkg search "$BINARY" 2>/dev/null | head -n 1)"
+    json_add_string install_method 'opkg-native-ipk'
+    json_add_string github_proxy_mode "$(config_get github_proxy_mode off)"
+    json_add_string source_integrity 'GitHub Release API asset digest (no independent signing)'
+    json_add_string runtime_processes "$(pidof naive 2>/dev/null | wc -w | tr -d ' ')"
+    json_add_string job_state "${j:-idle}"
+    json_add_string job_message "$m"
+    json_add_string check_state "$(jsonval "$CACHE/check-state.json" '@.status')"
+    json_add_string check_message "$(jsonval "$CACHE/check-state.json" '@.message')"
+    json_add_string ready "${r:-false}"
+    json_dump; echo
+}
+check_update() {
+    create_dirs || return 1
+    rm -f "$PLAN"
+    [ ! -r "$TXN" ] || { check_msg recovery_required 'Previous update must be restored first'; return 1; }
+    command -v opkg >/dev/null 2>&1 || { check_msg unsupported 'This version requires opkg'; return 1; }
+    a=$(arch) || { check_msg unsupported 'Unsupported OpenWrt architecture'; return 1; }
+    [ -x "$BINARY" ] && [ ! -L "$BINARY" ] || { check_msg unsupported 'Existing naive binary is missing or symlinked'; return 1; }
+    [ -n "$(package_version)" ] || { check_msg unsupported 'naiveproxy must already be installed through opkg'; return 1; }
+    space_ok || { check_msg unsupported 'Insufficient tmp or overlay space'; return 1; }
+    download https://api.github.com/repos/klzgrad/naiveproxy/releases/latest "$CACHE/official.tmp" ||
+        { check_msg error 'Official GitHub API unavailable'; return 1; }
+    mv -f "$CACHE/official.tmp" "$CACHE/official.json"
+    tag=$(jsonval "$CACHE/official.json" '@.tag_name')
+    valid_tag "$tag" || { check_msg error 'Unexpected official release tag'; return 1; }
+    version=$(build_version "$tag") || { check_msg error 'Unsupported release version format'; return 1; }
+    build_tag="component-naiveproxy-$tag-upx521-r2"
+    api="https://api.github.com/repos/$GITHUB/releases/tags/$build_tag"
+    download "$api" "$CACHE/release.tmp" ||
+        { check_msg pending 'Official update found; native IPKs are being prepared'; return 0; }
+    mv -f "$CACHE/release.tmp" "$CACHE/release.json"
+    [ "$(jsonval "$CACHE/release.json" '@.tag_name')" = "$build_tag" ] ||
+        { check_msg error 'Published release tag mismatch'; return 1; }
+    hash=$(release_digest "$CACHE/release.json" manifest.json) || { check_msg pending 'Published manifest digest not ready'; return 0; }
+    valid_hash "$hash" || { check_msg error 'Invalid release digest'; return 1; }
+    url="https://github.com/$GITHUB/releases/download/$build_tag/manifest.json"
+    download "$url" "$CACHE/manifest.tmp" && check_sha "$CACHE/manifest.tmp" "$hash" ||
+        { check_msg error 'Manifest download / GitHub API digest mismatch'; return 1; }
+    mv -f "$CACHE/manifest.tmp" "$CACHE/manifest.json"
+    [ "$(jsonval "$CACHE/manifest.json" '@.upstream_tag')" = "$tag" ] &&
+      [ "$(jsonval "$CACHE/manifest.json" '@.release_tag')" = "$build_tag" ] &&
+      [ "$(jsonval "$CACHE/manifest.json" '@.component')" = naiveproxy ] ||
+        { check_msg error 'Manifest identity mismatch'; return 1; }
+    key=$(printf '%s' "$a" | tr '-' '_')
+    filename="naiveproxy_${version}_${a}.ipk"
+    [ "$(jsonval "$CACHE/manifest.json" "@.assets.$key.filename")" = "$filename" ] &&
+      [ "$(jsonval "$CACHE/manifest.json" "@.assets.$key.package_version")" = "$version" ] &&
+      [ "$(jsonval "$CACHE/manifest.json" "@.assets.$key.package_arch")" = "$a" ] &&
+      [ "$(jsonval "$CACHE/manifest.json" "@.assets.$key.package")" = naiveproxy ] &&
+      [ "$(jsonval "$CACHE/manifest.json" "@.assets.$key.format")" = ipk ] ||
+        { check_msg error 'Native IPK architecture/version mismatch'; return 1; }
+    digest=$(jsonval "$CACHE/manifest.json" "@.assets.$key.sha256")
+    binary_sum=$(jsonval "$CACHE/manifest.json" "@.assets.$key.binary_sha256")
+    api_digest=$(release_digest "$CACHE/release.json" "$filename") ||
+        { check_msg pending 'Native IPK digest not ready'; return 0; }
+    for h in "$digest" "$binary_sum" "$api_digest"; do
+        valid_hash "$h" || { check_msg error 'Invalid asset SHA256'; return 1; }
+    done
+    [ "$digest" = "$api_digest" ] || { check_msg error 'Release API and manifest digest disagree'; return 1; }
+    if [ "$(package_version)" = "$version" ] && check_sha "$BINARY" "$binary_sum"; then
+        check_msg up_to_date 'Installed native IPK matches the latest official build'
+        return 0
+    fi
+    json_init
+    json_add_string component naiveproxy
+    json_add_string upstream_tag "$tag"
+    json_add_string build_tag "$build_tag"
+    json_add_string architecture "$a"
+    json_add_string package_version "$version"
+    json_add_string filename "$filename"
+    json_add_string sha256 "$digest"
+    json_add_string binary_sha256 "$binary_sum"
+    json_add_string checked_at "$(date +%s)"
+    json_add_string ready true
+    json_dump > "$PLAN.$$"
+    mv -f "$PLAN.$$" "$PLAN"
+    check_msg ready 'Verified native IPK is available for manual installation'
+}
+has_valid_plan() {
+    [ ! -r "$TXN" ] && [ -r "$PLAN" ] || return 1
+    when=$(jsonval "$PLAN" '@.checked_at')
+    case "$when" in ''|*[!0-9]*) return 1;; esac
+    now=$(date +%s)
+    [ "$when" -le "$now" ] && [ $((now - when)) -le 3600 ] || return 1
+    [ "$(jsonval "$PLAN" '@.ready')" = true ] || return 1
+    a=$(arch) || return 1
+    [ "$(jsonval "$PLAN" '@.architecture')" = "$a" ] || return 1
+    tag=$(jsonval "$PLAN" '@.upstream_tag')
+    valid_tag "$tag" || return 1
+    version=$(build_version "$tag") || return 1
+    [ "$(jsonval "$PLAN" '@.build_tag')" = "component-naiveproxy-$tag-upx521-r2" ] || return 1
+    [ "$(jsonval "$PLAN" '@.filename')" = "naiveproxy_${version}_${a}.ipk" ] || return 1
+    [ "$(jsonval "$PLAN" '@.package_version')" = "$version" ] || return 1
+    valid_hash "$(jsonval "$PLAN" '@.sha256')" || return 1
+    valid_hash "$(jsonval "$PLAN" '@.binary_sha256')" || return 1
+}
+# Builds an offline rollback IPK with the exact old binary and opkg Version.
+# Only permitted for a single-file managed package with no other owned paths.
+snapshot_owner_ok() {
+    [ -n "$(package_version)" ] || return 1
+    files=$(opkg files naiveproxy 2>/dev/null) || return 1
+    seen=0
+    for f in $files; do
+        case "$f" in
+            /usr/bin/naive) seen=$((seen+1));;
+            /*) return 1;;
+        esac
+    done
+    [ "$seen" -eq 1 ]
+}
+ar_member() {
+    name=$1 source=$2 output=$3
+    nbytes=$(wc -c < "$source" | tr -d ' ')
+    printf '%-16s%-12s%-6s%-6s%-8s%-10s\140\n' "$name/" 0 0 0 100644 "$nbytes" >> "$output"
+    cat "$source" >> "$output"
+    [ $((nbytes%2)) -eq 0 ] || printf '\n' >> "$output"
+}
+make_rollback_ipk() {
+    dst=$1
+    version=$(package_version)
+    architecture=$(package_arch)
+    dependencies=$(package_depends)
+    case "$version:$architecture" in *[!A-Za-z0-9.+_~:-]*) return 1;; esac
+    [ -n "$version" ] && [ -n "$architecture" ] || return 1
+    # Existing opkg dependencies are metadata from a local trusted database.
+    if printf '%s' "$dependencies" | grep -Eq '[^A-Za-z0-9+._,=<> ()-]'; then return 1; fi
+    staging=$dst/staging
+    mkdir -p "$staging/control" "$staging/root/usr/bin" || return 1
+    cp -p "$BINARY" "$staging/root/usr/bin/naive" || return 1
+    {
+        printf 'Package: naiveproxy\nVersion: %s\nArchitecture: %s\n' "$version" "$architecture"
+        [ -z "$dependencies" ] || printf 'Depends: %s\n' "$dependencies"
+        printf 'Maintainer: Component Updater Backup\nSection: net\nDescription: Local recovery of previous naiveproxy installation\n'
+    } > "$staging/control/control"
+    (cd "$staging/control" && tar -czf "$staging/control.tar.gz" ./control) || return 1
+    (cd "$staging/root" && tar -czf "$staging/data.tar.gz" ./usr/bin/naive) || return 1
+    printf '2.0\n' > "$staging/debian-binary"
+    rollback=$dst/previous.ipk
+    printf '!<arch>\n' > "$rollback"
+    ar_member debian-binary "$staging/debian-binary" "$rollback" || return 1
+    ar_member control.tar.gz "$staging/control.tar.gz" "$rollback" || return 1
+    ar_member data.tar.gz "$staging/data.tar.gz" "$rollback" || return 1
+    rm -rf "$staging"
+    [ -s "$rollback" ] || return 1
+}
+restore_previous() {
+    id=$1
+    case "$id" in ''|*[!0-9-]*) return 1;; esac
+    backup=$BACKUPS/$id
+    [ -f "$backup/previous.ipk" ] && [ -f "$backup/sha256" ] || return 1
+    old=$(cat "$backup/sha256")
+    valid_hash "$old" || return 1
+    # --force-downgrade is required to restore a lower package version.
+    opkg install --force-downgrade --force-reinstall "$backup/previous.ipk" >/dev/null 2>&1 || return 1
+    check_sha "$BINARY" "$old" || return 1
+    [ "$(package_version)" = "$(cat "$backup/version")" ] || return 1
+    if [ -s "$backup/receipt.json" ]; then
+        cp "$backup/receipt.json" "$RECEIPT" || return 1
+    else
+        rm -f "$RECEIPT"
+    fi
+    rm -f "$TXN" "$PLAN"
+    return 0
+}
+perform_install() {
+    has_valid_plan || { job_record failed 'Check for updates before installing'; return 1; }
+    [ -x "$BINARY" ] && [ ! -L "$BINARY" ] && snapshot_owner_ok ||
+        { job_record failed 'Package ownership is unsafe or includes additional files'; return 1; }
+    space_ok || { job_record failed 'Not enough storage'; return 1; }
+    build_tag=$(jsonval "$PLAN" '@.build_tag')
+    filename=$(jsonval "$PLAN" '@.filename')
+    desired=$(jsonval "$PLAN" '@.package_version')
+    expected=$(jsonval "$PLAN" '@.sha256')
+    binhash=$(jsonval "$PLAN" '@.binary_sha256')
+    tag=$(jsonval "$PLAN" '@.upstream_tag')
+    work=$CACHE/job.$$
+    mkdir -m 700 "$work" || return 1
+    job_record downloading 'Downloading verified native IPK'
+    url="https://github.com/$GITHUB/releases/download/$build_tag/$filename"
+    if ! download "$url" "$work/update.ipk" || ! check_sha "$work/update.ipk" "$expected"; then
+        job_record failed 'IPK download or digest verification failed'
+        return 1
+    fi
+    job_record backing_up 'Preparing previous native IPK for rollback'
+    id="$(date +%s)-$$"
+    backup=$BACKUPS/$id
+    mkdir -m 700 "$backup" || return 1
+    old=$(sha256sum "$BINARY" | awk '{print $1}')
+    printf '%s\n' "$old" > "$backup/sha256"
+    package_version > "$backup/version"
+    [ -r "$RECEIPT" ] && cp "$RECEIPT" "$backup/receipt.json" || true
+    if ! make_rollback_ipk "$backup"; then
+        job_record failed 'Could not prepare rollback IPK; original package remains untouched'
+        return 1
+    fi
+    json_init
+    json_add_string backup_id "$id"
+    json_add_string original_version "$(cat "$backup/version")"
+    json_add_string intended_version "$desired"
+    json_add_string target "$BINARY"
+    json_dump > "$TXN.tmp.$$" || return 1
+    mv -f "$TXN.tmp.$$" "$TXN" || return 1
+    sync
+    job_record installing 'Installing native IPK via opkg; PassWall will not be restarted by this updater'
+    if ! opkg install "$work/update.ipk" > "$work/opkg.log" 2>&1 ||
+       [ "$(package_version)" != "$desired" ] ||
+       ! check_sha "$BINARY" "$binhash"; then
+        if restore_previous "$id"; then
+            job_record rolled_back 'Install failed; previous native IPK restored'
+        else
+            job_record recovery_required 'Install failed and rollback requires attention'
+        fi
+        return 1
+    fi
+    base=${tag#v}; base=${base%-*}
+    if [ "$(current_version)" != "$base" ]; then
+        if restore_previous "$id"; then job_record rolled_back 'Version mismatch; original IPK restored'
+        else job_record recovery_required 'Version validation failed and rollback requires attention'; fi
+        return 1
+    fi
+    json_init
+    json_add_string upstream_tag "$tag"
+    json_add_string build_tag "$build_tag"
+    json_add_string package_version "$desired"
+    json_add_string binary_sha256 "$binhash"
+    json_add_string previous_backup "$id"
+    json_add_string installed_at "$(date +%s)"
+    json_dump > "$RECEIPT.tmp.$$"
+    mv -f "$RECEIPT.tmp.$$" "$RECEIPT" || {
+        job_record recovery_required 'IPK installed but receipt writing failed; recover from backup'
+        return 1
+    }
+    rm -f "$TXN" "$PLAN"
+    job_record completed 'Native IPK installed; existing PassWall processes not restarted'
+    ls -1 "$BACKUPS" 2>/dev/null | sort -r | awk 'NR>2' | while IFS= read -r obsolete; do
+        case "$obsolete" in ''|*[!0-9-]*) continue;; esac
+        rm -rf "${BACKUPS:?}/$obsolete"
+    done
+}
+run() {
+    create_dirs || return 1
+    lock=$CACHE/update.lock
+    mkdir "$lock" 2>/dev/null || { json_msg busy 'Update in progress'; return 1; }
+    work=''
+    trap 'if [ -n "$work" ]; then rm -rf "$work"; fi; rmdir "$lock" 2>/dev/null || true' EXIT
+    trap 'exit 1' HUP INT TERM
+    perform_install
+}
+start() {
+    create_dirs || return 1
+    [ ! -d "$CACHE/update.lock" ] || { json_msg busy 'Already updating'; return 1; }
+    has_valid_plan || { json_msg error 'Check for updates before installing'; return 1; }
+    job_record queued 'Native IPK installation queued'
+    (/usr/sbin/component-updaterctl run > "$CACHE/job.log" 2>&1 </dev/null &)
+    json_msg started 'Native IPK installation started'
+}
+rollback() {
+    create_dirs || return 1
+    lock=$CACHE/update.lock
+    mkdir "$lock" 2>/dev/null || { json_msg busy 'Update or recovery in progress'; return 1; }
+    trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+    if [ -r "$TXN" ]; then id=$(jsonval "$TXN" '@.backup_id')
+    else id=$(jsonval "$RECEIPT" '@.previous_backup'); fi
+    if restore_previous "$id"; then
+        job_record rolled_back 'Previous opkg package and file content restored'
+        json_msg rolled_back 'Previous native package restored; PassWall not restarted'
+    else
+        json_msg recovery_required 'Rollback IPK failed; package and version must be repaired manually'
+        return 1
+    fi
+}
+case "${1:-}" in
+    status) status;;
+    check) check_update;;
+    plan) [ -r "$PLAN" ] && cat "$PLAN" || json_msg unavailable 'Run check first';;
+    start) start;;
+    run) run;;
+    rollback) rollback;;
+    *) json_msg error 'Usage: component-updaterctl status|check|plan|start|run|rollback'; exit 2;;
+esac

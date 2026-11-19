@@ -1,0 +1,125 @@
+name: Component Builder / Official Releases & UPX
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/component-build.yml'
+      - 'components/**'
+      - 'tools/component_builder.py'
+      - 'tools/package_component_ipk.py'
+      - 'tools/validate_artifacts.py'
+  schedule:
+    # Cloud-side prebuild; router does not wait for compression.
+    - cron: '7,27,47 * * * *'
+  pull_request:
+    paths:
+      - '.github/workflows/component-build.yml'
+      - 'components/**'
+      - 'tools/component_builder.py'
+      - 'tools/validate_artifacts.py'
+      - 'tests/**'
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Component ID, or all
+        type: string
+        default: all
+      publish:
+        description: Publish native IPKs after validation
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: component-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build candidates without signing credentials
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discover and verify upstream component assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMPONENT: ${{ inputs.component || 'all' }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # A marker ensures artifact download also works when no new version exists.
+          echo "scan completed" > dist/discovery.txt
+          mapfile -t COMPONENTS < <(python3 - <<'PY'
+          import os,sys
+          sys.path.insert(0,'tools')
+          import component_builder as b
+          print('\n'.join(x['id'] for x in b.definitions(os.environ['COMPONENT'])))
+          PY
+          )
+          for COMPONENT_ID in "${COMPONENTS[@]}"; do
+            export COMPONENT_ID
+            TAG=$(python3 - <<'PY'
+          import os,sys
+          sys.path.insert(0,'tools')
+          import component_builder as b
+          cfg=b.definitions(os.environ['COMPONENT_ID'])[0]
+          release=b.github_json('https://api.github.com/repos/'+cfg['upstream']['repository']+'/releases/latest',os.environ.get('GITHUB_TOKEN',''))
+          print(b.release_tag(cfg,release['tag_name']))
+          PY
+            )
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "Published artifact exists: $TAG"
+              continue
+            fi
+            OUT="dist/$COMPONENT_ID"
+            python3 tools/component_builder.py --component "$COMPONENT_ID" --output "$OUT"
+            [[ "$(cat "$OUT/release-tag.txt")" == "$TAG" ]] || exit 1
+            python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-ipk-candidates
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Revalidate and publish verified native IPKs
+    needs: build
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push' || inputs.publish == true) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-ipk-candidates
+          path: dist
+      - name: Validate once more and publish native IPKs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mapfile -t MANIFESTS < <(find dist -mindepth 2 -maxdepth 2 -name manifest.json -type f | sort)
+          if [[ "${#MANIFESTS[@]}" -eq 0 ]]; then
+            echo 'No new component IPK candidates to publish'
+            exit 0
+          fi
+          for MANIFEST in "${MANIFESTS[@]}"; do
+            OUT=$(dirname "$MANIFEST")
+            python3 tools/validate_artifacts.py --manifest "$MANIFEST"
+            TAG=$(cat "$OUT/release-tag.txt")
+            [[ "$TAG" == component-* && "$TAG" != *'/'* ]] || exit 1
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "::error::Release appeared during build: $TAG. Refusing to overwrite."
+              exit 1
+            fi
+            gh release create "$TAG" "$OUT"/*.ipk "$MANIFEST" \
+              --title "$TAG" --latest=false --prerelease \
+              --notes "Native OpenWrt IPK candidate: verified official Release asset SHA256, UPX round-trip, IPK package contents and architecture. No detached signature: install is user-confirmed and downloads are verified against GitHub Release API digest. Router functional test still required."
+          done

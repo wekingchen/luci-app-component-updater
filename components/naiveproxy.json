@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "id": "naiveproxy",
+  "name": "NaiveProxy",
+  "enabled": true,
+  "upstream": {
+    "repository": "klzgrad/naiveproxy",
+    "channel": "stable"
+  },
+  "binary": {
+    "archive_member": "naive",
+    "version_command": [
+      "--version"
+    ],
+    "install_path": "/usr/bin/naive"
+  },
+  "platforms": [
+    {
+      "id": "aarch64_cortex-a53",
+      "asset_suffix": "openwrt-aarch64_cortex-a53.tar.xz",
+      "elf_machine": 183
+    },
+    {
+      "id": "aarch64_generic",
+      "asset_suffix": "openwrt-aarch64_generic.tar.xz",
+      "elf_machine": 183
+    }
+  ],
+  "compression": {
+    "type": "upx",
+    "version": "5.2.1",
+    "arguments": [
+      "--lzma",
+      "--best"
+    ],
+    "revision": 2
+  },
+  "install": {
+    "type": "opkg",
+    "service": "passwall-optional",
+    "package_names": [
+      "naiveproxy"
+    ],
+    "package": "naiveproxy",
+    "dependencies": [
+      "libc"
+    ],
+    "rollback": "local-ipk"
+  }
+}
