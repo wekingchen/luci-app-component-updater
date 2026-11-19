@@ -24,14 +24,27 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - name: Build OpenWrt usign from pinned source
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/openwrt/usign.git /tmp/component-usign
+          git -C /tmp/component-usign checkout --quiet c4c72b1b07945ee192361dc751291a7c98d6adcd
+          cmake -S /tmp/component-usign -B /tmp/component-usign/build -DUSE_LIBUBOX=OFF
+          cmake --build /tmp/component-usign/build -j2
+          sudo install -m755 /tmp/component-usign/build/usign /usr/local/bin/usign
       - name: Build and publish each enabled component independently
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMPONENT: ${{ inputs.component || 'all' }}
           PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
+          SIGNING_KEY_B64: ${{ secrets.COMPONENT_USIGN_PRIVATE_KEY_B64 }}
         run: |
           set -euo pipefail
+          if [[ "$PUBLISH" == 'true' && "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo '::error::Only the default main branch may publish signed releases'
+            exit 1
+          fi
           mapfile -t COMPONENTS < <(python3 - <<'PY'
           import os, sys
           sys.path.insert(0, 'tools')
@@ -56,7 +69,11 @@ jobs:
             )
             echo "Component release: $TAG"
             if gh release view "$TAG" >/dev/null 2>&1; then
-              echo "Already published; skip: $TAG"
+              if ! gh release view "$TAG" --json assets -q '.assets[].name' | grep -Fxq 'manifest.json.sig'; then
+                echo "::error::Release $TAG is unsigned. Do not reuse it: increment component revision and publish a new tag."
+                exit 1
+              fi
+              echo "Signed release already published; skip: $TAG"
               echo '::endgroup::'
               continue
             fi
@@ -65,9 +82,22 @@ jobs:
             [[ "$(cat "$OUT/release-tag.txt")" == "$TAG" ]] || { echo 'Release changed during build'; exit 1; }
             python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
             if [[ "$PUBLISH" == 'true' ]]; then
-              gh release create "$TAG" "$OUT"/*.tar.xz "$OUT/manifest.json" \
+              PUBKEY="luci-app-component-updater/root/usr/share/component-updater/trust.pub"
+              if [[ -z "$SIGNING_KEY_B64" || ! -s "$PUBKEY" ]]; then
+                echo '::error::Missing COMPONENT_USIGN_PRIVATE_KEY_B64 secret or trusted public key. Refusing unsigned publish.'
+                exit 1
+              fi
+              umask 077
+              KEY_FILE=$(mktemp)
+              trap 'rm -f "$KEY_FILE"' EXIT
+              printf '%s' "$SIGNING_KEY_B64" | base64 -d > "$KEY_FILE"
+              usign -S -m "$OUT/manifest.json" -s "$KEY_FILE" -x "$OUT/manifest.json.sig"
+              usign -V -q -m "$OUT/manifest.json" -p "$PUBKEY" -x "$OUT/manifest.json.sig"
+              rm -f "$KEY_FILE"
+              trap - EXIT
+              gh release create "$TAG" "$OUT"/*.tar.xz "$OUT/manifest.json" "$OUT/manifest.json.sig" \
                 --title "$TAG" --latest=false --prerelease \
-                --notes "PRE-RELEASE build candidates only. SHA256/provenance/UPX round-trip checked. NO target-router service health verification, NO detached signature yet; use only with explicit test consent."
+                --notes "Signed pre-release candidate. SHA256/provenance/UPX round-trip verified, signed manifest with pinned usign key. Router functional verification still required."
             fi
             echo '::endgroup::'
           done
@@ -78,4 +108,5 @@ jobs:
           path: |
             dist/*/*.tar.xz
             dist/*/manifest.json
+            dist/*/manifest.json.sig
           if-no-files-found: ignore
