@@ -1,0 +1,36 @@
+name: Component Builder / Real Upstream Smoke Test
+on:
+  pull_request:
+    paths:
+      - 'components/**'
+      - 'tools/component_builder.py'
+      - '.github/workflows/builder-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-real-assets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build both real official NaiveProxy targets with UPX 5.2.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 tools/component_builder.py --component naiveproxy --output dist
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('dist/manifest.json').read_text())
+          assert set(x['assets']) == {'aarch64_cortex_a53','aarch64_generic'}
+          assert all(v['validation']['round_trip']=='passed' for v in x['assets'].values())
+          print('Real upstream artifacts: verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-naiveproxy-candidates
+          path: |
+            dist/*.tar.xz
+            dist/manifest.json
+          if-no-files-found: error
