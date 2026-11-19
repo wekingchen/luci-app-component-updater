@@ -57,6 +57,8 @@ elif cmd=='install':
  try:
   c,b=inspect_ipk(Path(a[-1]).read_bytes(),'/usr/bin/naive')
   assert c['Package']=='naiveproxy' and c['Architecture']==s['arch']
+  if c['Version']==s['version'] and '--force-reinstall' not in a:
+   sys.exit(0) # realistic no-op: an already-installed version isn't rewritten
   target=Path(os.environ['TEST_BINARY'])
   target.write_bytes(b);target.chmod(0o755)
   s['version']=c['Version']
@@ -133,6 +135,20 @@ else:sys.exit(2)
         rc,out=self.call('rollback');self.assertEqual(rc,0,out)
         self.assertEqual(json.loads(self.pkg.read_text())['version'],OLD)
         self.assertEqual(self.bin.read_bytes(),self.old)
+    def test_same_package_version_repairs_manually_replaced_binary(self):
+        self.pkg.write_text(json.dumps(dict(version=NEW,arch=ARCH)))
+        self.bin.write_bytes(binary('150.0.7871.63'))
+        self.bin.chmod(0o755)
+        self.checked()
+        rc,out=self.call('run')
+        self.assertEqual(rc,0,out)
+        self.assertEqual(self.bin.read_bytes(),self.new)
+        self.assertEqual(json.loads(self.pkg.read_text())['version'],NEW)
+        rc,out=self.call('rollback')
+        self.assertEqual(rc,0,out)
+        self.assertEqual(self.bin.read_bytes(),binary('150.0.7871.63'))
+        self.assertEqual(json.loads(self.pkg.read_text())['version'],NEW)
+
     def test_corrupt_ipk_never_installs(self):
         self.checked()
         (self.fixture/'update.ipk').write_bytes(b'tampered')

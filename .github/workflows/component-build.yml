@@ -80,6 +80,19 @@ jobs:
             [[ "$(cat "$OUT/release-tag.txt")" == "$TAG" ]] || exit 1
             python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
           done
+      - name: Emulate packaged ARM64 executables before release publication
+        run: |
+          set -euo pipefail
+          mapfile -t manifests < <(find dist -mindepth 2 -maxdepth 2 -type f -name manifest.json | sort)
+          if [ "${#manifests[@]}" -gt 0 ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq qemu-user
+            for manifest in "${manifests[@]}"; do
+              python3 tools/smoke_arm64.py --manifest "$manifest"
+            done
+          else
+            echo "No new IPK candidates to emulate"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: native-ipk-candidates

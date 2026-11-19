@@ -34,6 +34,11 @@ jobs:
           print('Real upstream artifacts: verified')
           PY
           python3 tools/validate_artifacts.py --manifest dist/manifest.json
+      - name: Run native compressed binaries in AArch64 QEMU
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-user
+          python3 tools/smoke_arm64.py --manifest dist/manifest.json
       - uses: actions/upload-artifact@v4
         with:
           name: verified-naiveproxy-candidates
