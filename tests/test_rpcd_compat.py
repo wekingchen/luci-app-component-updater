@@ -44,12 +44,15 @@ class RpcdCompatibilityTests(unittest.TestCase):
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,
                            stdout=subprocess.DEVNULL)
             p=Path(td)/'luci-app-component-updater_0.2.1-1_all.ipk'
-            control=subprocess.check_output(['ar','p',str(p),'control.tar.gz'])
+            with tarfile.open(p,mode='r:gz') as outer:
+                self.assertEqual(outer.getnames(),[
+                    './debian-binary','./data.tar.gz','./control.tar.gz'])
+                control=outer.extractfile('./control.tar.gz').read()
+                data=outer.extractfile('./data.tar.gz').read()
             with tarfile.open(fileobj=io.BytesIO(control),mode='r:gz') as tar:
                 dep=tar.extractfile('./control').read().decode()
             self.assertIn('opkg',dep)
             self.assertNotIn('usign',dep)
-            data=subprocess.check_output(['ar','p',str(p),'data.tar.gz'])
             with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as tar:
                 members=set(tar.getnames())
             self.assertIn('./www/luci-static/resources/view/component-updater/settings.js',members)
