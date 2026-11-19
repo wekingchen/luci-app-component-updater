@@ -109,6 +109,8 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn('PKG_RELEASE:=1',manager)
         self.assertIn('VERSION = "0.3.0-1"',wrapper)
         self.assertIn('luci-app-component-updater_0.3.0-1_all.ipk',workflow)
+        self.assertIn('sha256sum luci-app-component-updater_0.3.0-1_all.ipk',workflow)
+        self.assertNotIn('luci-app-component-updater_0.2.3-1_all.ipk',workflow)
 
     def test_offline_ipk_contains_required_files_and_permissions(self):
         with tempfile.TemporaryDirectory() as td:
