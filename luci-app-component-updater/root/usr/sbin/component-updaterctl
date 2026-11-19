@@ -67,7 +67,7 @@ valid_tag() {
     case "$1" in v[0-9]*) case "$1" in *[!A-Za-z0-9.+_-]*) return 1;; esac;; *) return 1;; esac
 }
 valid_hash() {
-    [ "$\{#1\}" -eq 64 ] || return 1
+    [ "${#1}" -eq 64 ] || return 1
     case "$1" in *[!0-9a-f]*) return 1;; esac
 }
 check_sha() { [ "$(sha256sum "$1" 2>/dev/null | awk '{print $1}')" = "$2" ]; }
@@ -75,7 +75,7 @@ space_ok() {
     tf=$(df -Pk /tmp 2>/dev/null | awk 'NR==2 {print $4}')
     of=$(df -Pk /etc 2>/dev/null | awk 'NR==2 {print $4}')
     case "$tf:$of" in *[!0-9:]*|'') return 1;; esac
-    [ "$\{tf:-0\}" -ge 16384 ] && [ "$\{of:-0\}" -ge 16384 ]
+    [ "${tf:-0}" -ge 16384 ] && [ "${of:-0}" -ge 16384 ]
 }
 # Optional HTTPS GitHub download prefix; never permits an arbitrary remote URL.
 proxy_target() {
@@ -89,9 +89,9 @@ proxy_target() {
     esac
     prefix=$(config_get github_proxy_prefix '')
     case "$prefix" in https://*/*) ;; *) return 1;; esac
-    host=$\{prefix#https://\}; host=$\{host%%/*\}
+    host=${prefix#https://}; host=${host%%/*}
     case "$host" in ''|localhost|*.localhost|127.*|10.*|192.168.*|172.16.*|172.17.*|172.18.*|172.19.*|172.2?.*|172.30.*|172.31.*|[0-9]*|*:*|*[!A-Za-z0-9.-]*) return 1;; esac
-    suffix=$\{prefix#https://*/\}
+    suffix=${prefix#https://*/}
     case "$suffix" in *[!A-Za-z0-9._~/-]*|*..*|*//*) return 1;; esac
     printf '%s%s\n' "$prefix" "$url"
 }
@@ -135,7 +135,7 @@ release_digest() {
         [ -n "$n" ] || break
         if [ "$n" = "$filename" ]; then
             d=$(jsonval "$metadata" "@.assets[$i].digest")
-            case "$d" in sha256:*) printf '%s\n' "$\{d#sha256:\}"; return 0;; esac
+            case "$d" in sha256:*) printf '%s\n' "${d#sha256:}"; return 0;; esac
             return 1
         fi
         i=$((i+1))
@@ -145,8 +145,8 @@ release_digest() {
 build_version() {
     tag=$1
     valid_tag "$tag" || return 1
-    core=$\{tag#v\}
-    case "$core" in *-*) base=$\{core%-*\}; rev=$\{core##*-\};; *) return 1;; esac
+    core=${tag#v}
+    case "$core" in *-*) base=${core%-*}; rev=${core##*-};; *) return 1;; esac
     case "$base:$rev" in *[!0-9.:]*) return 1;; esac
     printf '%s.%s-r2\n' "$base" "$rev"
 }
@@ -171,11 +171,11 @@ status() {
     json_add_string github_proxy_mode "$(config_get github_proxy_mode off)"
     json_add_string source_integrity 'GitHub Release API asset digest (no independent signing)'
     json_add_string runtime_processes "$(pidof naive 2>/dev/null | wc -w | tr -d ' ')"
-    json_add_string job_state "$\{j:-idle\}"
+    json_add_string job_state "${j:-idle}"
     json_add_string job_message "$m"
     json_add_string check_state "$(jsonval "$CACHE/check-state.json" '@.status')"
     json_add_string check_message "$(jsonval "$CACHE/check-state.json" '@.message')"
-    json_add_string ready "$\{r:-false\}"
+    json_add_string ready "${r:-false}"
     json_dump; echo
 }
 check_update() {
@@ -381,7 +381,7 @@ perform_install() {
         fi
         return 1
     fi
-    base=$\{tag#v\}; base=$\{base%-*\}
+    base=${tag#v}; base=${base%-*}
     if [ "$(current_version)" != "$base" ]; then
         if restore_previous "$id"; then job_record rolled_back 'Version mismatch; original IPK restored'
         else job_record recovery_required 'Version validation failed and rollback requires attention'; fi
@@ -438,7 +438,7 @@ rollback() {
         return 1
     fi
 }
-case "$\{1:-\}" in
+case "${1:-}" in
     status) status;;
     check) check_update;;
     plan) [ -r "$PLAN" ] && cat "$PLAN" || json_msg unavailable 'Run check first';;
