@@ -14,13 +14,50 @@ on:
       - tools/build_ax6s_apk_assets.py
       - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
   workflow_dispatch:
+  workflow_run:
+    workflows: [Component Builder / Official Releases & UPX]
+    types: [completed]
 permissions:
   contents: read
 concurrency:
   group: ax6s-apk-release
   cancel-in-progress: false
 jobs:
+  discover:
+    # Never trust a workflow_run originating from pull requests or forks.
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.event != 'pull_request') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.detect.outputs.build }}
+    steps:
+      - name: Discover latest official native APK candidate without unnecessary rebuild
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          upstream=$(gh api repos/klzgrad/naiveproxy/releases/latest --jq .tag_name)
+          case "$upstream" in v[0-9]*) ;; *) exit 1;; esac
+          source="component-naiveproxy-$upstream-upx521-r3"
+          candidate="$source-ax6s-apk1"
+          if [ "${{ github.ref }}" = refs/heads/main ]; then
+            if gh release view "$candidate" >/dev/null 2>&1; then
+              echo "::notice::Native AX6S APK already prebuilt: $candidate"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if ! gh release view "$source" >/dev/null 2>&1; then
+              echo "::notice::Waiting for verified official UPX artifact: $source"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
   package-and-rollback:
+    needs: discover
+    if: needs.discover.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -319,3 +356,47 @@ jobs:
             echo "PASS: crash-recovery marker, tampered rollback protection and manual recovery"
 
           '
+
+  publish-native-apk-candidate:
+    name: Publish immutable AX6S native APK preview after native CI gates
+    needs: [package-and-rollback, native-arm64-controller]
+    # Hardware must be explicitly accepted once before automatic cloud
+    # publishing is enabled. The feature branch never publishes.
+    if: ${{ github.ref == 'refs/heads/main' && vars.AX6S_APK_AUTO_PUBLISH == 'true' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ax6s-native-apk-verified-candidates
+          path: dist
+      - name: Publish verified native APKs and recovery manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=$(cat dist/release-tag.txt)
+          case "$tag" in
+            component-naiveproxy-v[0-9]*-upx521-r3-ax6s-apk1) ;;
+            *) echo "::error::Unexpected native APK release tag"; exit 1;;
+          esac
+          set -- dist/naiveproxy_*.apk
+          [ "$#" -eq 2 ] || { echo "::error::Both previous and candidate APKs are required"; exit 1; }
+          [ -s dist/manifest.json ] || exit 1
+          (cd dist && sha256sum manifest.json naiveproxy_*.apk > SHA256SUMS.txt)
+          if gh release view "$tag" >/dev/null 2>&1; then
+            temp=$(mktemp -d)
+            trap 'rm -rf "$temp"' EXIT
+            gh release download "$tag" --pattern '*.apk' --pattern manifest.json --pattern SHA256SUMS.txt --dir "$temp"
+            (cd "$temp" && sha256sum -c SHA256SUMS.txt)
+            cmp "$temp/manifest.json" dist/manifest.json
+            for apk in dist/naiveproxy_*.apk; do cmp "$apk" "$temp/$(basename "$apk")"; done
+            echo "::notice::Same immutable AX6S native APK release already exists"
+            exit 0
+          fi
+          gh release create "$tag" dist/manifest.json dist/naiveproxy_*.apk dist/SHA256SUMS.txt \
+            --prerelease --latest=false \
+            --title "NaiveProxy / AX6S APKv3 · $tag" \
+            --notes "Native AX6S APKv3 packages and firmware-original rollback asset. Verified in the original SHA256-pinned AX6S firmware rootfs using AArch64 apk, ubusd/rpcd, update/rollback and failure tests. Physical-router PassWall and flash-write acceptance remain separate; this is a cloud-tested release candidate, not a claimed hardware-stable build."
