@@ -197,18 +197,6 @@ jobs:
             sha256sum -c /tmp/naive-old.sha
             opkg status naiveproxy | grep -Fx "Version: 150.0.7871.63.1-r1"
           '
-      - name: Inspect rpcd and ubus prerequisites in official rootfs
-        run: |
-          sudo chroot "$ROOTFS" /bin/sh -c '
-            echo "== baseline components =="
-            for name in ubusd ubus rpcd uci jsonfilter; do
-              command -v "$name" || true
-            done
-            echo "== rpcd packages =="
-            opkg status rpcd 2>/dev/null | grep -E "^(Package|Version|Status):" || true
-            echo "== package feeds =="
-            cat /etc/opkg/distfeeds.conf 2>/dev/null || true
-          '
       - name: Verify native opkg installs LuCI manager and preserves UCI configuration
         shell: bash
         run: |
@@ -230,6 +218,36 @@ jobs:
             grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
           '
 
+      - name: Test real rpcd executable plugin over ubus on OpenWrt
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chroot "$ROOTFS" /sbin/ubusd -s /var/run/ubus.sock > /tmp/component-ubusd.log 2>&1 &
+          ubusd_pid=$!
+          rpcd_pid=''
+          cleanup() {
+            [ -z "$rpcd_pid" ] || sudo kill "$rpcd_pid" >/dev/null 2>&1 || true
+            sudo kill "$ubusd_pid" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 60); do
+            [ -S "$ROOTFS/var/run/ubus.sock" ] && break
+            sleep 0.1
+          done
+          test -S "$ROOTFS/var/run/ubus.sock" || { cat /tmp/component-ubusd.log; exit 1; }
+          sudo chroot "$ROOTFS" /sbin/rpcd -s /var/run/ubus.sock > /tmp/component-rpcd.log 2>&1 &
+          rpcd_pid=$!
+          for i in $(seq 1 60); do
+            if sudo chroot "$ROOTFS" /bin/ubus -s /var/run/ubus.sock -v list component-updater > /tmp/component-rpcd-methods.json 2>/dev/null; then break; fi
+            sleep 0.1
+          done
+          cat /tmp/component-rpcd-methods.json
+          grep -q rollback /tmp/component-rpcd-methods.json || { cat /tmp/component-rpcd.log; exit 1; }
+          sudo chroot "$ROOTFS" /bin/ubus -s /var/run/ubus.sock call component-updater status > /tmp/component-rpcd-status.json
+          cat /tmp/component-rpcd-status.json
+          grep -q '"component": "naiveproxy"' /tmp/component-rpcd-status.json
+          sudo chroot "$ROOTFS" /bin/ubus -s /var/run/ubus.sock call component-updater plan > /tmp/component-rpcd-plan.json
+          grep -q unavailable /tmp/component-rpcd-plan.json
   publish:
     name: Revalidate and publish verified native IPKs
     needs: [build, native-smoke, legacy-opkg]
