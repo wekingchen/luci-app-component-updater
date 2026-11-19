@@ -86,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD:/src" -w /src alpine:edge sh -ec '
-            set -eu
+            set -eux
             cp -a firmware-root /tmp/ax6s-root
             original=$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)
             test "$original" = 94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861
@@ -96,12 +96,14 @@ jobs:
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks add \
               /src/dist/naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.apk
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy | \
               grep -Fx 'naiveproxy 154.0.8037.49.5-r3'
             test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" != "$original"
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks add \
               /src/dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy | \
               grep -Fx 'naiveproxy 154.0.8037.49.5-r1'
             test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" = "$original"
