@@ -244,8 +244,8 @@ jobs:
             printf "\n# local-user-config-test\n" >> /etc/config/naiveproxy
             config_sha=$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")
             world_sha=$(sha256sum /etc/apk/world | awk "{print \$1}")
-            echo "APK world before native component update:"
-            cat /etc/apk/world
+            echo "APK world constraint before update:"
+            grep "^naiveproxy" /etc/apk/world || true
             /usr/sbin/component-updaterctl check
             test -s /tmp/component-updater/plan.json
             cp /tmp/component-acceptance-fixtures/candidate.apk /tmp/good-candidate.apk
@@ -261,15 +261,17 @@ jobs:
             /usr/sbin/component-updaterctl run
             test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r3"
             test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
+            test "$(sha256sum /etc/apk/world | awk "{print \$1}")" = "$world_sha"
             test ! -r /etc/component-updater/transaction.json
             test -s /etc/component-updater/installed/naiveproxy-active.apk
-            echo "APK world after native component update:"
-            cat /etc/apk/world
+            echo "APK world constraint after update:"
+            grep "^naiveproxy" /etc/apk/world || true
             test "$(sha256sum /etc/apk/world | awk "{print \$1}")" = "$world_sha"
             /usr/sbin/component-updaterctl rollback
             test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r1"
             test "$(sha256sum /usr/bin/naive | awk "{print \$1}")" = "$source_root"
             test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
+            test "$(sha256sum /etc/apk/world | awk "{print \$1}")" = "$world_sha"
             test ! -r /etc/component-updater/transaction.json
             echo "PASS: Native firmware controller install / rollback with modified config"
             # Simulate a persisted interrupted transaction after an upgrade:
