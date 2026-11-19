@@ -5,6 +5,7 @@ For official feeds use the OpenWrt Makefile/SDK instead.
 from pathlib import Path
 import argparse
 import io
+import gzip
 import tarfile
 from package_component_ipk import _outer_ipk
 import tempfile
@@ -30,7 +31,11 @@ def create_tar(path: Path, files: list[tuple[str, bytes, int]]) -> None:
             raise ValueError("empty package file path")
         for i in range(1,len(parts)):
             directories.add("./"+"/".join(parts[:i]))
-    with tarfile.open(path, "w:gz") as t:
+    # A gzip header written by tarfile.open(path, "w:gz") embeds a
+    # wall-clock mtime and filename, so identical packages get different hashes.
+    # Produce a deterministic tar stream and explicitly zero its gzip timestamp.
+    raw_tar = io.BytesIO()
+    with tarfile.open(fileobj=raw_tar, mode="w") as t:
         for name in sorted(directories,key=lambda x:(x.count("/"),x)):
             entry=tarfile.TarInfo(name+"/")
             entry.type=tarfile.DIRTYPE
@@ -41,6 +46,9 @@ def create_tar(path: Path, files: list[tuple[str, bytes, int]]) -> None:
             entry=tarfile.TarInfo(name)
             entry.size,entry.mode,entry.uid,entry.gid,entry.mtime=len(data),mode,0,0,0
             t.addfile(entry,io.BytesIO(data))
+    with path.open("wb") as out:
+        with gzip.GzipFile(filename="", fileobj=out, mode="wb", mtime=0, compresslevel=6) as gz:
+            gz.write(raw_tar.getvalue())
 
 
 def main():

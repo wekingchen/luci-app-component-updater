@@ -54,6 +54,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: luci-app-component-updater-ipk
@@ -69,19 +70,14 @@ jobs:
           pkg=luci-app-component-updater_0.3.0-1_all.ipk
           (cd dist && sha256sum "$pkg" > SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
-            # Reusing an immutable release is safe only if the candidate
-            # matches the exact checksum of the previously published IPK.
+            # Published IPK is immutable. Compare logical tar members instead
+            # of compressed bytes: older gzip headers contained timestamps.
             previous="$(mktemp -d)"
             trap 'rm -rf "$previous"' EXIT
-            gh release download "$tag" --pattern SHA256SUMS.txt --dir "$previous"
-            expected="$(awk -v name="$pkg" '$2 == name {print $1}' "$previous/SHA256SUMS.txt")"
-            actual="$(awk '{print $1}' dist/SHA256SUMS.txt)"
-            if [[ -n "$expected" && "$actual" == "$expected" ]]; then
-              echo "::notice::Release $tag already exists with identical IPK; no republish needed."
-              exit 0
-            fi
-            echo "::error::Release $tag exists but IPK contents changed. Bump the manager version."
-            exit 1
+            gh release download "$tag" --pattern "$pkg" --pattern SHA256SUMS.txt --dir "$previous"
+            python3 tools/compare_ipk_payloads.py               "dist/$pkg" "$previous/$pkg" "$previous/SHA256SUMS.txt"
+            echo "::notice::Published release has identical package contents; skip republishing."
+            exit 0
           fi
           gh release create "$tag" dist/luci-app-component-updater_0.3.0-1_all.ipk dist/SHA256SUMS.txt \
             --title "Component Updater V0.3.0 RC1" --latest=false --prerelease \

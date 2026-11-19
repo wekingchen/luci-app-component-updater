@@ -111,9 +111,64 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn('luci-app-component-updater_0.3.0-1_all.ipk',workflow)
         self.assertIn('pkg=luci-app-component-updater_0.3.0-1_all.ipk',workflow)
         self.assertIn('sha256sum "$pkg"',workflow)
-        self.assertIn('gh release download "$tag" --pattern SHA256SUMS.txt',workflow)
-        self.assertIn('"$actual" == "$expected"',workflow)
+        self.assertIn('gh release download "$tag" --pattern "$pkg" --pattern SHA256SUMS.txt',workflow)
+        self.assertIn('python3 tools/compare_ipk_payloads.py',workflow)
+        self.assertIn('Published release has identical package contents',workflow)
+        self.assertNotIn('gh release delete',workflow)
         self.assertNotIn('luci-app-component-updater_0.2.3-1_all.ipk',workflow)
+
+
+    def test_manager_ipk_is_reproducible_and_payload_equivalence_ignores_gzip_headers(self):
+        import gzip
+        from package_component_ipk import open_ipk, _outer_ipk
+        from compare_ipk_payloads import semantic_manifest, verify_release_sum
+        with tempfile.TemporaryDirectory() as td:
+            td=Path(td)
+            subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',str(td)],check=True,capture_output=True)
+            pkg=td/'luci-app-component-updater_0.3.0-1_all.ipk'
+            original=pkg.read_bytes()
+            nested=open_ipk(original)
+            # All tar layers should now use gzip headers with deterministic mtime.
+            for data in [original,nested['control.tar.gz'],nested['data.tar.gz']]:
+                self.assertEqual(data[4:8],b'\\0'*4)
+                self.assertFalse(data[3] & 8,'gzip must not embed original filename')
+            subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',str(td)],check=True,capture_output=True)
+            self.assertEqual(original,pkg.read_bytes())
+            modified_gzip=gzip.compress(gzip.decompress(nested['data.tar.gz']),mtime=123456)
+            wrapped=_outer_ipk([
+                ('debian-binary',nested['debian-binary']),
+                ('data.tar.gz',modified_gzip),
+                ('control.tar.gz',nested['control.tar.gz']),
+            ])
+            self.assertNotEqual(original,wrapped)
+            self.assertEqual(semantic_manifest(original),semantic_manifest(wrapped))
+            checksum=td/'SHA256SUMS.txt'
+            checksum.write_text(hashlib.sha256(original).hexdigest()+'  '+pkg.name+'\\n')
+            self.assertEqual(verify_release_sum(pkg,checksum),hashlib.sha256(original).hexdigest())
+            tampered=_outer_ipk([
+                ('debian-binary',nested['debian-binary']),
+                ('data.tar.gz',modified_gzip),
+                ('control.tar.gz',gzip.compress(gzip.decompress(nested['control.tar.gz'])+b'extra',mtime=0)),
+            ])
+            with self.assertRaises((ValueError,tarfile.TarError)):
+                semantic_manifest(tampered)
+            # An independently re-compressed tar containing different content
+            # must be rejected, even if the outer gzip remains well formed.
+            inner=io.BytesIO()
+            with tarfile.open(fileobj=inner,mode='w') as t:
+                entry=tarfile.TarInfo('./control')
+                entry.mode=0o644
+                entry.size=7
+                t.addfile(entry,io.BytesIO(b'changed'))
+            altered=_outer_ipk([
+                ('debian-binary',nested['debian-binary']),
+                ('data.tar.gz',nested['data.tar.gz']),
+                ('control.tar.gz',gzip.compress(inner.getvalue(),mtime=0)),
+            ])
+            self.assertNotEqual(semantic_manifest(original),semantic_manifest(altered))
+            checksum.write_text('0'*64+'  '+pkg.name+'\\n')
+            with self.assertRaises(ValueError):
+                verify_release_sum(pkg,checksum)
 
     def test_offline_ipk_contains_required_files_and_permissions(self):
         with tempfile.TemporaryDirectory() as td:
