@@ -38,12 +38,28 @@ jobs:
             JS_FILE="$path" node -e "const fs=require('fs');new Function(fs.readFileSync(process.env.JS_FILE,'utf8'));console.log(process.env.JS_FILE,'LuCI JS parse OK')"
           done
           node tests/luci_ui_smoke.js
-      - name: Build installable IPK
+      - name: Check AX6S native APK build scripts
+        run: |
+          sh -n tools/package_manager_apk.sh
+          sh -n scripts/device-ax6s-apk-preflight.sh
+          sh -n luci-app-component-updater/root/usr/libexec/component-updater/device-ax6s-apk-preflight.sh
+      - name: Build installable opkg IPK
         run: python3 tools/package_ipk.py --out dist
+      - name: Build and inspect genuine APKv3 with host apk-tools
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src alpine:edge sh -ec '
+            apk --version
+            apk mkpkg --help >/dev/null
+            sh tools/package_manager_apk.sh dist
+            apk adbdump --format json dist/luci-app-component-updater-0.4.0-r1.apk > dist/manager-apk-adbdump.json
+            grep -q "luci-app-component-updater" dist/manager-apk-adbdump.json
+          '
       - uses: actions/upload-artifact@v4
         with:
           name: luci-app-component-updater-ipk
-          path: dist/*.ipk
+          path: |
+            dist/*.ipk
+            dist/*.apk
           if-no-files-found: error
 
   publish-luci-candidate:
@@ -65,20 +81,24 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag=luci-app-component-updater-v0.3.0-rc1
-          test -s dist/luci-app-component-updater_0.3.0-1_all.ipk
-          pkg=luci-app-component-updater_0.3.0-1_all.ipk
-          (cd dist && sha256sum "$pkg" > SHA256SUMS.txt)
+          tag=luci-app-component-updater-v0.4.0-rc1
+          test -s dist/luci-app-component-updater_0.4.0-1_all.ipk
+          pkg=luci-app-component-updater_0.4.0-1_all.ipk
+          manager_apk=luci-app-component-updater-0.4.0-r1.apk
+          test -s "dist/$manager_apk"
+          (cd dist && sha256sum "$pkg" "$manager_apk" > SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
             # Published IPK is immutable. Compare logical tar members instead
             # of compressed bytes: older gzip headers contained timestamps.
             previous="$(mktemp -d)"
             trap 'rm -rf "$previous"' EXIT
-            gh release download "$tag" --pattern "$pkg" --pattern SHA256SUMS.txt --dir "$previous"
-            python3 tools/compare_ipk_payloads.py               "dist/$pkg" "$previous/$pkg" "$previous/SHA256SUMS.txt"
+            gh release download "$tag" --pattern "$pkg" --pattern "$manager_apk" --pattern SHA256SUMS.txt --dir "$previous"
+            python3 tools/compare_ipk_payloads.py "dist/$pkg" "$previous/$pkg" "$previous/SHA256SUMS.txt"
+            (cd "$previous" && sha256sum -c SHA256SUMS.txt)
+            cmp "dist/$manager_apk" "$previous/$manager_apk"
             echo "::notice::Published release has identical package contents; skip republishing."
             exit 0
           fi
-          gh release create "$tag" dist/luci-app-component-updater_0.3.0-1_all.ipk dist/SHA256SUMS.txt \
-            --title "Component Updater V0.3.0 RC1" --latest=false --prerelease \
-            --notes "Product interface release candidate. Core update and rollback behavior is unchanged; new responsive Chinese UI, inline action feedback, state mapping and LuCI compatibility regressions are covered by CI. The redesigned interface still requires separate MT3600BE / N1 browser acceptance."
+          gh release create "$tag" dist/luci-app-component-updater_0.4.0-1_all.ipk dist/luci-app-component-updater-0.4.0-r1.apk dist/SHA256SUMS.txt \
+            --title "Component Updater V0.4.0 RC1" --latest=false --prerelease \
+            --notes "AX6S compatibility preview: a native APKv3 LuCI manager for ImmortalWrt master is included, with a read-only device audit. APK NaiveProxy install and rollback remain locked pending AX6S device validation. opkg targets continue their existing behavior; neither package is a firmware image."
