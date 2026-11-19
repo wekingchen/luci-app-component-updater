@@ -197,6 +197,27 @@ jobs:
             sha256sum -c /tmp/naive-old.sha
             opkg status naiveproxy | grep -Fx "Version: 150.0.7871.63.1-r1"
           '
+      - name: Verify native opkg installs LuCI manager and preserves UCI configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/package_ipk.py --out /tmp/manager-build
+          sudo cp /tmp/manager-build/luci-app-component-updater_0.2.1-1_all.ipk "$ROOTFS/tmp/manager.ipk"
+          sudo chroot "$ROOTFS" /bin/sh -eu -c '
+            # The clean rootfs deliberately lacks LuCI dependencies; force-depends
+            # tests package installation semantics only, not full UI/runtime.
+            opkg install --force-depends /tmp/manager.ipk
+            test -x /usr/sbin/component-updaterctl
+            test -x /usr/libexec/rpcd/component-updater
+            test -r /usr/share/rpcd/acl.d/luci-app-component-updater.json
+            test -r /usr/share/luci/menu.d/luci-app-component-updater.json
+            /usr/libexec/rpcd/component-updater list | grep -q rollback
+            grep -q "config updater" /etc/config/component-updater
+            echo "    option github_proxy_mode '\''assets'\''" >> /etc/config/component-updater
+            opkg install --force-depends --force-reinstall /tmp/manager.ipk
+            grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
+          '
+
   publish:
     name: Revalidate and publish verified native IPKs
     needs: [build, native-smoke, legacy-opkg]

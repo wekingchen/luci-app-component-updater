@@ -53,6 +53,11 @@ class RpcdCompatibilityTests(unittest.TestCase):
                 dep=tar.extractfile('./control').read().decode()
             self.assertIn('opkg',dep)
             self.assertNotIn('usign',dep)
+            with tarfile.open(fileobj=io.BytesIO(control),mode='r:gz') as ct:
+                self.assertEqual(
+                    ct.extractfile('./conffiles').read(),
+                    b'/etc/config/component-updater\n'
+                )
             with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as tar:
                 members=set(tar.getnames())
             self.assertIn('./www/luci-static/resources/view/component-updater/settings.js',members)

@@ -18,6 +18,10 @@ define Package/luci-app-component-updater
   DEPENDS:=+luci-base +rpcd +jsonfilter +libubox +opkg
 endef
 
+define Package/luci-app-component-updater/conffiles
+/etc/config/component-updater
+endef
+
 define Package/luci-app-component-updater/description
   Config-driven GitHub component updater with official version discovery,
   precompressed native opkg IPKs, package-aware backup and rollback. No proxy configuration changes.
