@@ -10,6 +10,7 @@ BACKUPS=$BASE/backups/naiveproxy
 RECEIPT=$BASE/installed/naiveproxy.json
 PLAN=$CACHE/plan.json
 JOB=$CACHE/job.json
+TXN=$BASE/transaction.json
 GITHUB=wekingchen/luci-app-component-updater
 UPSTREAM=klzgrad/naiveproxy
 BINARY=/usr/bin/naive
@@ -28,6 +29,20 @@ json_msg() {
     json_add_string status "$1"
     json_add_string message "$2"
     json_dump
+    echo
+}
+
+check_msg() {
+    # Remember the last *check* outcome so LuCI can distinguish pending cloud
+    # builds from "never checked" and from transport errors.
+    create_dirs || return 1
+    json_init
+    json_add_string status "$1"
+    json_add_string message "$2"
+    json_add_string checked_at "$(date +%s)"
+    json_dump > "$CACHE/check-state.tmp.$$"
+    mv -f "$CACHE/check-state.tmp.$$" "$CACHE/check-state.json"
+    cat "$CACHE/check-state.json"
     echo
 }
 
@@ -87,6 +102,12 @@ status() {
     ready=$(jsonval "$PLAN" '@.ready')
     job_state=$(jsonval "$JOB" '@.state')
     job_message=$(jsonval "$JOB" '@.message')
+    check_state=$(jsonval "$CACHE/check-state.json" '@.status')
+    check_message=$(jsonval "$CACHE/check-state.json" '@.message')
+    if [ -r "$TXN" ]; then
+        job_state=recovery_required
+        job_message='Previous update was interrupted; restore the persistent backup before another update'
+    fi
     runtime_count=$(pidof naive 2>/dev/null | wc -w | tr -d ' ')
     json_init
     json_add_string component naiveproxy
@@ -100,6 +121,9 @@ status() {
     json_add_string runtime_processes "$runtime_count"
     json_add_string job_state "${job_state:-idle}"
     json_add_string job_message "$job_message"
+    json_add_string check_state "$check_state"
+    json_add_string check_message "$check_message"
+    [ ! -r "$TXN" ] || ready=false
     json_add_string ready "${ready:-false}"
     json_dump
     echo
@@ -130,20 +154,26 @@ space_ok() {
 }
 
 check_update() {
-    create_dirs || { json_msg error 'cannot create cache'; return 1; }
+    create_dirs || { check_msg error 'cannot create cache'; return 1; }
+    # A failed or pending check must NEVER leave a previously approved plan usable.
+    rm -f "$PLAN"
+    if [ -r "$TXN" ]; then
+        check_msg recovery_required 'Interrupted transaction must be restored before updating'
+        return 1
+    fi
     a=$(arch 2>/dev/null || true)
-    if [ -z "$a" ]; then json_msg unsupported 'OpenWrt architecture is not supported'; return 1; fi
+    if [ -z "$a" ]; then check_msg unsupported 'OpenWrt architecture is not supported'; return 1; fi
     if ! download "https://api.github.com/repos/$UPSTREAM/releases/latest" "$CACHE/official.tmp"; then
-        json_msg error 'official GitHub release request failed'; return 1
+        check_msg error 'official GitHub release request failed'; return 1
     fi
     mv -f "$CACHE/official.tmp" "$CACHE/official.json"
     tag=$(jsonval "$CACHE/official.json" '@.tag_name')
-    if ! safe_tag "$tag"; then json_msg error 'unrecognized official release tag'; return 1; fi
+    if ! safe_tag "$tag"; then check_msg error 'unrecognized official release tag'; return 1; fi
     build_tag="component-naiveproxy-${tag}-upx521-r1"
     manifest_url="https://github.com/$GITHUB/releases/download/$build_tag/manifest.json"
     if ! download "$manifest_url" "$CACHE/manifest.tmp"; then
         rm -f "$PLAN"
-        json_msg pending 'official release found; verified precompressed build not available'
+        check_msg pending 'official release found; verified precompressed build not available'
         return 0
     fi
     mv -f "$CACHE/manifest.tmp" "$CACHE/manifest.json"
@@ -151,7 +181,7 @@ check_update() {
     recorded_build=$(jsonval "$CACHE/manifest.json" '@.release_tag')
     component=$(jsonval "$CACHE/manifest.json" '@.component')
     if [ "$tag" != "$recorded_tag" ] || [ "$build_tag" != "$recorded_build" ] || [ "$component" != naiveproxy ]; then
-        json_msg error 'build manifest mismatch'; return 1
+        check_msg error 'build manifest mismatch'; return 1
     fi
     key=$(printf '%s' "$a" | tr '-' '_')
     filename=$(jsonval "$CACHE/manifest.json" "@.assets.$key.filename")
@@ -159,17 +189,17 @@ check_update() {
     binary_sum=$(jsonval "$CACHE/manifest.json" "@.assets.$key.binary_sha256")
     case "$filename" in
         "naiveproxy-${tag}-openwrt-${a}-upx521-r1.tar.xz") ;;
-        *) json_msg error 'missing or unexpected target artifact'; return 1;;
+        *) check_msg error 'missing or unexpected target artifact'; return 1;;
     esac
     for h in "$checksum" "$binary_sum"; do
-        [ ${#h} -eq 64 ] || { json_msg error 'invalid SHA256'; return 1; }
-        case "$h" in *[!0-9a-f]*) json_msg error 'invalid SHA256'; return 1;; esac
+        [ ${#h} -eq 64 ] || { check_msg error 'invalid SHA256'; return 1; }
+        case "$h" in *[!0-9a-f]*) check_msg error 'invalid SHA256'; return 1;; esac
     done
-    [ -x "$BINARY" ] || { json_msg unsupported 'existing naive binary not found'; return 1; }
-    space_ok || { json_msg unsupported 'insufficient temporary or persistent storage'; return 1; }
+    [ -x "$BINARY" ] || { check_msg unsupported 'existing naive binary not found'; return 1; }
+    space_ok || { check_msg unsupported 'insufficient temporary or persistent storage'; return 1; }
     if [ "$(jsonval "$RECEIPT" '@.upstream_tag')" = "$tag" ] && check_sha256 "$BINARY" "$binary_sum"; then
         rm -f "$PLAN"
-        json_msg up_to_date 'Installed binary matches the newest recorded official build'
+        check_msg up_to_date 'Installed binary matches the newest recorded official build'
         return 0
     fi
     json_init
@@ -180,19 +210,31 @@ check_update() {
     json_add_string filename "$filename"
     json_add_string sha256 "$checksum"
     json_add_string binary_sha256 "$binary_sum"
+    json_add_string checked_at "$(date +%s)"
     json_add_string ready true
     json_dump > "$PLAN.tmp"
     mv -f "$PLAN.tmp" "$PLAN"
-    json_msg ready 'official release and precompressed artifact available; review before install'
+    check_msg ready 'official release and precompressed artifact available; review before install'
 }
 
 has_valid_plan() {
+    [ ! -e "$TXN" ] || return 1
     [ -r "$PLAN" ] || return 1
+    checked_at=$(jsonval "$PLAN" '@.checked_at')
+    case "$checked_at" in ''|*[!0-9]*) return 1;; esac
+    now=$(date +%s)
+    [ "$checked_at" -le "$now" ] && [ $((now - checked_at)) -le 3600 ] || return 1
     [ "$(jsonval "$PLAN" '@.ready')" = true ] || return 1
     [ "$(jsonval "$PLAN" '@.architecture')" = "$(arch)" ] || return 1
     tag=$(jsonval "$PLAN" '@.upstream_tag')
     safe_tag "$tag" || return 1
     [ "$(jsonval "$PLAN" '@.build_tag')" = "component-naiveproxy-${tag}-upx521-r1" ] || return 1
+    filename=$(jsonval "$PLAN" '@.filename')
+    [ "$filename" = "naiveproxy-${tag}-openwrt-$(arch)-upx521-r1.tar.xz" ] || return 1
+    for hash in "$(jsonval "$PLAN" '@.sha256')" "$(jsonval "$PLAN" '@.binary_sha256')"; do
+        [ "${#hash}" -eq 64 ] || return 1
+        case "$hash" in *[!a-f0-9]*) return 1;; esac
+    done
 }
 
 check_sha256() {
@@ -231,17 +273,30 @@ perform_install() {
     mkdir -m 700 "$backup" || return 1
     cp -p "$BINARY" "$backup/naive" || { job_record failed 'Could not back up existing binary'; return 1; }
     sha256sum "$backup/naive" | awk '{print $1}' > "$backup/sha256"
+    [ -s "$backup/sha256" ] && check_sha256 "$backup/naive" "$(cat "$backup/sha256")" || {
+        job_record failed 'Backup verification failed'; return 1;
+    }
     [ -r "$RECEIPT" ] && cp "$RECEIPT" "$backup/receipt.json" || true
     new="$BINARY.component-updater.$$"
     cp "$work/naive" "$new" || { job_record failed 'Could not stage new binary'; return 1; }
     chmod 755 "$new"
     check_sha256 "$new" "$expected_binary" || { rm -f "$new"; job_record failed 'Staged binary checksum mismatch'; return 1; }
+    # Persistent recovery marker is written *before* replacing the executable.
+    json_init
+    json_add_string backup_id "$timestamp"
+    json_add_string old_sha256 "$(cat "$backup/sha256")"
+    json_add_string new_sha256 "$expected_binary"
+    json_add_string target "$BINARY"
+    json_dump > "$TXN.tmp.$$" || { job_record failed 'Could not write recovery record'; return 1; }
+    mv -f "$TXN.tmp.$$" "$TXN" || { job_record failed 'Could not commit recovery record'; return 1; }
+    sync
     job_record installing 'Replacing installed binary atomically'
     if ! mv -f "$new" "$BINARY"; then
-        rm -f "$new"; job_record failed 'Atomic replacement failed'; return 1
+        rm -f "$new" "$TXN"; job_record failed 'Atomic replacement failed'; return 1
     fi
     if ! check_sha256 "$BINARY" "$expected_binary" || [ "$(current_version)" != "$base" ]; then
         if cp -p "$backup/naive" "$BINARY.restore.$$" && mv -f "$BINARY.restore.$$" "$BINARY" && check_sha256 "$BINARY" "$(cat "$backup/sha256")"; then
+            rm -f "$TXN"
             job_record rolled_back 'Post-install validation failed; old binary restored'
         else
             job_record failed 'CRITICAL: new binary invalid and automatic rollback failed'
@@ -255,7 +310,11 @@ perform_install() {
     json_add_string previous_backup "$timestamp"
     json_add_string installed_at "$(date +%s)"
     json_dump > "$RECEIPT.tmp.$$"
-    mv -f "$RECEIPT.tmp.$$" "$RECEIPT"
+    if ! mv -f "$RECEIPT.tmp.$$" "$RECEIPT"; then
+        job_record recovery_required 'Binary updated but install receipt failed; restore backup'
+        return 1
+    fi
+    rm -f "$TXN"
     job_record completed 'Binary updated; running PassWall processes are not restarted'
     # Keep exactly two newest backups, with no user-configurable deletion paths.
     ls -1 "$BACKUPS" 2>/dev/null | sort -r | awk 'NR>2' | while IFS= read -r obsolete; do
@@ -289,19 +348,29 @@ rollback() {
     lock="$CACHE/update.lock"
     mkdir "$lock" 2>/dev/null || { json_msg busy 'Update or restore in progress'; return 1; }
     trap 'rmdir "$lock" 2>/dev/null || true' EXIT
-    receipt_backup=$(jsonval "$RECEIPT" '@.previous_backup')
+    if [ -r "$TXN" ]; then
+        receipt_backup=$(jsonval "$TXN" '@.backup_id')
+    else
+        receipt_backup=$(jsonval "$RECEIPT" '@.previous_backup')
+    fi
     case "$receipt_backup" in *[!0-9-]*|'') json_msg error 'No managed backup found'; return 1;; esac
     backup="$BACKUPS/$receipt_backup"
     [ -f "$backup/naive" ] && [ -r "$backup/sha256" ] || { json_msg error 'Backup incomplete'; return 1; }
     checksum=$(cat "$backup/sha256")
     check_sha256 "$backup/naive" "$checksum" || { json_msg error 'Backup hash mismatch'; return 1; }
+    [ -x "$BINARY" ] && [ ! -L "$BINARY" ] || { json_msg error 'Target path unsafe'; return 1; }
     stage="$BINARY.rollback.$$"
     cp -p "$backup/naive" "$stage" && mv -f "$stage" "$BINARY" || { rm -f "$stage"; json_msg error 'Restore failed'; return 1; }
+    if ! check_sha256 "$BINARY" "$checksum"; then
+        json_msg error 'CRITICAL: restored file checksum mismatch'
+        return 1
+    fi
     if [ -r "$backup/receipt.json" ]; then
         cp "$backup/receipt.json" "$RECEIPT"
     else
         rm -f "$RECEIPT"
     fi
+    rm -f "$TXN" "$PLAN"
     job_record rolled_back 'Previous binary restored; running services not restarted'
     json_msg rolled_back 'Previous managed binary restored'
 }

@@ -4,6 +4,8 @@ on:
     paths:
       - 'components/**'
       - 'tools/component_builder.py'
+      - 'tools/validate_artifacts.py'
+      - 'tests/**'
       - '.github/workflows/builder-smoke.yml'
   workflow_dispatch:
 permissions:
@@ -27,6 +29,7 @@ jobs:
           assert all(v['validation']['round_trip']=='passed' for v in x['assets'].values())
           print('Real upstream artifacts: verified')
           PY
+          python3 tools/validate_artifacts.py --manifest dist/manifest.json
       - uses: actions/upload-artifact@v4
         with:
           name: verified-naiveproxy-candidates

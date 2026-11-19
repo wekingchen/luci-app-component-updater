@@ -1,7 +1,8 @@
 name: Component Builder / Official Releases & UPX
 on:
   schedule:
-    - cron: '23 3 * * *'
+    # Prebuild in the cloud every 20 min (GitHub schedule may be delayed).
+    - cron: '7,27,47 * * * *'
   workflow_dispatch:
     inputs:
       component:
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   discover-and-build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - name: Build and publish each enabled component independently
@@ -62,10 +63,11 @@ jobs:
             OUT="dist/$COMPONENT_ID"
             python3 tools/component_builder.py --component "$COMPONENT_ID" --output "$OUT"
             [[ "$(cat "$OUT/release-tag.txt")" == "$TAG" ]] || { echo 'Release changed during build'; exit 1; }
+            python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
             if [[ "$PUBLISH" == 'true' ]]; then
               gh release create "$TAG" "$OUT"/*.tar.xz "$OUT/manifest.json" \
-                --title "$TAG" --latest=false \
-                --notes "Repackaged official binaries. The manifest records upstream digests, compression, and basic tests. Device-runtime compatibility and package-manager metadata are NOT guaranteed."
+                --title "$TAG" --latest=false --prerelease \
+                --notes "PRE-RELEASE build candidates only. SHA256/provenance/UPX round-trip checked. NO target-router service health verification, NO detached signature yet; use only with explicit test consent."
             fi
             echo '::endgroup::'
           done

@@ -44,6 +44,8 @@ return view.extend({
         var ready = plan.ready === 'true';
         var progress = status.job_state || 'idle';
         var jobBusy = ['downloading', 'verifying', 'backing_up', 'installing', 'queued'].indexOf(progress) >= 0;
+        var checkState = status.check_state || '';
+        var checkMessage = status.check_message || '';
         var currentTag = status.installed_upstream_tag || '未记录（历史手动安装）';
         var official = status.official_tag || '尚未检查';
         var version = status.installed_version || '未检测';
@@ -51,7 +53,7 @@ return view.extend({
         var section = E('div', {'class':'cbi-section', style:'padding:1em;border:1px solid var(--border-color-low, #ddd);border-radius:12px'}, [
             E('div', {style:'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1em'}, [
                 E('div', {}, [E('h3', {style:'margin:0'}, 'NaiveProxy'), E('small', {}, '官方来源：klzgrad/naiveproxy')]),
-                E('span', {'class':'label'}, ready ? '已获取更新预案' : (jobBusy ? '更新中' : '等待检查'))
+                E('span', {'class':'label'}, ready ? '压缩更新已就绪' : (jobBusy ? '更新中' : (checkState === 'pending' ? '云端压缩准备中' : (checkState === 'error' ? '检查失败' : '等待检查'))))
             ]),
             this.row('实际程序版本', version),
             this.row('官方最新 Release', official),
@@ -60,7 +62,9 @@ return view.extend({
             this.row('设备软件架构', status.architecture),
             this.row('运行中 NaiveProxy 进程', status.runtime_processes),
             this.row('当前任务状态', progress),
+            this.row('最近检查结果', checkMessage),
             status.job_message ? E('p', {'class':'alert-message'}, status.job_message) : E('span'),
+            E('p', {'class':'description'}, 'GitHub Actions 在云端预先压缩并发布；点击更新不会现场等待压缩。如果发现官方新版但尚无候选包，此页显示准备中，稍后重新检查即可。'),
             E('p', {'class':'description',style:'margin-top:1em'}, '更新仅替换已备份的 /usr/bin/naive；不修改 opkg 数据库，不自动重启 PassWall。原有进程可能仍在使用旧版本。'),
             E('div', {style:'display:flex;flex-wrap:wrap;gap:0.6em;margin-top:1em'}, [
                 E('button', {'class':'btn cbi-button cbi-button-action', disabled:jobBusy, click:function(){self.handleCheck();}}, '检查官方更新'),
@@ -73,7 +77,7 @@ return view.extend({
             this.row('构建来源', 'wekingchen/luci-app-component-updater'),
             this.row('构建版本', plan.build_tag || '尚未获取'),
             this.row('下载资源', plan.filename || '尚未获取'),
-            E('p', {'class':'description'}, 'GitHub Actions 对官方二进制执行 UPX --lzma --best。安装前校验 SHA256 和程序可执行性；该构建不代表已完成代理功能真机测试。')
+            E('p', {'class':'description'}, 'GitHub Actions 对官方二进制执行 UPX --lzma --best；由云端每 20 分钟轮询官方版本（调度可能延迟）。安装前校验 SHA256 和程序可执行性；该构建尚未完成签名与代理功能真机测试。')
         ]);
         return [section, extra];
     },

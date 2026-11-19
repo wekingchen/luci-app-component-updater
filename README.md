@@ -30,7 +30,7 @@ components/*.json                  单一组件定义及架构资源规则
 ## GitHub Actions
 
 - **Component Updater / CI & IPK**：单测、Shell/JS 静态检查、通用 `all.ipk` 构建，PR 会运行。CI Artifacts 中可获取安装包。
-- **Component Builder / Official Releases & UPX**：每日检查最新官方 Release，也可手动执行。上游未变化且已有同名 Release 时跳过。对 NaiveProxy 提取两个 OpenWrt ARM64 官方资源，严格验证 GitHub Release 中的 `digest`，使用 UPX **5.2.1** `--lzma --best` 压缩、`upx -t` 校验及解压往返字节比较，生成包含双架构资源的 `manifest.json`。首次构建只代表基础验证，不代表通过设备真实代理连接测试。
+- **Component Builder / Official Releases & UPX**：每 20 分钟检查最新官方 Release，也可手动执行。上游未变化且已有同名 Release 时跳过。对 NaiveProxy 提取两个 OpenWrt ARM64 官方资源，严格验证 GitHub Release 中的 `digest`，使用 UPX **5.2.1** `--lzma --best` 压缩、`upx -t` 校验及解压往返字节比较，生成包含双架构资源的 `manifest.json`。首次构建只代表基础验证，不代表通过设备真实代理连接测试。
 
 以后增加程序，应提供新 `components/<id>.json`，构建器当前已有配置化来源、架构、解包、压缩/不压缩支持；若新程序运行协议、软件包管理或服务健康检查不同，则新增适配器。V0.1 的设备更新器只允许 NaiveProxy，不会执行任意组件提供的 Shell 指令。
 
@@ -79,6 +79,12 @@ LuCI → 系统 → 组件更新。设备端需要可用的 GitHub HTTPS、CA �
 ## 扩展组件
 
 参照 `components/naiveproxy.json` 定义版本来源、资源匹配、归档成员、架构和压缩策略。构建器支持 `.tar.xz`、`.tar.gz`、`.zip` 源文件、`upx` 与 `none` 策略；设备端新增安装适配器仍需要人工审查，不允许直接执行组件配置中的任意程序。
+
+## 自动化单元测试与实机验收门禁
+
+详见 [`docs/acceptance-gates.md`](docs/acceptance-gates.md)。G0 离线单元与模拟路由器事务测试、G1 真实官方 Release 构建与产物验证均必须完成，G2/G3 需要 MT3600BE、N1 各自实机验收，G4 才允许正式稳定发布。CI 通过并不表示已经通过真机。
+
+**体验：路由器点击“更新”不会现场等待 UPX。** 默认分支的定时 Actions 提前发现上游版本（每 20 分钟检查一次，GitHub 可能延迟），压缩并发布候选；若尚未完成则显示 `pending`，不可更新。查看官方最新版本与下载可安装的最新构建是两个不同的状态。
 
 ## 进度
 
