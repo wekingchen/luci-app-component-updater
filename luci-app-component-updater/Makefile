@@ -37,6 +37,7 @@ define Package/luci-app-component-updater/install
 	$(INSTALL_DIR) $(1)/etc/component-updater
 	$(INSTALL_BIN) ./root/usr/sbin/component-updaterctl $(1)/usr/sbin/component-updaterctl
 	$(INSTALL_BIN) ./root/usr/libexec/rpcd/component-updater $(1)/usr/libexec/rpcd/component-updater
+	$(INSTALL_BIN) ./root/usr/libexec/component-updater/device-ax6s-apk-preflight.sh $(1)/usr/libexec/component-updater/device-ax6s-apk-preflight.sh
 endef
 
 $(eval $(call BuildPackage,luci-app-component-updater))
