@@ -3,3 +3,8 @@ __pycache__/
 /dist/
 *.ipk
 .DS_Store
+
+# Never commit release signing private keys
+component-updater.sec
+*.private.key
+*.secret.key
