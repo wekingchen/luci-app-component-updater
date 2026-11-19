@@ -33,8 +33,14 @@ BASE_SHA = {
     "etc/init.d/naiveproxy": "4d9dec9eb81586c5ea932260500329b68fc60f8c38af0712516b7a0f0ae59849",
     "etc/config/naiveproxy": "201d0b3afd1e131f7695a4e4f541ec0ff6447dc8bf824eb8f96827d530b03682",
 }
+METADATA_NAMES = (
+    "lib/apk/packages/naiveproxy.conffiles",
+    "lib/apk/packages/naiveproxy.conffiles_static",
+    "lib/apk/packages/naiveproxy.list",
+)
 MODES = {"usr/bin/naive": 0o755, "etc/init.d/naiveproxy":0o755,
-         "etc/config/naiveproxy":0o600}
+         "etc/config/naiveproxy":0o600,
+         **{name: 0o644 for name in METADATA_NAMES}}
 TAG_PATTERN = re.compile(r"v[0-9]+(?:\.[0-9]+)*(?:-[0-9]+)?\Z")
 
 
@@ -52,6 +58,11 @@ def require_source(root: Path) -> dict[str, bytes]:
         if sha(data) != expected:
             raise ValueError("AX6S original firmware hash mismatch: " + name)
         contents[name] = data
+    for name in METADATA_NAMES:
+        p=root/name
+        if not p.is_file() or p.is_symlink() or p.stat().st_size > 65536:
+            raise ValueError("missing/unsafe firmware APK package metadata: "+name)
+        contents[name]=p.read_bytes()
     if not (root/"lib/apk/db/installed").is_file():
         raise ValueError("firmware native APK database is missing")
     return contents
@@ -68,7 +79,7 @@ def check_original_metadata(root: Path, apk_tool: str) -> None:
                            capture_output=True,text=True).stdout
     paths = {line.strip().lstrip("/") for line in files.splitlines()
              if line.strip().startswith(("etc/","usr/","/etc/","/usr/"))}
-    if paths != set(BASE_SHA):
+    if paths != set(BASE_SHA).union(METADATA_NAMES):
         raise ValueError("original APK package owns unexpected paths: "+repr(sorted(paths)))
 
 
@@ -78,17 +89,13 @@ def mkpkg(apk_tool: str, out: Path, version: str, payload: dict[str,bytes]) -> P
     with tempfile.TemporaryDirectory(prefix="ax6s-apk-") as tmp:
         stage = Path(tmp)/"root"
         for name, data in payload.items():
-            if name not in BASE_SHA:
+            if name not in MODES:
                 raise ValueError("unrecognized package file")
             path=stage/name
             path.parent.mkdir(parents=True,exist_ok=True)
             path.write_bytes(data)
             path.chmod(MODES[name])
-        # OpenWrt native APK protected conffile metadata.
-        meta = stage/"lib/apk/packages"
-        meta.mkdir(parents=True,exist_ok=True)
-        (meta/"naiveproxy.conffiles").write_text("/etc/config/naiveproxy\n")
-        # The APK ownership metadata includes only approved package paths.
+        # Exact metadata from the hash-verified original firmware is retained.
         dest=out/f"naiveproxy_{version}_{ARCH}.apk"
         subprocess.run([apk_tool,"mkpkg",
             "--info","name:naiveproxy",
