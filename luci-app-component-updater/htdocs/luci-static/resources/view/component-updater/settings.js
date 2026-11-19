@@ -57,7 +57,7 @@ return view.extend({
                 E('div', {'class': 'cu-settings-form'}, formNode),
                 E('div', {'class': 'cu-settings-note'}, [
                     E('strong', {}, '关于校验与可信度'),
-                    E('p', {}, '安装前会核对官方发布信息和安装包的 SHA-256 摘要，但它不是独立数字签名。若将版本查询也交给中转节点，校验信息同样经过该节点，请仅使用可信服务。')
+                    E('p', {}, '安装前会依据 GitHub Release API 提供的 SHA256 摘要核对安装包，但它不是独立数字签名。若将版本查询也交给中转节点，校验信息同样经过该节点，请仅使用可信服务。')
                 ])
             ]);
         });
