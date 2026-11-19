@@ -12,7 +12,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "luci-app-component-updater"
 NAME = "luci-app-component-updater"
-VERSION = "0.2.2-1"
+VERSION = "0.2.3-1"
 
 
 def create_tar(path: Path, files: list[tuple[str, bytes, int]]) -> None:
