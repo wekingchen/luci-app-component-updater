@@ -156,6 +156,7 @@ jobs:
           sudo install -d -m 755 "$ROOTFS/dev"
           if [ ! -e "$ROOTFS/dev/null" ]; then sudo mknod -m 666 "$ROOTFS/dev/null" c 1 3; fi
           sudo chroot "$ROOTFS" /bin/sh -c 'command -v opkg && opkg --version'
+          sudo chroot "$ROOTFS" /bin/sh -c 'mkdir -p /var/lock /var/run && test -d /var/lock'
       - name: Create isolated upgrade, force-reinstall and downgrade IPKs
         run: python3 tools/legacy_opkg_fixture.py --root "$ROOTFS"
       - name: Native OpenWrt 21.02 opkg contract test (isolated rootfs only)
