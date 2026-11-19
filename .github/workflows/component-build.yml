@@ -3,6 +3,13 @@ on:
   schedule:
     # Cloud-side prebuild; router does not wait for compression.
     - cron: '7,27,47 * * * *'
+  pull_request:
+    paths:
+      - '.github/workflows/component-build.yml'
+      - 'components/**'
+      - 'tools/component_builder.py'
+      - 'tools/validate_artifacts.py'
+      - 'tests/**'
   workflow_dispatch:
     inputs:
       component:
