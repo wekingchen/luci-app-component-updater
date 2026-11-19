@@ -9,6 +9,7 @@ on:
       - 'tools/package_component_ipk.py'
       - 'tools/validate_artifacts.py'
       - 'tools/smoke_arm64.py'
+      - 'tools/legacy_opkg_fixture.py'
       - 'tools/runtime-smoke.Dockerfile'
   schedule:
     # Cloud-side prebuild; router does not wait for compression.
@@ -27,7 +28,52 @@ on:
         description: Component ID, or all
         type: string
         default: all
-      publish:
+      legacy-opkg:
+    name: OpenWrt 21.02.5 native opkg install and rollback
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download hash-verified official OpenWrt 21.02.5 x86_64 rootfs
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS="$(mktemp -d)"
+          echo "ROOTFS=$ROOTFS" >> "$GITHUB_ENV"
+          ROOTFS_URL=https://downloads.openwrt.org/releases/21.02.5/targets/x86/64/openwrt-21.02.5-x86-64-rootfs.tar.gz
+          curl -fL --retry 3 --connect-timeout 15 --max-time 120 "$ROOTFS_URL" -o /tmp/openwrt-legacy-rootfs.tar.gz
+          echo '99d3c353b214304b24ec28a6499715a1b00fad7eabb34e55b2db5f90440646cf  /tmp/openwrt-legacy-rootfs.tar.gz' | sha256sum -c
+          sudo tar -xzf /tmp/openwrt-legacy-rootfs.tar.gz -C "$ROOTFS"
+          sudo install -d -m 1777 "$ROOTFS/tmp"
+          sudo install -d -m 755 "$ROOTFS/dev"
+          if [ ! -e "$ROOTFS/dev/null" ]; then sudo mknod -m 666 "$ROOTFS/dev/null" c 1 3; fi
+          sudo chroot "$ROOTFS" /bin/sh -c 'command -v opkg && opkg --version'
+      - name: Create isolated upgrade, force-reinstall and downgrade IPKs
+        run: python3 tools/legacy_opkg_fixture.py --root "$ROOTFS"
+      - name: Native OpenWrt 21.02 opkg contract test (isolated rootfs only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chroot "$ROOTFS" /bin/sh -eu -c '
+            opkg install /tmp/naive-old.ipk
+            sha256sum -c /tmp/naive-old.sha
+            opkg status naiveproxy | grep -Fx "Version: 150.0.7871.63.1-r1"
+            opkg install /tmp/naive-new.ipk
+            sha256sum -c /tmp/naive-new.sha
+            opkg status naiveproxy | grep -Fx "Version: 154.0.8037.49.5-r3"
+            opkg install --force-reinstall /tmp/naive-repair.ipk
+            sha256sum -c /tmp/naive-repair.sha
+            opkg status naiveproxy | grep -Fx "Version: 154.0.8037.49.5-r3"
+            opkg install --force-downgrade --force-reinstall /tmp/naive-old.ipk
+            sha256sum -c /tmp/naive-old.sha
+            opkg status naiveproxy | grep -Fx "Version: 150.0.7871.63.1-r1"
+          '
+  publish:
         description: Publish native IPKs after validation
         type: boolean
         default: true
@@ -132,7 +178,7 @@ jobs:
 
   publish:
     name: Revalidate and publish verified native IPKs
-    needs: [build, native-smoke]
+    needs: [build, native-smoke, legacy-opkg]
     if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push' || inputs.publish == true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
