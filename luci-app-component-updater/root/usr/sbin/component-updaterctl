@@ -292,7 +292,7 @@ make_rollback_ipk() {
     case "$version:$architecture" in ''|*[!A-Za-z0-9.+_~:-]*) return 1;; esac
     [ -n "$version" ] && [ -n "$architecture" ] || return 1
     # Existing opkg dependencies are metadata from a local trusted database.
-    printf '%s' "$dependencies" | grep -Eq '^[A-Za-z0-9+._,=<> ()-]*
+    if printf '%s' "$dependencies" | grep -Eq '[^A-Za-z0-9+._,=<> ()-]'; then return 1; fi
     staging=$dst/staging
     mkdir -p "$staging/control" "$staging/root/usr/bin" || return 1
     cp -p "$BINARY" "$staging/root/usr/bin/naive" || return 1
