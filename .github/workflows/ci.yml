@@ -12,8 +12,14 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Install static checks
-        run: sudo apt-get update && sudo apt-get install -y shellcheck jq busybox
+      - name: Check built-in GitHub runner tools
+        run: |
+          command -v shellcheck
+          command -v jq
+          command -v busybox
+          shellcheck --version | head -n 2
+          jq --version
+          busybox | head -n 1
       - name: Validate component definitions and tests
         run: |
           python3 -m unittest discover -s tests -v
