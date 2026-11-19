@@ -148,7 +148,7 @@ build_version() {
     core=${tag#v}
     case "$core" in *-*) base=${core%-*}; rev=${core##*-};; *) return 1;; esac
     case "$base:$rev" in *[!0-9.:]*) return 1;; esac
-    printf '%s.%s-r2\n' "$base" "$rev"
+    printf '%s.%s-r3\n' "$base" "$rev"
 }
 status() {
     v=$(current_version); [ -n "$v" ] || v=not-installed
@@ -193,7 +193,7 @@ check_update() {
     tag=$(jsonval "$CACHE/official.json" '@.tag_name')
     valid_tag "$tag" || { check_msg error 'Unexpected official release tag'; return 1; }
     version=$(build_version "$tag") || { check_msg error 'Unsupported release version format'; return 1; }
-    build_tag="component-naiveproxy-$tag-upx521-r2"
+    build_tag="component-naiveproxy-$tag-upx521-r3"
     api="https://api.github.com/repos/$GITHUB/releases/tags/$build_tag"
     download "$api" "$CACHE/release.tmp" ||
         { check_msg pending 'Official update found; native IPKs are being prepared'; return 0; }
@@ -257,7 +257,7 @@ has_valid_plan() {
     tag=$(jsonval "$PLAN" '@.upstream_tag')
     valid_tag "$tag" || return 1
     version=$(build_version "$tag") || return 1
-    [ "$(jsonval "$PLAN" '@.build_tag')" = "component-naiveproxy-$tag-upx521-r2" ] || return 1
+    [ "$(jsonval "$PLAN" '@.build_tag')" = "component-naiveproxy-$tag-upx521-r3" ] || return 1
     [ "$(jsonval "$PLAN" '@.filename')" = "naiveproxy_${version}_${a}.ipk" ] || return 1
     [ "$(jsonval "$PLAN" '@.package_version')" = "$version" ] || return 1
     valid_hash "$(jsonval "$PLAN" '@.sha256')" || return 1

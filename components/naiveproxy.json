@@ -33,7 +33,7 @@
       "--lzma",
       "--best"
     ],
-    "revision": 2
+    "revision": 3
   },
   "install": {
     "type": "opkg",
@@ -43,7 +43,8 @@
     ],
     "package": "naiveproxy",
     "dependencies": [
-      "libc"
+      "libc",
+      "libgcc1"
     ],
     "rollback": "local-ipk"
   }

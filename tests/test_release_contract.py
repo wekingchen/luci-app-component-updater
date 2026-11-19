@@ -87,7 +87,7 @@ class ReleaseContractTests(unittest.TestCase):
             ctl,packaged=inspect_ipk(archive.read_bytes(),'/usr/bin/naive')
             self.assertEqual(ctl['Package'],'naiveproxy')
             self.assertEqual(ctl['Architecture'],'aarch64_cortex-a53')
-            self.assertEqual(ctl['Version'],'154.0.8037.49.5-r2')
+            self.assertEqual(ctl['Version'],'154.0.8037.49.5-r3')
             self.assertEqual(packaged,elf)
             self.assertEqual(result['source_sha256'],hashlib.sha256(blob).hexdigest())
             self.assertEqual(result['validation']['device_runtime'],'unverified')

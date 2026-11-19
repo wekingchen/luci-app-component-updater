@@ -42,6 +42,11 @@ def verify_manifest(path: Path) -> dict:
         for k,field in [('Package','package'),('Version','package_version'),('Architecture','package_arch')]:
             if control.get(k)!=item[field]:
                 raise ValueError('IPK control mismatch: '+k)
+        expected_deps=item.get('dependencies')
+        if not isinstance(expected_deps,list) or not expected_deps or any(not re.fullmatch(r'[a-z][a-z0-9+.-]*',x) for x in expected_deps):
+            raise ValueError('missing or invalid declared IPK dependencies')
+        if control.get('Depends')!=', '.join(expected_deps):
+            raise ValueError('IPK dependencies mismatch: '+name)
         if len(binary)>128*1024*1024 or not SHA.fullmatch(item.get('binary_sha256','')) or hashlib.sha256(binary).hexdigest()!=item['binary_sha256']:
             raise ValueError('binary digest mismatch: '+name)
         checks=item.get('validation',{})

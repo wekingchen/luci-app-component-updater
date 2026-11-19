@@ -253,6 +253,7 @@ def build_one(cfg: dict, release: dict, target: dict, upx: str, out: Path) -> di
     return {
         "filename": name, "format": "ipk", "package": package,
         "package_version": version, "package_arch": target["id"],
+        "dependencies": cfg["install"]["dependencies"],
         "install_path": cfg["binary"]["install_path"], "sha256": hashlib.sha256(payload).hexdigest(),
         "bytes": len(payload), "binary_sha256": hashlib.sha256(packed).hexdigest(),
         "source_sha256": origin_sha, "original_bytes": len(original),

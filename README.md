@@ -27,7 +27,7 @@ LuCI：官方版本 → Release API digest → 下载并校验 Manifest / IPK
 验证实际二进制版本、SHA256、opkg Version → 保存记录
 ```
 
-官方 Tag `v154.0.8037.49-5` 对应 package `154.0.8037.49.5-r2`，其中最后一位 `5` 保留官方修订，`-r2` 标识我们的包构建修订。原先手工复制 NaiveProxy 到 `/usr/bin/naive` 不会更新软件包数据库；现在通过 `opkg install` 正常升级，解决这个问题。
+官方 Tag `v154.0.8037.49-5` 对应 package `154.0.8037.49.5-r3`，其中最后一位 `5` 保留官方修订，`-r2` 标识我们的包构建修订。原先手工复制 NaiveProxy 到 `/usr/bin/naive` 不会更新软件包数据库；现在通过 `opkg install` 正常升级，解决这个问题。
 
 更新前生成由当前二进制和当前 opkg 版本/架构/依赖组成的本地恢复 IPK。回滚通过 `opkg install --force-downgrade --force-reinstall` 恢复之前的二进制哈希和 opkg 记录。原先手动覆盖过二进制的旧状态，在回滚后仍可能呈现不同的实际程序版本与 opkg Version，这是对更新前状态的忠实恢复。IPK 更新可能触发原包已有的维护脚本，设备实测前不能保证代理连接绝对无中断。
 

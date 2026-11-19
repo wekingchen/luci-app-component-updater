@@ -9,15 +9,15 @@ class NativeArtifactTests(unittest.TestCase):
     def setUp(self):
         t=tempfile.TemporaryDirectory();self.addCleanup(t.cleanup)
         self.root=Path(t.name);self.bin=b'naive-upx-arm64'
-        self.ver='154.0.8037.49.5-r2';self.arch='aarch64_generic'
+        self.ver='154.0.8037.49.5-r3';self.arch='aarch64_generic'
         self.filename=f'naiveproxy_{self.ver}_{self.arch}.ipk'
         self.asset=self.root/self.filename
-        self.asset.write_bytes(build_ipk(package='naiveproxy',version=self.ver,architecture=self.arch,target='/usr/bin/naive',binary=self.bin))
+        self.asset.write_bytes(build_ipk(package='naiveproxy',version=self.ver,architecture=self.arch,target='/usr/bin/naive',binary=self.bin,depends=['libc','libgcc1']))
         self.manifest=self.root/'manifest.json'
         self.d={'schema':1,'component':'naiveproxy','upstream_tag':'v154.0.8037.49-5',
-                'release_tag':'component-naiveproxy-v154.0.8037.49-5-upx521-r2',
+                'release_tag':'component-naiveproxy-v154.0.8037.49-5-upx521-r3',
                 'assets':{'aarch64_generic':{'filename':self.filename,'format':'ipk',
-                'package':'naiveproxy','package_version':self.ver,'package_arch':self.arch,
+                'package':'naiveproxy','package_version':self.ver,'package_arch':self.arch,'dependencies':['libc','libgcc1'],
                 'install_path':'/usr/bin/naive','sha256':sha(self.asset.read_bytes()),
                 'binary_sha256':sha(self.bin),'bytes':self.asset.stat().st_size,
                 'validation':{'elf':'passed','round_trip':'passed'}}}}

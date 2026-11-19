@@ -5,8 +5,8 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from package_component_ipk import build_ipk,inspect_ipk
 ROOT=Path(__file__).resolve().parents[1]
 SOURCE=ROOT/'luci-app-component-updater/root/usr/sbin/component-updaterctl'
-TAG='v154.0.8037.49-5';BUILD=f'component-naiveproxy-{TAG}-upx521-r2'
-ARCH='aarch64_cortex-a53';NEW='154.0.8037.49.5-r2';OLD='150.0.7871.63.1-r1'
+TAG='v154.0.8037.49-5';BUILD=f'component-naiveproxy-{TAG}-upx521-r3'
+ARCH='aarch64_cortex-a53';NEW='154.0.8037.49.5-r3';OLD='150.0.7871.63.1-r1'
 FILE=f'naiveproxy_{NEW}_{ARCH}.ipk'
 def sha(b):return hashlib.sha256(b).hexdigest()
 def binary(v):return f'#!/bin/sh\necho "naive {v}"\n'.encode()
@@ -94,12 +94,12 @@ else:sys.exit(2)
         p=self.mockbin/name;p.write_text(data);p.chmod(0o755)
     def build_fixture(self,b=None,hash_override=None):
         b=self.new if b is None else b
-        blob=build_ipk(package='naiveproxy',version=NEW,architecture=ARCH,target='/usr/bin/naive',binary=b)
+        blob=build_ipk(package='naiveproxy',version=NEW,architecture=ARCH,target='/usr/bin/naive',binary=b,depends=['libc','libgcc1'])
         (self.fixture/'update.ipk').write_bytes(blob)
         (self.fixture/'official.json').write_text(json.dumps(dict(tag_name=TAG)))
         m=dict(schema=1,component='naiveproxy',upstream_tag=TAG,release_tag=BUILD,
           assets={'aarch64_cortex_a53':dict(filename=FILE,format='ipk',package='naiveproxy',
-          package_arch=ARCH,package_version=NEW,sha256=hash_override or sha(blob),
+          package_arch=ARCH,package_version=NEW,dependencies=['libc','libgcc1'],sha256=hash_override or sha(blob),
           binary_sha256=sha(b))})
         raw=json.dumps(m).encode()
         (self.fixture/'manifest.json').write_bytes(raw)
