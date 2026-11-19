@@ -17,6 +17,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import component_builder as b
+from package_component_ipk import inspect_ipk
 
 
 def fake_elf(machine=183):
@@ -83,17 +84,19 @@ class ReleaseContractTests(unittest.TestCase):
             result=b.build_one(self.cfg,release,self.cfg['platforms'][0],'/fake/upx',Path(td))
             archive=Path(td)/result['filename']
             self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(),result['sha256'])
-            with tarfile.open(archive,mode='r:xz') as t:
-                self.assertEqual(t.getnames(),['naive','METADATA.json'])
-                meta=json.load(t.extractfile('METADATA.json'))
-                self.assertEqual(meta['source_archive_sha256'],hashlib.sha256(blob).hexdigest())
-                self.assertEqual(meta['original_binary_sha256'],hashlib.sha256(elf).hexdigest())
+            ctl,packaged=inspect_ipk(archive.read_bytes(),'/usr/bin/naive')
+            self.assertEqual(ctl['Package'],'naiveproxy')
+            self.assertEqual(ctl['Architecture'],'aarch64_cortex-a53')
+            self.assertEqual(ctl['Version'],'154.0.8037.49.5-r2')
+            self.assertEqual(packaged,elf)
+            self.assertEqual(result['source_sha256'],hashlib.sha256(blob).hexdigest())
             self.assertEqual(result['validation']['device_runtime'],'unverified')
 
     def test_component_definitions_remain_extensible(self):
         raw=json.loads(json.dumps(self.cfg))
         raw['id']='another-program'
         raw['name']='Future component'
+        raw['install']['package']='another-program'
         raw['compression']={'type':'none','revision':1}
         b.validate_definition(raw)
         self.assertEqual(b.release_tag(raw,'v1.2.3'),'component-another-program-v1.2.3-raw-r1')

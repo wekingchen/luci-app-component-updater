@@ -1,74 +1,51 @@
-"""Manifest/asset validation negative matrix (no network)."""
-import hashlib
-import io
-import json
+"""Native IPK artifact validation including negative digest and metadata cases."""
+import hashlib, json, sys, tempfile, unittest
 from pathlib import Path
-import sys
-import tarfile
-import tempfile
-import unittest
-
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
+from package_component_ipk import build_ipk, inspect_ipk
 from validate_artifacts import verify_manifest
-
-
-def sha(blob):
-    return hashlib.sha256(blob).hexdigest()
-
-
-class ArtifactValidationTests(unittest.TestCase):
+def sha(blob): return hashlib.sha256(blob).hexdigest()
+class NativeArtifactTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root=Path(self.temp.name)
-        self.original=b'arm64-test-program'
-        self.asset=self.root/'component-naiveproxy-test.tar.xz'
-        self.meta={'component':'naiveproxy','upstream_tag':'v1.0',
-                   'compressed_binary_sha256':sha(self.original),
-                   'source_archive_sha256':'a'*64}
-        self.build_archive()
+        t=tempfile.TemporaryDirectory();self.addCleanup(t.cleanup)
+        self.root=Path(t.name);self.bin=b'naive-upx-arm64'
+        self.ver='154.0.8037.49.5-r2';self.arch='aarch64_generic'
+        self.filename=f'naiveproxy_{self.ver}_{self.arch}.ipk'
+        self.asset=self.root/self.filename
+        self.asset.write_bytes(build_ipk(package='naiveproxy',version=self.ver,architecture=self.arch,target='/usr/bin/naive',binary=self.bin))
         self.manifest=self.root/'manifest.json'
-        self.data={'schema':1,'component':'naiveproxy','upstream_tag':'v1.0',
-                   'release_tag':'component-naiveproxy-v1.0-upx521-r1','binary_name':'naive',
-                   'assets':{'aarch64_generic':{'filename':self.asset.name,'sha256':sha(self.asset.read_bytes()),
-                   'binary_sha256':sha(self.original),'source_sha256':'a'*64,'bytes':self.asset.stat().st_size,
-                   'validation':{'elf':'passed','round_trip':'passed'}}}}
-        self.write_manifest()
-
-    def build_archive(self, extra=False):
-        with tarfile.open(self.asset,mode='w:xz') as t:
-            for name,blob in [('naive',self.original),('METADATA.json',json.dumps(self.meta).encode())] + ([('bad',b'x')] if extra else []):
-                info=tarfile.TarInfo(name)
-                info.size=len(blob)
-                t.addfile(info,io.BytesIO(blob))
-
-    def write_manifest(self):
-        self.manifest.write_text(json.dumps(self.data))
-
-    def test_genuine_candidate_passes(self):
+        self.d={'schema':1,'component':'naiveproxy','upstream_tag':'v154.0.8037.49-5',
+                'release_tag':'component-naiveproxy-v154.0.8037.49-5-upx521-r2',
+                'assets':{'aarch64_generic':{'filename':self.filename,'format':'ipk',
+                'package':'naiveproxy','package_version':self.ver,'package_arch':self.arch,
+                'install_path':'/usr/bin/naive','sha256':sha(self.asset.read_bytes()),
+                'binary_sha256':sha(self.bin),'bytes':self.asset.stat().st_size,
+                'validation':{'elf':'passed','round_trip':'passed'}}}}
+        self.save()
+    def save(self):self.manifest.write_text(json.dumps(self.d))
+    def test_valid_ipk(self):
         self.assertEqual(verify_manifest(self.manifest)['component'],'naiveproxy')
-
-    def test_tampered_asset_fails(self):
-        self.asset.write_bytes(self.asset.read_bytes()+b'evil')
+        ctl,b=inspect_ipk(self.asset.read_bytes(),'/usr/bin/naive')
+        self.assertEqual(ctl['Version'],self.ver);self.assertEqual(b,self.bin)
+    def test_reproducible_package(self):
+        kw=dict(package='naiveproxy',version=self.ver,architecture=self.arch,target='/usr/bin/naive',binary=self.bin)
+        self.assertEqual(build_ipk(**kw),build_ipk(**kw))
+    def test_invalid_sha(self):
+        self.asset.write_bytes(self.asset.read_bytes()+b'x')
         with self.assertRaises(ValueError):verify_manifest(self.manifest)
-
-    def test_missing_asset_fails(self):
+    def test_invalid_arch(self):
+        self.d['assets']['aarch64_generic']['package_arch']='mips_24kc';self.save()
+        with self.assertRaises(ValueError):verify_manifest(self.manifest)
+    def test_invalid_control(self):
+        self.d['assets']['aarch64_generic']['package_version']='99-r1';self.save()
+        with self.assertRaises(ValueError):verify_manifest(self.manifest)
+    def test_invalid_binary_digest(self):
+        self.d['assets']['aarch64_generic']['binary_sha256']='f'*64;self.save()
+        with self.assertRaises(ValueError):verify_manifest(self.manifest)
+    def test_unknown_path(self):
+        with self.assertRaises(ValueError):
+            build_ipk(package='naiveproxy',version='1-r1',architecture=self.arch,target='/etc/shadow',binary=self.bin)
+    def test_missing_file(self):
         self.asset.unlink()
         with self.assertRaises(ValueError):verify_manifest(self.manifest)
-
-    def test_wrong_embedded_provenance_fails(self):
-        self.meta['component']='fake'
-        self.build_archive()
-        self.data['assets']['aarch64_generic']['sha256']=sha(self.asset.read_bytes())
-        self.data['assets']['aarch64_generic']['bytes']=self.asset.stat().st_size
-        self.write_manifest()
-        with self.assertRaises(ValueError):verify_manifest(self.manifest)
-
-    def test_unexpected_archive_member_fails(self):
-        self.build_archive(extra=True)
-        self.data['assets']['aarch64_generic']['sha256']=sha(self.asset.read_bytes())
-        self.data['assets']['aarch64_generic']['bytes']=self.asset.stat().st_size
-        self.write_manifest()
-        with self.assertRaises(ValueError):verify_manifest(self.manifest)
-
 if __name__=='__main__':unittest.main()
