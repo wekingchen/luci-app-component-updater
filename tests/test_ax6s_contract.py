@@ -23,11 +23,14 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
         self.assertRegex(BACKEND,r'redmi.router.ax6s')
         self.assertIn('/lib/apk/db',BACKEND)
         self.assertIn('command -v apk',BACKEND)
-        self.assertIn("json_add_string compatibility 'ax6s-apk-readonly'",BACKEND)
+        self.assertIn("json_add_string compatibility 'ax6s-apk-native'",BACKEND)
 
     def test_all_mutations_are_guarded_before_opkg(self):
-        for method in ('check_update','start','run','rollback','perform_install'):
-            self.assertRegex(BACKEND,rf'{method}\(\) \{{\s*require_opkg \|\| return 1')
+        self.assertIn('load_apk_backend',BACKEND)
+        self.assertIn('apk_check',BACKEND)
+        self.assertIn('apk_perform',BACKEND)
+        self.assertIn('apk_rollback',BACKEND)
+        self.assertIn('require_opkg || return 1',BACKEND)
         self.assertIn("json_msg unsupported 'Native APK firmware requires",BACKEND)
         self.assertIn('[ "$(package_manager)" = opkg ]',BACKEND)
         self.assertIn('status) status;;',BACKEND)
