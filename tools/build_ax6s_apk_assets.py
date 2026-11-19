@@ -71,9 +71,9 @@ def require_source(root: Path) -> dict[str, bytes]:
 def check_original_metadata(root: Path, apk_tool: str) -> None:
     # The package must be installed and own exactly the three intended files.
     cmd = [apk_tool,"--root",str(root),"--arch",ARCH]
-    info = subprocess.run(cmd+["info","-v","naiveproxy"],check=True,
+    info = subprocess.run(cmd+["list","--installed","--manifest","naiveproxy"],check=True,
                           capture_output=True,text=True).stdout.strip()
-    if info != "naiveproxy-" + BASE_VERSION:
+    if info != "naiveproxy " + BASE_VERSION:
         raise ValueError("firmware package version mismatch: "+repr(info))
     files = subprocess.run(cmd+["info","-L","naiveproxy"],check=True,
                            capture_output=True,text=True).stdout
