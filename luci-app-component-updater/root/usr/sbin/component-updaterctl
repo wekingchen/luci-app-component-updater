@@ -62,21 +62,21 @@ arch() {
 # An APK database has precedence and is never handled by the opkg adapter.
 package_manager() {
     if [ -d /lib/apk/db ] && command -v apk >/dev/null 2>&1; then
-        printf 'apk\\n'
+        printf 'apk\n'
     elif command -v opkg >/dev/null 2>&1; then
-        printf 'opkg\\n'
+        printf 'opkg\n'
     else
-        printf 'unknown\\n'
+        printf 'unknown\n'
     fi
 }
 firmware_target() {
-    sed -n "s/^DISTRIB_TARGET='\\([^']*\\)'.*/\\1/p" /etc/openwrt_release 2>/dev/null | head -n 1
+    sed -n "s/^DISTRIB_TARGET='\([^']*\)'.*/\1/p" /etc/openwrt_release 2>/dev/null | head -n 1
 }
 device_board() {
     if [ -r /tmp/sysinfo/board_name ]; then
         head -n 1 /tmp/sysinfo/board_name
     else
-        printf 'unknown\\n'
+        printf 'unknown\n'
     fi
 }
 ax6s_apk_target() {
