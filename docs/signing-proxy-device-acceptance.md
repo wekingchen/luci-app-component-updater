@@ -14,7 +14,8 @@ LuCI → 系统 → 组件更新 → GitHub 下载设置。
 - 关闭：完全直连 GitHub。
 - 仅文件：API 直连；Manifest 与 IPK 可以经过 HTTPS 前缀反代（安全性优先）。
 - API + 文件：所有请求经过自定义 HTTPS 前缀；适用于 API 也无法直连的环境，但需要信任反代服务。
-- 支持代理失败时直连回退。不要关闭 HTTPS 证书验证。
+- 预置节点选择：`gh-proxy.org`、`ghproxy.cc`、`ghproxy.com`、`ghfast.top`，以及自定义 HTTPS 前缀；默认关闭反代。
+- 支持代理失败时直连回退。不要关闭 HTTPS 证书验证。节点预置不等于实时连通测试，实际可用性取决于路由器所在网络。
 
 ## 回滚行为
 

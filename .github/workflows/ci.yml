@@ -64,13 +64,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag=luci-app-component-updater-v0.2.1-rc1
-          test -s dist/luci-app-component-updater_0.2.1-1_all.ipk
+          tag=luci-app-component-updater-v0.2.2-rc1
+          test -s dist/luci-app-component-updater_0.2.2-1_all.ipk
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "::error::Manager tag $tag already exists. Bump the package version before republishing."
             exit 1
           fi
-          (cd dist && sha256sum luci-app-component-updater_0.2.1-1_all.ipk > SHA256SUMS.txt)
-          gh release create "$tag" dist/luci-app-component-updater_0.2.1-1_all.ipk dist/SHA256SUMS.txt \
-            --title "Component Updater V0.2.1 RC1" --latest=false --prerelease \
+          (cd dist && sha256sum luci-app-component-updater_0.2.2-1_all.ipk > SHA256SUMS.txt)
+          gh release create "$tag" dist/luci-app-component-updater_0.2.2-1_all.ipk dist/SHA256SUMS.txt \
+            --title "Component Updater V0.2.2 RC1" --latest=false --prerelease \
             --notes "Release candidate only. CI has verified native OpenWrt 21.02.5 / 24.10.5 opkg install, old-version recovery, real rpcd executable plugin, UCI configuration preservation and LuCI JS actions. GL-MT3600BE / N1 customized-firmware hardware validation remains separate."
