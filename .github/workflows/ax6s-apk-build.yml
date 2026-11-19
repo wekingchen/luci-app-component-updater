@@ -77,6 +77,11 @@ jobs:
               python3 tools/build_ax6s_apk_assets.py \
                 --rootfs /firmware --source-manifest source/manifest.json \
                 --source-ipk "$1" --apk-tool /tmp/apk-build/src/apk --out dist
+              set -- dist/naiveproxy_*-r3_aarch64_cortex-a53.apk
+              test "$#" -eq 1
+              candidate="$1"
+              candidate_version=$(basename "$candidate" | sed -e "s/^naiveproxy_//" -e "s/_aarch64_cortex-a53.apk$//")
+              test -n "$candidate_version"
               /tmp/apk-build/src/apk adbdump --format json \
                 dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk \
                 > dist/ax6s-recovery-adb.json
@@ -94,15 +99,19 @@ jobs:
             cp -a firmware-root /tmp/ax6s-root
             original=$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)
             test "$original" = 94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861
+            set -- /src/dist/naiveproxy_*-r3_aarch64_cortex-a53.apk
+            test "$#" -eq 1
+            candidate="$1"
+            candidate_version=$(basename "$candidate" | sed -e "s/^naiveproxy_//" -e "s/_aarch64_cortex-a53.apk$//")
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks --simulate add \
-              /src/dist/naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.apk
+              /src/$candidate
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks add \
-              /src/dist/naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.apk
+              /src/$candidate
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy | \
-              grep -Fx "naiveproxy 154.0.8037.49.5-r3"
+              grep -Fx "naiveproxy $candidate_version"
             test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" != "$original"
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks add \
@@ -228,10 +237,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set -- dist/naiveproxy_*-r3_aarch64_cortex-a53.apk
+          test "$#" -eq 1
           sudo python3 tools/ax6s_native_rootfs_fixtures.py /tmp/ax6s-native-rootfs \
             dist/manifest.json \
             dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk \
-            dist/naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.apk
+            "$1"
       - name: Verify fail closed, updated package DB, config preservation and actual APK rollback
         shell: bash
         run: |
@@ -239,6 +250,8 @@ jobs:
           ROOTFS=/tmp/ax6s-native-rootfs
           sudo chroot "$ROOTFS" /bin/sh -eu -c '
             set -e
+            candidate_version=$(cat /tmp/component-acceptance-fixtures/expected_version)
+            test -n "$candidate_version"
             source_root=$(sha256sum /usr/bin/naive | awk "{print \$1}")
             test "$source_root" = 94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861
             printf "\n# local-user-config-test\n" >> /etc/config/naiveproxy
@@ -259,7 +272,7 @@ jobs:
             mv /tmp/good-candidate.apk /tmp/component-acceptance-fixtures/candidate.apk
             /usr/sbin/component-updaterctl check
             /usr/sbin/component-updaterctl run
-            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r3"
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy $candidate_version"
             test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
             test "$(sha256sum /etc/apk/world | awk "{print \$1}")" = "$world_sha"
             test ! -r /etc/component-updater/transaction.json
@@ -296,7 +309,7 @@ jobs:
               exit 1
             fi
             test -r /etc/component-updater/transaction.json
-            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r3"
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy $candidate_version"
             mv /tmp/untampered-previous.apk "$recovery"
             /usr/sbin/component-updaterctl rollback
             test ! -r /etc/component-updater/transaction.json
