@@ -44,13 +44,37 @@ def link_errors(root, rel, wiki=False):
     return errors
 
 
+def _publish_condition(source, job):
+    """Find the job-level 'if', not a comment or a step-level condition."""
+    match = re.search(r"(?m)^  " + re.escape(job) + r":\s*$", source)
+    if not match:
+        return ""
+    body = source[match.end():]
+    next_job = re.search(r"(?m)^  [a-zA-Z][\w-]+:\s*$", body)
+    if next_job:
+        body = body[:next_job.start()]
+    match = re.search(r"(?m)^    if:\s*(.*)$", body)
+    return match.group(1).strip() if match else ""
+
+
 def release_policy_errors(ci, apk):
     errors = []
-    for name, source in (("manager", ci), ("ax6s", apk)):
+    jobs = (
+        ("manager", ci, "publish-luci-candidate"),
+        ("ax6s", apk, "publish-native-apk-candidate"),
+    )
+    for name, source, job in jobs:
+        condition = _publish_condition(source, job)
         for text, explanation in (
-            ("vars.AX6S_APK_AUTO_PUBLISH == 'true'", "缺少实体设备门禁"),
-            ("github.ref == 'refs/heads/main'", "发布不限于 main"),
-            ("github.event_name != 'pull_request'", "PR 可能发布"),
+            ("vars.AX6S_APK_AUTO_PUBLISH == 'true'", "发布 job 缺少实体设备门禁"),
+            ("github.ref == 'refs/heads/main'", "发布 job 未限定 main"),
+            ("github.event_name != 'pull_request'", "发布 job 没有拒绝 PR"),
+        ):
+            if text not in condition:
+                errors.append(f"{name}: {explanation}")
+        if "||" in condition or "publish-v0.5.0-rc1" in condition:
+            errors.append(f"{name}: 禁止在发布条件中用 OR 绕过实机验收")
+        for text, explanation in (
             ("--latest=false", "可能覆盖 latest"),
             ("--prerelease", "预发布标记丢失"),
             ("SHA256SUMS.txt", "缺少校验文件"),

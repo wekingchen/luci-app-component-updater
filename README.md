@@ -9,7 +9,7 @@
 ## 知识库与规则
 
 - [中文知识库源目录](wiki-src/Home.md) · [GitHub Wiki](https://github.com/wekingchen/luci-app-component-updater/wiki)
-- [AI / 人类开发规则](AGENTS.md) · [文档治理与事实等级](docs/project-governance.md)
+- [AI / 人类开发规则](AGENTS.md) · [文档治理与事实等级](docs/project-governance.md) · [Wiki 首次同步和授权](docs/wiki-initialization.md)
 - [兼容与真实固件证据](docs/ax6s-apk-compatibility.md) · [AX6S 真机验收待办](docs/ax6s-hardware-acceptance-checklist.md)
 - [质量验收门禁](docs/acceptance-gates.md) · [桌面/手机 UI 验收](docs/product-ui-acceptance.md)
 - [安全反代与回滚说明](docs/signing-proxy-device-acceptance.md) · [历史实施记录](docs/implementation-notes.md)
