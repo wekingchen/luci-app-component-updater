@@ -18,4 +18,4 @@
 - [组件更新器 V0.5.0 RC1：同一 Release 下的 IPK / APK](https://github.com/wekingchen/luci-app-component-updater/releases/tag/luci-app-component-updater-v0.5.0-rc1)
 - [AX6S NaiveProxy APKv3 候选：升级包和原固件恢复包](https://github.com/wekingchen/luci-app-component-updater/releases/tag/component-naiveproxy-v154.0.8037.49-5-upx521-r3-ax6s-apk1)
 
-本知识库由主仓库 `wiki-src/` 维护。实际技术约束以 [项目开发规则](https://github.com/wekingchen/luci-app-component-updater/blob/main/AGENTS.md)、[项目治理](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/project-governance.md)及可运行的代码/测试为准，Wiki 页面不替代设备验收。
+本知识库的页面由主仓库 `wiki-src/` 版本化维护，并经 GitHub Actions 校验后同步。实际技术约束以 [项目开发规则](https://github.com/wekingchen/luci-app-component-updater/blob/main/AGENTS.md)、[项目治理](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/project-governance.md)及可运行的代码/测试为准，Wiki 页面不替代设备验收。
