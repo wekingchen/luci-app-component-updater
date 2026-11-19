@@ -268,7 +268,6 @@ perform_install() {
 run() {
     create_dirs || return 1
     lock="$CACHE/update.lock"
-    [ ! -d "$CACHE/rollback.lock" ] || { json_msg busy 'Restore in progress'; return 1; }
     mkdir "$lock" 2>/dev/null || { json_msg busy 'Update in progress'; return 1; }
     work=''
     trap '[ -z "${work:-}" ] || rm -rf "${work:?}"; rmdir "$lock" 2>/dev/null || true' EXIT
@@ -278,7 +277,7 @@ run() {
 
 start() {
     create_dirs || { json_msg error 'Unable to initialize workspace'; return 1; }
-    if [ -d "$CACHE/update.lock" ] || [ -d "$CACHE/rollback.lock" ]; then json_msg busy 'Already updating'; return 1; fi
+    if [ -d "$CACHE/update.lock" ]; then json_msg busy 'Already updating'; return 1; fi
     has_valid_plan || { json_msg error 'Check for updates before installing'; return 1; }
     job_record queued 'Update queued'
     ( /usr/sbin/component-updaterctl run > "$CACHE/job.log" 2>&1 </dev/null & )
@@ -286,9 +285,10 @@ start() {
 }
 
 rollback() {
-    [ ! -d "$CACHE/update.lock" ] || { json_msg busy 'Update in progress'; return 1; }
-    mkdir "$CACHE/rollback.lock" 2>/dev/null || { json_msg busy 'Restore in progress'; return 1; }
-    trap 'rmdir "$CACHE/rollback.lock" 2>/dev/null || true' EXIT
+    create_dirs || { json_msg error 'Unable to initialize workspace'; return 1; }
+    lock="$CACHE/update.lock"
+    mkdir "$lock" 2>/dev/null || { json_msg busy 'Update or restore in progress'; return 1; }
+    trap 'rmdir "$lock" 2>/dev/null || true' EXIT
     receipt_backup=$(jsonval "$RECEIPT" '@.previous_backup')
     case "$receipt_backup" in *[!0-9-]*|'') json_msg error 'No managed backup found'; return 1;; esac
     backup="$BACKUPS/$receipt_backup"
