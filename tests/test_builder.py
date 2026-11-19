@@ -48,6 +48,21 @@ class BuilderTests(unittest.TestCase):
         with self.assertRaises(b.BuildError):
             b.extract_member(buf.getvalue(), "naive")
 
+    def test_nested_official_archive(self):
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:xz") as t:
+            name = "naiveproxy-v154-openwrt-aarch64_generic/naive"
+            member = tarfile.TarInfo(name)
+            member.size = 4
+            t.addfile(member, io.BytesIO(b"test"))
+        self.assertEqual(b.extract_member(buf.getvalue(), "naive"), b"test")
+
+    def test_uncompressed_component_mode(self):
+        raw = json.loads(json.dumps(self.cfg))
+        raw["compression"] = {"type": "none", "revision": 2}
+        b.validate_definition(raw)
+        self.assertEqual(b.release_tag(raw, "v100.1-1"), "component-naiveproxy-v100.1-1-raw-r2")
+
     def test_elf_arch(self):
         elf = bytearray(64)
         elf[:6] = b"\x7fELF\x02\x01"
