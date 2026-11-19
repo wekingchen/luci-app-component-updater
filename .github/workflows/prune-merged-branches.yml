@@ -1,0 +1,33 @@
+name: Maintenance / Clean merged development branches
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/prune-merged-branches.yml
+      - scripts/prune_merged_branches.py
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: component-updater-branch-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify safe deletion rules
+        run: python3 -m unittest discover -s tests -p test_branch_prune.py -v
+      - name: Prune only merged and unchanged development branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/prune_merged_branches.py
