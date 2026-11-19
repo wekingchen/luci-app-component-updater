@@ -27,6 +27,10 @@ jobs:
           x=json.loads(Path('dist/manifest.json').read_text())
           assert set(x['assets']) == {'aarch64_cortex_a53','aarch64_generic'}
           assert all(v['validation']['round_trip']=='passed' for v in x['assets'].values())
+          for item in x['assets'].values():
+              assert item['format']=='ipk'
+              assert (Path('dist')/item['filename']).is_file()
+              assert item['filename'].endswith('_'+item['package_arch']+'.ipk')
           print('Real upstream artifacts: verified')
           PY
           python3 tools/validate_artifacts.py --manifest dist/manifest.json
@@ -34,6 +38,6 @@ jobs:
         with:
           name: verified-naiveproxy-candidates
           path: |
-            dist/*.tar.xz
+            dist/*.ipk
             dist/manifest.json
           if-no-files-found: error

@@ -371,7 +371,11 @@ perform_install() {
     mv -f "$TXN.tmp.$$" "$TXN" || return 1
     sync
     job_record installing 'Installing native IPK via opkg; PassWall will not be restarted by this updater'
-    if ! opkg install "$work/update.ipk" > "$work/opkg.log" 2>&1 ||
+    # A manually overwritten same-version executable requires an actual reinstall,
+    # not opkg's normal "already installed" early-exit.
+    reinstall=''
+    [ "$(package_version)" != "$desired" ] || reinstall='--force-reinstall'
+    if ! opkg install $reinstall "$work/update.ipk" > "$work/opkg.log" 2>&1 ||
        [ "$(package_version)" != "$desired" ] ||
        ! check_sha "$BINARY" "$binhash"; then
         if restore_previous "$id"; then

@@ -39,7 +39,7 @@ class RpcdCompatibilityTests(unittest.TestCase):
         menu=json.loads((APP/'root/usr/share/luci/menu.d/luci-app-component-updater.json').read_text())
         self.assertIn('admin/system/component-updater/settings',menu)
 
-    def test_opkg_package_requires_usign_and_includes_proxy_ui(self):
+    def test_opkg_package_requires_opkg_and_includes_proxy_ui(self):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,
                            stdout=subprocess.DEVNULL)
@@ -48,6 +48,7 @@ class RpcdCompatibilityTests(unittest.TestCase):
             with tarfile.open(fileobj=io.BytesIO(control),mode='r:gz') as tar:
                 dep=tar.extractfile('./control').read().decode()
             self.assertIn('opkg',dep)
+            self.assertNotIn('usign',dep)
             data=subprocess.check_output(['ar','p',str(p),'data.tar.gz'])
             with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as tar:
                 members=set(tar.getnames())
