@@ -211,7 +211,12 @@ jobs:
           cat /tmp/ax6s-ubusd.log || true
           test -s /tmp/ax6s-rpc-methods.json || exit 1
           grep -q rollback /tmp/ax6s-rpc-methods.json
-          sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-test-ubus.sock call component-updater status > /tmp/ax6s-rpc-status.json
+          if ! sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-test-ubus.sock call component-updater status > /tmp/ax6s-rpc-status.json 2>/tmp/ax6s-rpc-error.log; then
+            cat /tmp/ax6s-rpc-status.json /tmp/ax6s-rpc-error.log /tmp/ax6s-rpcd.log
+            exit 1
+          fi
+          echo '=== AX6S native RPC response ==='
+          cat /tmp/ax6s-rpc-status.json
           grep -q 'naiveproxy' /tmp/ax6s-rpc-status.json
           grep -q 'apk-native-v3' /tmp/ax6s-rpc-status.json
           echo 'PASS: AX6S native ubusd/rpcd LuCI API compatibility'
