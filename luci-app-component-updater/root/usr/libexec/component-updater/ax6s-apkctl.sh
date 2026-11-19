@@ -18,7 +18,8 @@ apk_owned_files_ok() {
     wanted=$(printf '%s\n' etc/config/naiveproxy etc/init.d/naiveproxy \
         lib/apk/packages/naiveproxy.conffiles lib/apk/packages/naiveproxy.conffiles_static \
         lib/apk/packages/naiveproxy.list usr/bin/naive | LC_ALL=C sort)
-    [ "$paths" = "$wanted" ] || return 1
+    minimal=$(printf '%s\n' etc/config/naiveproxy etc/init.d/naiveproxy usr/bin/naive | LC_ALL=C sort)
+    [ "$paths" = "$wanted" ] || [ "$paths" = "$minimal" ] || return 1
     for p in /usr/bin/naive /etc/config/naiveproxy /etc/init.d/naiveproxy; do
         [ -f "$p" ] && [ ! -L "$p" ] || return 1
         owned=$(apk --no-network info -W "$p" 2>/dev/null | head -n1)
