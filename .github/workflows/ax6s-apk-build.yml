@@ -203,7 +203,13 @@ jobs:
             if sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-test-ubus.sock -v list component-updater > /tmp/ax6s-rpc-methods.json 2>/dev/null; then break; fi
             sleep 0.1
           done
-          test -s /tmp/ax6s-rpc-methods.json || { cat /tmp/ax6s-rpcd.log; exit 1; }
+          echo '=== AX6S native rpcd methods ==='
+          cat /tmp/ax6s-rpc-methods.json || true
+          echo '=== AX6S rpcd log ==='
+          cat /tmp/ax6s-rpcd.log || true
+          echo '=== AX6S ubusd log ==='
+          cat /tmp/ax6s-ubusd.log || true
+          test -s /tmp/ax6s-rpc-methods.json || exit 1
           grep -q rollback /tmp/ax6s-rpc-methods.json
           sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-test-ubus.sock call component-updater status > /tmp/ax6s-rpc-status.json
           grep -q 'naiveproxy' /tmp/ax6s-rpc-status.json
