@@ -75,6 +75,18 @@ jobs:
             )
             if gh release view "$TAG" >/dev/null 2>&1; then
               echo "Published artifact exists: $TAG"
+              # Recheck existing pre-releases when source code changes or when
+              # manually dispatched; scheduled polling can skip unchanged assets.
+              case "$GITHUB_EVENT_NAME" in
+                push|workflow_dispatch|pull_request)
+                  OUT="dist/$COMPONENT_ID"
+                  mkdir -p "$OUT"
+                  gh release download "$TAG" --dir "$OUT" --pattern "*.ipk"
+                  gh release download "$TAG" --dir "$OUT" --pattern "manifest.json"
+                  printf '%s\n' "$TAG" > "$OUT/release-tag.txt"
+                  python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
+                  ;;
+              esac
               continue
             fi
             OUT="dist/$COMPONENT_ID"
@@ -145,8 +157,8 @@ jobs:
             TAG=$(cat "$OUT/release-tag.txt")
             [[ "$TAG" == component-* && "$TAG" != *'/'* ]] || exit 1
             if gh release view "$TAG" >/dev/null 2>&1; then
-              echo "::error::Release appeared during build: $TAG. Refusing to overwrite."
-              exit 1
+              echo "Existing release verified and left immutable: $TAG"
+              continue
             fi
             gh release create "$TAG" "$OUT"/*.ipk "$MANIFEST" \
               --title "$TAG" --latest=false --prerelease \
