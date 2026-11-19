@@ -5,12 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: Component ID
-        type: choice
-        options: [naiveproxy]
-        default: naiveproxy
+        description: Component ID (or all enabled components)
+        type: string
+        default: all
       publish:
-        description: Publish validated artifacts into a GitHub Release
+        description: Publish successfully validated artifacts into immutable Releases
         type: boolean
         default: true
 permissions:
@@ -21,55 +20,60 @@ concurrency:
 jobs:
   discover-and-build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
-      - name: Check supported upstream versions and pick release tag
-        id: plan
+      - name: Build and publish each enabled component independently
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMPONENT: ${{ inputs.component || 'all' }}
+          PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
         run: |
-          python3 tools/component_builder.py --component "$COMPONENT" --dry-run --output dist
-          TAG=$(python3 - <<'PY'
-          import json, os, sys
-          sys.path.insert(0,'tools')
+          set -euo pipefail
+          mapfile -t COMPONENTS < <(python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'tools')
           import component_builder as b
-          items=b.definitions(os.environ['COMPONENT'])
-          if len(items)!=1:
-              raise SystemExit('V1 publishing supports exactly one enabled component')
-          cfg=items[0]
-          latest=b.github_json('https://api.github.com/repos/'+cfg['upstream']['repository']+'/releases/latest',os.environ['GITHUB_TOKEN'])
-          print(b.release_tag(cfg,latest['tag_name']))
+          print('\n'.join(cfg['id'] for cfg in b.definitions(os.environ['COMPONENT'])))
           PY
           )
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo 'exists=true' >> "$GITHUB_OUTPUT"
-            echo "Release $TAG already exists; no rebuild needed"
-          else
-            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          if [[ "${#COMPONENTS[@]}" -eq 0 ]]; then
+            echo 'No enabled components'; exit 1
           fi
-      - name: Build official assets using pinned UPX
-        if: steps.plan.outputs.exists != 'true'
-        env:
-          COMPONENT: ${{ inputs.component || 'all' }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 tools/component_builder.py --component "$COMPONENT" --output dist
+          for COMPONENT_ID in "${COMPONENTS[@]}"; do
+            echo "::group::${COMPONENT_ID}"
+            export COMPONENT_ID
+            TAG=$(python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'tools')
+          import component_builder as b
+          cfg=b.definitions(os.environ['COMPONENT_ID'])[0]
+          release=b.github_json('https://api.github.com/repos/'+cfg['upstream']['repository']+'/releases/latest', os.environ.get('GITHUB_TOKEN',''))
+          print(b.release_tag(cfg,release['tag_name']))
+          PY
+            )
+            echo "Component release: $TAG"
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "Already published; skip: $TAG"
+              echo '::endgroup::'
+              continue
+            fi
+            OUT="dist/$COMPONENT_ID"
+            python3 tools/component_builder.py --component "$COMPONENT_ID" --output "$OUT"
+            [[ "$(cat "$OUT/release-tag.txt")" == "$TAG" ]] || { echo 'Release changed during build'; exit 1; }
+            if [[ "$PUBLISH" == 'true' ]]; then
+              gh release create "$TAG" "$OUT"/*.tar.xz "$OUT/manifest.json" \
+                --title "$TAG" --latest=false \
+                --notes "Repackaged official binaries. The manifest records upstream digests, compression, and basic tests. Device-runtime compatibility and package-manager metadata are NOT guaranteed."
+            fi
+            echo '::endgroup::'
+          done
       - uses: actions/upload-artifact@v4
-        if: steps.plan.outputs.exists != 'true'
+        if: ${{ always() }}
         with:
-          name: component-build-${{ steps.plan.outputs.tag }}
+          name: component-build-artifacts
           path: |
-            dist/*.tar.xz
-            dist/manifest.json
-          if-no-files-found: error
-      - name: Publish immutable component release
-        if: steps.plan.outputs.exists != 'true' && (github.event_name == 'schedule' || inputs.publish)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.plan.outputs.tag }}
-        run: |
-          gh release create "$TAG" dist/*.tar.xz dist/manifest.json \
-            --title "$TAG" \
-            --notes "Repacked official upstream release with UPX 5.2.1 --lzma --best. Hashes and source provenance in manifest.json. Functional tests on each target device are still required." \
-            --latest=false
+            dist/*/*.tar.xz
+            dist/*/manifest.json
+          if-no-files-found: ignore
