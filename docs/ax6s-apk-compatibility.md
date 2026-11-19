@@ -1,54 +1,44 @@
-# Redmi AX6S / ImmortalWrt APK 原生包兼容性（V0.4.0 RC1）
+# AX6S APKv3 原生更新与回滚 · V0.5.0 RC1
 
-## 支持范围与确切来源
+## 验证的固件来源
 
-本轮以固件 Release [2026.11.17-2044-AX6S-MTK](https://github.com/golldenstj/AX6Sproject/releases/tag/2026.11.17-2044-AX6S-MTK) 为准，源代码快照为 AX6Sproject 标签提交 `0d9b1d0dc4820ecc11f734db8da8da59d805bd5c`，而非猜测目标设备型号。
+来自 [AX6Sproject 2026.11.17-2044-AX6S-MTK](https://github.com/golldenstj/AX6Sproject/releases/tag/2026.11.17-2044-AX6S-MTK) 的原版 `sysupgrade.itb`，SHA256：
+`a963222763cf7c2c1b9bc521730a9d1b06b2e261caca156e6c7ebdebe1afc181`。
 
-| 对照项 | Release 的构建配置 |
+从已经验证 SHA256 的固件中提取真正的 SquashFS、APK 数据库及 NaiveProxy 原始文件（架构 `aarch64_cortex-a53`，平台 `mediatek/mt7622`）。原版本 `154.0.8037.49.5-r1`，依赖 `libc`。原始核心文件：
+
+| 文件 | 固件中的 SHA256 |
 | --- | --- |
-| 源固件 | `immortalwrt/immortalwrt` 的 `master` |
-| 目标 | `mediatek/mt7622`，`xiaomi_redmi-router-ax6s` |
-| 架构 | `aarch64_cortex-a53` |
-| 包管理器 | `CONFIG_USE_APK=y`，`apk-openssl` |
-| 组件支持 | `luci-base`、`rpcd`、`jsonfilter`、`libubox`、`naiveproxy` 均在完整版本中选中 |
-| APK 签名 | `CONFIG_SIGN_EACH_PACKAGE=y`，其构建密钥不等于本仓库的私钥 |
-| 初始 NaiveProxy | Release 声明 `v154.0.8037.49-5`，二进制 SHA256 为 `89049dae919a088ced487bff2760ca3e624fb818200da43e29d6acaa91ed6ba2` |
+| `/usr/bin/naive` | `94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861` |
+| `/etc/init.d/naiveproxy` | `4d9dec9eb81586c5ea932260500329b68fc60f8c38af0712516b7a0f0ae59849` |
+| `/etc/config/naiveproxy` | `201d0b3afd1e131f7695a4e4f541ec0ff6447dc8bf824eb8f96827d530b03682` |
 
-固件使用精简 `apk-tools 3`，**未包含 `mkpkg` 命令**，无法像 opkg 版本那样由设备自动打包原版恢复 IPK。AX6S 的自定义 `naiveproxy` 包由 `diy-mtk-part2.sh` 在构建阶段生成，包含 `/usr/bin/naive`、`/etc/config/naiveproxy` 和 `/etc/init.d/naiveproxy` 三个文件，与原更新器“只占有一个可执行文件”前提不相符。
+注意：**实际固件内的 naive ELF 摘要与该 Release 正文里列出的预编译 ELF 摘要不同**。本仓库以经过固件镜像验证的真实文件作为恢复基线，不将 Release 正文的单独哈希当作固件原始程序哈希。
 
-## V0.4.0 RC1 的实际能力
+## 两种原生软件包管理器，共用 UI
 
-- 新增独立 **原生 APKv3 格式 LuCI 管理包**，由独立的完整 host `apk-tools 3.0.7` 生成，不用 tar.gz 冒充 APK。
-- 通过 `/lib/apk/db`、实际 `apk` 命令、`mediatek/mt7622`、架构和板级名称识别 AX6S；即使设备上还有 opkg 也优先识别原生 APK。
-- 识别后首页展示中文兼容性提示、固件架构和软件包管理器。对于 APK 环境，**检查更新、下载并更新、恢复旧版全部保持禁用**，rpcd 后端也拒绝执行 IPK 安装、原有 IPK 计划和 IPK 恢复。
-- 配置文件列入 APK 保留清单；预检脚本只读取包数据库、系统环境与 SHA256。
-- GL-MT3600BE 和 N1 的 opkg 安装、回滚及原有 IPK 发布模式保持不变。
+- 旧版 OpenWrt/opkg：原有 GitHub 发现、IPK、旧版备份、安装及失败回滚逻辑保持不变。
+- AX6S/ImmortalWrt APK：新加入 `ax6s-apkctl.sh`，检查相同的官方版本和 Manifest，但下载和安装原生 APKv3，不会误调用 opkg，既有下载反代及 LuCI UI 共用。
+- 其它未知 APK 环境不会误启用更新，强制检查固件板型、版本、APK 数据库及 NaiveProxy 文件所有权。
 
-**本版本并不宣称 AX6S 已经能够安装新版 NaiveProxy。** 安装动作必须在以下条件均满足后才能解锁：得到可验证的 AX6S 旧版 APK 恢复包（包含已安装的服务文件、配置文件和原软件包元数据）、官方新版完整 APK、跨版本前后哈希与 APK 数据库版本校验、实机安装与回滚、PassWall 服务不被主动重启的验证。
+## 原生 APK 完整安全闭环
 
-## AX6S 只读检查（无需升级 NaiveProxy）
+1. GitHub Actions 直接复用已经验证官方来源和 UPX 5.2.1 解压回环的 r3 IPK 二进制，利用 pin 版本的完整 `apk-tools 3.0.7` 在云端生成两个真正的 APKv3 包：新版安装包、从原固件文件重建的 r1 恢复包，均带对应 SHA256。设备不自行压缩或制包。
+2. 检查固件身份、现有 `naiveproxy` APK 数据库版本、已拥有的文件、`naive` 哈希及 init 脚本哈希；出现无法解释的手动改动则阻止安装。
+3. 校验官方发布 tag 与更新器仓库 Release API 摘要、Manifest、原始与目标 APK SHA256；已有真实包、签名密钥或不兼容架构之间不做静默降级。
+4. 先永久保存恢复包、当前真实可执行文件、用户配置、APK 版本与收据，并在磁盘上记录事务标识；如果旧版完整 APK 下载/校验不成功则不安装。
+5. 安装前执行 APK `--simulate`，随后以 `--no-network --no-scripts --no-commit-hooks` 安装**唯一已经经过摘要校验的本地 APK**，不会因为 stale feed 额外安装其它包，也不会主动重启 PassWall。
+6. 安装后核对 APK 数据库、二进制、服务脚本及用户配置的 SHA256；失败立即恢复旧版，保留未完成事务供人工处理。成功后保存新 APK 供下一轮升级前备份，支持手动回滚。
+7. 使用 `--allow-untrusted` 只针对已经由 GH Release API + Manifest 多级摘要校验的单个本地 APK。**没有独立数字签名**，启用 GitHub API 反代意味着额外信任反代节点，风险需要明确告知。
 
-从 V0.4.0 RC1 Release 下载 `luci-app-component-updater-0.4.0-r1.apk`，先核对 Release 提供的 SHA256。此 APK 在本仓库生成，不使用 AX6S 固件签名密钥；首次安装时需要明确采用第三方包安装模式：
+## 已完成的 CI 验证
 
-```sh
-# 上传 APK 到 /tmp 后执行；不要把 IPK 安装到 APK 固件
-apk add --allow-untrusted /tmp/luci-app-component-updater-0.4.0-r1.apk
+- 真实 hash-pinned AX6S 固件 rootfs 的 APK 数据库 r1→r3→r1 升级、降级及 bin/init SHA256 核验通过。
+- Ubuntu ARM64 runner 上使用固件真实 `/bin/sh`、`apk-tools 3.0.5`、`jshn`、`jsonfilter` 运行生产 `component-updaterctl` 和 `ax6s-apkctl.sh`（**只替换网络下载为经过摘要校验的本地 fixture**）：新版检查、故意篡改拒装、真实 APK 安装、用户更改配置不丢失、手动恢复及清除事务标记已验证。
+- 原有 opkg 21.02.5 / 24.10.5 软件包管理、LuCI、rpcd 回归测试保持独立，不能为了支持 APK 放宽 IPK 约束。
 
-# 安装后只读取系统状态，不执行更新
-sh /usr/libexec/component-updater/device-ax6s-apk-preflight.sh
-```
+## 尚需实体 AX6S 验收
 
-`--allow-untrusted` 仅对已核验的本地包使用。它会跳过 APK 包自身的签名信任检查，不代表可以跳过 Release 文件摘要核验。当前 Release 的管理器 APK 首次上机前尚无真机确认。
+**这是一份实现完成、云端隔离回归通过的 RC，并非已在真实 AX6S 路由器上验收的稳定版。** 当前无实体设备控制权，无法验证 Flash 写入失败、设备实际 overlay 空间、保活的 PassWall 工作状态、LuCI/rpcd UI 及反代连接、真实断电后的恢复行为。最终需真实设备完成：安装管理器并保留配置、检查更新、升级、回滚、断网/断电恢复、现有代理连接与网络稳定性，随后才能确认商业发布门槛。
 
-## 两机旧版保护
-
-管理器在 APK 目标上只显示只读提示，后端 `require_opkg` 防护必须经过独立测试。旧版 opkg 目标继续使用固有的只读脚本及原生 IPK，不能以新的 APK 包替代。
-
-## 后续完整能力门禁
-
-1. 先读取 AX6S 真机 `apk info -L naiveproxy`、`apk info -W /usr/bin/naive`、`apk info -v naiveproxy` 和服务脚本 SHA256，确认与 Release 一致且无其他文件归属。
-2. 建立 APKv3 NaiveProxy 候选及精确旧版恢复包，保留原配置与服务脚本所有权；必须使用 host `apk mkpkg` 构建，不依赖设备端 `mkpkg`。
-3. 在独立 APK rootfs 中验证 install/reinstall/rollback 和版本登记；对无旧包、脚本差异、缺少回滚包、架构不匹配时必须拒绝安装。
-4. AX6S 实机测试版本升级和回滚，核对三个文件、APK 数据库和 PassWall 运行状态，再解锁按钮并发布稳定版。
-
-**区分：目前完成的是 APK 管理包与只读设备适配；NaiveProxy 的 APK 更新闭环仍未完成。**
+开发分支及 RC 在这些门禁通过之前不应标记“真机验收通过”。

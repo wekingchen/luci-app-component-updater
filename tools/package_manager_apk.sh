@@ -42,7 +42,7 @@ SOURCE_DATE_EPOCH=0 "$APK_TOOL" mkpkg \
   --info "license:MIT" \
   --info "origin:luci-app-component-updater" \
   --info "url:https://github.com/wekingchen/luci-app-component-updater" \
-  --info "description:OpenWrt component updater (APK compatibility preflight)" \
+  --info "description:OpenWrt component updater (native APK install and rollback)" \
   --info "maintainer:wekingchen" \
   --info "depends:luci-base rpcd jsonfilter libubox" \
   --script "post-install:$work/post-install" \

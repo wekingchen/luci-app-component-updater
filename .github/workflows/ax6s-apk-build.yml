@@ -1,0 +1,402 @@
+name: Component Builder / AX6S native APK install and rollback
+on:
+  push:
+    branches: [main, feat/v0.5.0-ax6s-apk-update-rollback]
+    paths:
+      - .github/workflows/ax6s-apk-build.yml
+      - tools/build_ax6s_apk_assets.py
+      - tools/package_component_ipk.py
+      - tests/test_ax6s_contract.py
+      - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+  pull_request:
+    paths:
+      - .github/workflows/ax6s-apk-build.yml
+      - tools/build_ax6s_apk_assets.py
+      - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Component Builder / Official Releases & UPX]
+    types: [completed]
+permissions:
+  contents: read
+concurrency:
+  group: ax6s-apk-release
+  cancel-in-progress: false
+jobs:
+  discover:
+    # Never trust a workflow_run originating from pull requests or forks.
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.event != 'pull_request') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.detect.outputs.build }}
+    steps:
+      - name: Discover latest official native APK candidate without unnecessary rebuild
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          upstream=$(gh api repos/klzgrad/naiveproxy/releases/latest --jq .tag_name)
+          case "$upstream" in v[0-9]*) ;; *) exit 1;; esac
+          source="component-naiveproxy-$upstream-upx521-r3"
+          candidate="$source-ax6s-apk1"
+          if [ "${{ github.ref }}" = refs/heads/main ]; then
+            if gh release view "$candidate" >/dev/null 2>&1; then
+              echo "::notice::Native AX6S APK already prebuilt: $candidate"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if ! gh release view "$source" >/dev/null 2>&1; then
+              echo "::notice::Waiting for verified official UPX artifact: $source"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
+  package-and-rollback:
+    needs: discover
+    if: needs.discover.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract original AX6S APK database and owned files from verified firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq u-boot-tools squashfs-tools
+          mkdir -p dist source
+          curl -fL --retry 3 --connect-timeout 15 --max-time 180 \
+            https://github.com/golldenstj/AX6Sproject/releases/download/2026.11.17-2044-AX6S-MTK/immortalwrt-mediatek-mt7622-xiaomi_redmi-router-ax6s-squashfs-sysupgrade.itb \
+            -o /tmp/ax6s.itb
+          echo 'a963222763cf7c2c1b9bc521730a9d1b06b2e261caca156e6c7ebdebe1afc181  /tmp/ax6s.itb' | sha256sum -c
+          dumpimage -T flat_dt -p 2 -o /tmp/ax6s.squashfs /tmp/ax6s.itb
+          unsquashfs -f -d firmware-root /tmp/ax6s.squashfs \
+            'lib/apk/db/*' 'lib/apk/packages/naiveproxy.*' 'etc/apk/*' \
+            'usr/bin/naive' 'etc/init.d/naiveproxy' 'etc/config/naiveproxy'
+          test -s firmware-root/lib/apk/db/installed
+          sha256sum firmware-root/usr/bin/naive
+      - name: Retrieve existing upstream-verified UPX package (no recompression)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(gh api repos/klzgrad/naiveproxy/releases/latest --jq .tag_name)
+          case "$tag" in v[0-9]*) ;; *) exit 1;; esac
+          source_tag="component-naiveproxy-$tag-upx521-r3"
+          gh release download "$source_tag" --dir source --pattern manifest.json
+          gh release download "$source_tag" --dir source --pattern "naiveproxy_*_aarch64_cortex-a53.ipk"
+          test -s source/manifest.json
+          ls -lh source/
+      - name: Build exact APKv3 recovery and update using pinned full apk-tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/src" -v "$PWD/firmware-root:/firmware" -w /src alpine:edge sh -ec '
+              apk add --no-cache build-base git meson ninja pkgconf openssl-dev zlib-dev linux-headers python3
+              git clone -q --depth=1 --branch v3.0.7 https://github.com/alpinelinux/apk-tools.git /tmp/apk-src
+              test "$(git -C /tmp/apk-src rev-parse HEAD)" = 522171e05c72c8a0dd2a9392f053c89196fbdb9b
+              meson setup /tmp/apk-build /tmp/apk-src \
+                -Dminimal=false -Dhelp=disabled -Ddocs=disabled -Dlua=disabled \
+                -Dpython=disabled -Dtests=disabled -Dzstd=disabled -Durl_backend=wget
+              ninja -C /tmp/apk-build
+              APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
+              /tmp/apk-build/src/apk adbdump --format json \
+                dist/luci-app-component-updater-0.5.0-r1.apk > /tmp/manager-apk-adb.json
+              grep -q luci-app-component-updater /tmp/manager-apk-adb.json
+              set -- source/naiveproxy_*_aarch64_cortex-a53.ipk
+              test "$#" -eq 1
+              python3 tools/build_ax6s_apk_assets.py \
+                --rootfs /firmware --source-manifest source/manifest.json \
+                --source-ipk "$1" --apk-tool /tmp/apk-build/src/apk --out dist
+              set -- dist/naiveproxy_*-r3_aarch64_cortex-a53.apk
+              test "$#" -eq 1
+              candidate="$1"
+              candidate_version=$(basename "$candidate" | sed -e "s/^naiveproxy_//" -e "s/_aarch64_cortex-a53.apk$//")
+              test -n "$candidate_version"
+              /tmp/apk-build/src/apk adbdump --format json \
+                dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk \
+                > dist/ax6s-recovery-adb.json
+              grep -q naiveproxy dist/ax6s-recovery-adb.json
+              for package in dist/naiveproxy_*.apk; do
+                /tmp/apk-build/src/apk --allow-untrusted verify "$package"
+              done
+            '
+      - name: Real APK database install and downgrade in isolated AX6S rootfs
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src" -w /src alpine:edge sh -ec '
+            set -eux
+            cp -a firmware-root /tmp/ax6s-root
+            original=$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)
+            test "$original" = 94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861
+            set -- /src/dist/naiveproxy_*-r3_aarch64_cortex-a53.apk
+            test "$#" -eq 1
+            candidate="$1"
+            candidate_version=$(basename "$candidate" | sed -e "s/^naiveproxy_//" -e "s/_aarch64_cortex-a53.apk$//")
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
+              --no-scripts --no-commit-hooks --simulate add \
+              "$candidate"
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
+              --no-scripts --no-commit-hooks add \
+              "$candidate"
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy | \
+              grep -Fx "naiveproxy $candidate_version"
+            test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" != "$original"
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
+              --no-scripts --no-commit-hooks add \
+              /src/dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy | \
+              grep -Fx "naiveproxy 154.0.8037.49.5-r1"
+            test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" = "$original"
+            test "$(sha256sum /tmp/ax6s-root/etc/init.d/naiveproxy | cut -d " " -f1)" = 4d9dec9eb81586c5ea932260500329b68fc60f8c38af0712516b7a0f0ae59849
+            echo "AX6S native APK install and rollback: PASS"
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ax6s-native-apk-verified-candidates
+          path: |
+            dist/*.apk
+            dist/manifest.json
+            dist/release-tag.txt
+          if-no-files-found: error
+
+  native-arm64-controller:
+    name: Actual AX6S firmware chroot / full updater upgrade and rollback
+    needs: package-and-rollback
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ax6s-native-apk-verified-candidates
+          path: dist
+      - name: Extract full hash-verified AX6S firmware in isolated ARM64 test root
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq u-boot-tools squashfs-tools
+          curl -fL --retry 3 --connect-timeout 15 --max-time 180 \
+            https://github.com/golldenstj/AX6Sproject/releases/download/2026.11.17-2044-AX6S-MTK/immortalwrt-mediatek-mt7622-xiaomi_redmi-router-ax6s-squashfs-sysupgrade.itb \
+            -o /tmp/ax6s.itb
+          echo 'a963222763cf7c2c1b9bc521730a9d1b06b2e261caca156e6c7ebdebe1afc181  /tmp/ax6s.itb' | sha256sum -c
+          dumpimage -T flat_dt -p 2 -o /tmp/ax6s.squashfs /tmp/ax6s.itb
+          sudo unsquashfs -f -d /tmp/ax6s-native-rootfs /tmp/ax6s.squashfs
+          # Make the chroot itself a real mountpoint, so BusyBox df -Pk
+          # can locate /tmp and /etc using the production space_ok() helper.
+          sudo mount --bind /tmp/ax6s-native-rootfs /tmp/ax6s-native-rootfs
+          sudo mount -t proc proc /tmp/ax6s-native-rootfs/proc
+          sudo chroot /tmp/ax6s-native-rootfs /bin/sh -c 'apk --version; command -v jsonfilter; test -f /lib/apk/db/installed'
+          sudo chroot /tmp/ax6s-native-rootfs /bin/sh -c 'df -Pk /tmp /etc; ls -l /proc/mounts'
+          sudo chown -R "$(id -u):$(id -g)" /tmp/ax6s-native-rootfs/tmp
+      - name: Upgrade actual LuCI APK manager 0.4 to 0.5 and preserve settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=/tmp/ax6s-native-rootfs
+          curl -fL --retry 3 --connect-timeout 15 --max-time 120 \
+            https://github.com/wekingchen/luci-app-component-updater/releases/download/luci-app-component-updater-v0.4.0-rc1/luci-app-component-updater-0.4.0-r1.apk \
+            -o /tmp/manager-old.apk
+          echo 'd6a28e3dffec8b3dc294a62a016b476c9f9effa38a693d27f759bd18c07d603c  /tmp/manager-old.apk' | sha256sum -c
+          sudo cp /tmp/manager-old.apk "$ROOTFS/tmp/manager-old.apk"
+          sudo cp dist/luci-app-component-updater-0.5.0-r1.apk "$ROOTFS/tmp/manager-new.apk"
+          sudo chroot "$ROOTFS" /bin/sh -e -c '
+            apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-old.apk
+            grep -q "config updater" /etc/config/component-updater
+            echo "    option github_proxy_mode '\''assets'\''" >> /etc/config/component-updater
+            apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-new.apk
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.0-r1"
+            grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
+            test -x /usr/sbin/component-updaterctl
+            test -r /usr/libexec/component-updater/ax6s-apkctl.sh
+            test -r /usr/share/rpcd/acl.d/luci-app-component-updater.json
+            test -r /usr/share/luci/menu.d/luci-app-component-updater.json
+            test -r /www/luci-static/resources/view/component-updater/overview.js
+            test -r /www/luci-static/resources/component-updater/design.css
+            echo "PASS: Native AX6S manager APK 0.4 -> 0.5 and UCI configuration preservation"
+          '
+      - name: Verify AX6S rpcd plugin registration and status through native ubus
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=/tmp/ax6s-native-rootfs
+          # /tmp/sysinfo is initialized at boot, not embedded in SquashFS.
+          # Emulate only that volatile board-name file in the extracted rootfs.
+          sudo mkdir -p "$ROOTFS/tmp/sysinfo"
+          printf 'xiaomi,redmi-router-ax6s\n' | sudo tee "$ROOTFS/tmp/sysinfo/board_name" >/dev/null
+          sudo chroot "$ROOTFS" /sbin/ubusd -s /tmp/component-test-ubus.sock > /tmp/ax6s-ubusd.log 2>&1 &
+          ubusd_pid=$!
+          rpcd_pid=''
+          cleanup() {
+            [ -z "$rpcd_pid" ] || sudo kill "$rpcd_pid" >/dev/null 2>&1 || true
+            sudo kill "$ubusd_pid" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 60); do
+            [ -S "$ROOTFS/tmp/component-test-ubus.sock" ] && break
+            sleep 0.1
+          done
+          test -S "$ROOTFS/tmp/component-test-ubus.sock" || { cat /tmp/ax6s-ubusd.log; exit 1; }
+          sudo chroot "$ROOTFS" /sbin/rpcd -s /tmp/component-test-ubus.sock > /tmp/ax6s-rpcd.log 2>&1 &
+          rpcd_pid=$!
+          for i in $(seq 1 60); do
+            if sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-test-ubus.sock -v list component-updater > /tmp/ax6s-rpc-methods.json 2>/dev/null; then break; fi
+            sleep 0.1
+          done
+          echo '=== AX6S native rpcd methods ==='
+          cat /tmp/ax6s-rpc-methods.json || true
+          echo '=== AX6S rpcd log ==='
+          cat /tmp/ax6s-rpcd.log || true
+          echo '=== AX6S ubusd log ==='
+          cat /tmp/ax6s-ubusd.log || true
+          test -s /tmp/ax6s-rpc-methods.json || exit 1
+          grep -q rollback /tmp/ax6s-rpc-methods.json
+          if ! sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-test-ubus.sock call component-updater status > /tmp/ax6s-rpc-status.json 2>/tmp/ax6s-rpc-error.log; then
+            cat /tmp/ax6s-rpc-status.json /tmp/ax6s-rpc-error.log /tmp/ax6s-rpcd.log
+            exit 1
+          fi
+          echo '=== AX6S native RPC response ==='
+          cat /tmp/ax6s-rpc-status.json
+          grep -q 'naiveproxy' /tmp/ax6s-rpc-status.json
+          grep -q 'apk-native-v3' /tmp/ax6s-rpc-status.json
+          echo 'PASS: AX6S native ubusd/rpcd LuCI API compatibility'
+      - name: Prepare only network-transport fixtures; use actual updater shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -- dist/naiveproxy_*-r3_aarch64_cortex-a53.apk
+          test "$#" -eq 1
+          sudo python3 tools/ax6s_native_rootfs_fixtures.py /tmp/ax6s-native-rootfs \
+            dist/manifest.json \
+            dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk \
+            "$1"
+      - name: Verify fail closed, updated package DB, config preservation and actual APK rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=/tmp/ax6s-native-rootfs
+          sudo chroot "$ROOTFS" /bin/sh -eu -c '
+            set -e
+            candidate_version=$(cat /tmp/component-acceptance-fixtures/expected_version)
+            test -n "$candidate_version"
+            source_root=$(sha256sum /usr/bin/naive | awk "{print \$1}")
+            test "$source_root" = 94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861
+            printf "\n# local-user-config-test\n" >> /etc/config/naiveproxy
+            config_sha=$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")
+            world_sha=$(sha256sum /etc/apk/world | awk "{print \$1}")
+            echo "APK world constraint before update:"
+            grep "^naiveproxy" /etc/apk/world || true
+            /usr/sbin/component-updaterctl check
+            test -s /tmp/component-updater/plan.json
+            cp /tmp/component-acceptance-fixtures/candidate.apk /tmp/good-candidate.apk
+            printf X >> /tmp/component-acceptance-fixtures/candidate.apk
+            if /usr/sbin/component-updaterctl run; then
+              echo "BLOCK: tampered package unexpectedly installed"
+              exit 1
+            fi
+            test ! -r /etc/component-updater/transaction.json
+            test "$(sha256sum /usr/bin/naive | awk "{print \$1}")" = "$source_root"
+            mv /tmp/good-candidate.apk /tmp/component-acceptance-fixtures/candidate.apk
+            /usr/sbin/component-updaterctl check
+            /usr/sbin/component-updaterctl run
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy $candidate_version"
+            test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
+            test "$(sha256sum /etc/apk/world | awk "{print \$1}")" = "$world_sha"
+            test ! -r /etc/component-updater/transaction.json
+            test -s /etc/component-updater/installed/naiveproxy-active.apk
+            echo "APK world constraint after update:"
+            grep "^naiveproxy" /etc/apk/world || true
+            test "$(sha256sum /etc/apk/world | awk "{print \$1}")" = "$world_sha"
+            /usr/sbin/component-updaterctl rollback
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r1"
+            test "$(sha256sum /usr/bin/naive | awk "{print \$1}")" = "$source_root"
+            test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
+            test "$(sha256sum /etc/apk/world | awk "{print \$1}")" = "$world_sha"
+            test ! -r /etc/component-updater/transaction.json
+            echo "PASS: Native firmware controller install / rollback with modified config"
+            # Simulate a persisted interrupted transaction after an upgrade:
+            # check must refuse installation and the original package must
+            # remain recoverable even across a fresh controller invocation.
+            /usr/sbin/component-updaterctl check
+            /usr/sbin/component-updaterctl run
+            id=$(jsonfilter -i /etc/component-updater/installed/naiveproxy.json -e "@.previous_backup")
+            test -n "$id"
+            printf "{\"manager\":\"apk\",\"backup_id\":\"%s\"}\n" "$id" > /etc/component-updater/transaction.json
+            if /usr/sbin/component-updaterctl check; then
+              echo "BLOCK: an unfinished transaction must stop updates"
+              exit 1
+            fi
+            grep -q recovery_required /tmp/component-updater/check-state.json
+            recovery="/etc/component-updater/backups/naiveproxy/$id/previous.apk"
+            test -s "$recovery"
+            cp "$recovery" /tmp/untampered-previous.apk
+            printf X >> "$recovery"
+            if /usr/sbin/component-updaterctl rollback; then
+              echo "BLOCK: corrupted recovery APK must be rejected"
+              exit 1
+            fi
+            test -r /etc/component-updater/transaction.json
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy $candidate_version"
+            mv /tmp/untampered-previous.apk "$recovery"
+            /usr/sbin/component-updaterctl rollback
+            test ! -r /etc/component-updater/transaction.json
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r1"
+            test "$(sha256sum /usr/bin/naive | awk "{print \$1}")" = "$source_root"
+            test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
+            echo "PASS: crash-recovery marker, tampered rollback protection and manual recovery"
+
+          '
+
+  publish-native-apk-candidate:
+    name: Publish immutable AX6S native APK preview after native CI gates
+    needs: [package-and-rollback, native-arm64-controller]
+    # V0.5.0 RC explicitly authorized one-time on merge; recurring automatic
+    # release requires AX6S hardware acceptance. PR never publishes.
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (vars.AX6S_APK_AUTO_PUBLISH == 'true' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-v0.5.0-rc1]'))) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ax6s-native-apk-verified-candidates
+          path: dist
+      - name: Publish verified native APKs and recovery manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=$(cat dist/release-tag.txt)
+          case "$tag" in
+            component-naiveproxy-v[0-9]*-upx521-r3-ax6s-apk1) ;;
+            *) echo "::error::Unexpected native APK release tag"; exit 1;;
+          esac
+          set -- dist/naiveproxy_*.apk
+          [ "$#" -eq 2 ] || { echo "::error::Both previous and candidate APKs are required"; exit 1; }
+          [ -s dist/manifest.json ] || exit 1
+          (cd dist && sha256sum manifest.json naiveproxy_*.apk > SHA256SUMS.txt)
+          if gh release view "$tag" >/dev/null 2>&1; then
+            temp=$(mktemp -d)
+            trap 'rm -rf "$temp"' EXIT
+            gh release download "$tag" --pattern '*.apk' --pattern manifest.json --pattern SHA256SUMS.txt --dir "$temp"
+            (cd "$temp" && sha256sum -c SHA256SUMS.txt)
+            cmp "$temp/manifest.json" dist/manifest.json
+            for apk in dist/naiveproxy_*.apk; do cmp "$apk" "$temp/$(basename "$apk")"; done
+            echo "::notice::Same immutable AX6S native APK release already exists"
+            exit 0
+          fi
+          gh release create "$tag" dist/manifest.json dist/naiveproxy_*.apk dist/SHA256SUMS.txt \
+            --prerelease --latest=false \
+            --title "NaiveProxy / AX6S APKv3 · $tag" \
+            --notes "Native AX6S APKv3 packages and firmware-original rollback asset. Verified in the original SHA256-pinned AX6S firmware rootfs using AArch64 apk, ubusd/rpcd, update/rollback and failure tests. Physical-router PassWall and flash-write acceptance remain separate; this is a cloud-tested release candidate, not a claimed hardware-stable build."

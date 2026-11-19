@@ -48,6 +48,13 @@ var CHECK_TEXT = {
     'Previous IPK transaction needs manual rollback': '存在未完成的更新事务，请先恢复旧版本。',
     'Already updating': '已有更新任务正在运行。',
     'Check for updates before installing': '请先检查更新，再执行安装。',
+    'Verified native APK is ready for manual installation': '原生 APK 安装包已通过校验，可以手动更新。',
+    'Installed native APK matches latest official binary': '当前 APK 已是官方最新版本。',
+    'Cloud APK package is being prepared': '云端正在生成并验证原生 APK 安装包。',
+    'APK installation failed; previous package restored': 'APK 更新失败，已自动恢复上一版本。',
+    'APK install failed; recovery files retained': 'APK 更新失败，恢复文件已保留，请检查日志。',
+    'Original APK version and configuration restored': '上一版本及原有配置均已恢复。',
+    'Native APK package ownership or installed firmware does not match the verified AX6S baseline': '当前软件包文件或设备环境与经过验证的 AX6S 基线不匹配，已禁止安装。',
     'Native APK firmware requires a verified APK package and rollback workflow; no changes made': '已识别 APK 软件包环境；原生 APK 更新与回滚尚未完成验收，未修改任何文件。',
     'libgcc1 must already be installed': '缺少必要的运行依赖。'
 };
@@ -152,7 +159,7 @@ return view.extend({
     statusModel: function(status, plan) {
         var checkState = status.check_state || '';
         var jobState = status.job_state || 'idle';
-        if (status.package_manager === 'apk')
+        if (status.package_manager === 'apk' && status.compatibility !== 'ax6s-apk-native')
             return status.compatibility === 'ax6s-apk-readonly' ?
                 {tone:'warn', label:'适配预检', title:'已识别红米 AX6S', description:'当前固件采用原生 APK 软件包。管理界面与只读诊断可用；完整安装、备份和回滚尚未通过验证，更新操作暂时锁定。'} :
                 {tone:'error', label:'暂不支持', title:'当前 APK 环境未适配', description:'已识别 APK 软件包管理器，但设备不属于已知 AX6S 环境。不会执行 IPK 安装。'};
@@ -181,14 +188,15 @@ return view.extend({
         var self = this;
         var state = this.statusModel(status, plan);
         var busy = this.isBusy(status);
-        var apkGuard = status.package_manager === 'apk';
+        var isApk = status.package_manager === 'apk';
+        var apkGuard = isApk && status.compatibility !== 'ax6s-apk-native';
         var ready = !apkGuard && (plan.ready === 'true' || plan.ready === true) && !this.isCurrent(status);
         var extraRows = [
             this.row('已安装软件包', status.package_version),
             this.row('设备架构', status.architecture),
-            this.row('软件包管理器', apkGuard ? '原生 APK' : 'opkg'),
+            this.row('软件包管理器', isApk ? '原生 APK' : 'opkg'),
             this.row('固件平台', status.firmware_target || '尚未识别'),
-            this.row('安装方式', apkGuard ? 'APK（仅开放只读预检）' : '系统原生 IPK · opkg'),
+            this.row('安装方式', isApk ? (apkGuard ? 'APK（只读）' : '系统原生 APKv3') : '系统原生 IPK · opkg'),
             this.row('运行中进程', status.runtime_processes === '' || status.runtime_processes === undefined ? '未检测' : status.runtime_processes + ' 个'),
             this.row('下载连接', this.proxyLabel(status))
         ];
@@ -223,7 +231,9 @@ return view.extend({
                 E('button', {'class': 'cu-btn cu-btn-subtle', type: 'button', disabled: (busy || apkGuard) ? true : null,
                     click: function() { return self.confirmRollback(); }}, '恢复上一个版本')
             ]),
-            E('p', {'class': 'cu-mini-note'}, apkGuard ? '原生 APK 环境尚未开启安装；请先完成只读兼容性报告与真实回滚验收。' : '安装前自动准备恢复包 · 不主动重启 PassWall · 已运行连接可能继续使用旧进程')
+            E('p', {'class': 'cu-mini-note'}, apkGuard ? '原生 APK 环境尚未开启安装；请先通过设备兼容性验收。' :
+                (isApk ? 'APK 安装前先保存完整恢复包及原配置 · 不主动重启 PassWall' :
+                    '安装前自动准备恢复包 · 不主动重启 PassWall · 已运行连接可能继续使用旧进程'))
         ]);
         var overview = E('section', {'class': 'cu-panel', 'aria-label': '设备与安装信息'}, [
             E('div', {'class': 'cu-section-head'}, [
@@ -252,7 +262,7 @@ return view.extend({
             content.push(notice);
         content.push(hero, overview, details,
             E('div', {'class': 'cu-footer'}, [
-                E('span', {}, '组件更新器 · v0.4.0 · NaiveProxy / AX6S 环境识别'),
+                E('span', {}, '组件更新器 · v0.5.0 · 原生 IPK / APK 双模式'),
                 E('a', {href: L.url('admin/system/component-updater/settings')}, 'GitHub 下载与反代设置')
             ]));
         return content;
@@ -341,7 +351,8 @@ return view.extend({
     confirmInstall: function() {
         var self = this;
         if (self.isBusy(self.currentStatus || {}) ||
-            (self.currentStatus || {}).package_manager === 'apk' ||
+            ((self.currentStatus || {}).package_manager === 'apk' &&
+             (self.currentStatus || {}).compatibility !== 'ax6s-apk-native') ||
             !(self.currentPlan && (self.currentPlan.ready === 'true' || self.currentPlan.ready === true)) ||
             self.isCurrent(self.currentStatus || {}))
             return;
@@ -360,7 +371,8 @@ return view.extend({
 
     confirmRollback: function() {
         var self = this;
-        if ((self.currentStatus || {}).package_manager === 'apk' || self.isBusy(self.currentStatus || {}))
+        if (((self.currentStatus || {}).package_manager === 'apk' &&
+             (self.currentStatus || {}).compatibility !== 'ax6s-apk-native') || self.isBusy(self.currentStatus || {}))
             return;
         ui.showModal('恢复上一个版本', [
             E('p', {}, '将尝试通过先前生成的恢复包还原软件包与程序文件。仅在存在有效备份时才能恢复；更新器不会主动重启 PassWall。'),

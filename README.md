@@ -1,12 +1,15 @@
 # luci-app-component-updater
 
-> **V0.4.0 RC1 / 红米 AX6S 固件兼容性预览**：针对 [AX6S-MTK 2026.11.17-2044](https://github.com/golldenstj/AX6Sproject/releases/tag/2026.11.17-2044-AX6S-MTK) 增加原生 APKv3 LuCI 管理包、真实 APK 系统识别、中文兼容性提示和只读设备诊断。**AX6S 的 NaiveProxy 更新与回滚尚未完成验收，按钮会保持禁用**，请勿把本仓库的原生 IPK 强制安装到 APK 固件。原有 MT3600BE / N1 opkg 工作流程不变。详见 [AX6S 兼容性说明与上机检查](docs/ax6s-apk-compatibility.md)。
+> **V0.5.0 RC1 · AX6S 原生 APK 更新候选**：增加 APKv3 更新检查、安装前完整原包及配置备份、校验后升级、失败回滚和手动恢复，与 IPK 共享中文 LuCI 界面及 GitHub 反代。使用原始 AX6S 固件 squashfs 与 APK 数据库完成 ARM64 真实软件环境 chroot 安装/回滚及故意篡改校验测试。**云端测试通过并不等于 AX6S 真机验收；尚未验证实体设备的 Flash/overlay、真实 PassWall 流量和 LuCI 页面。**在完成硬件验收前不宣称正式稳定版。
+
+
+> **V0.4.0 历史版本 / 红米 AX6S 固件兼容性预览**：针对 [AX6S-MTK 2026.11.17-2044](https://github.com/golldenstj/AX6Sproject/releases/tag/2026.11.17-2044-AX6S-MTK) 增加原生 APKv3 LuCI 管理包、真实 APK 系统识别、中文兼容性提示和只读设备诊断。**AX6S 的 NaiveProxy 更新与回滚尚未完成验收，按钮会保持禁用**，请勿把本仓库的原生 IPK 强制安装到 APK 固件。原有 MT3600BE / N1 opkg 工作流程不变。详见 [AX6S 兼容性说明与上机检查](docs/ax6s-apk-compatibility.md)。
 
 
 
 > **V0.3.0 历史版本 · 中文产品化界面**：首页改为组件状态、版本对比、三项主要操作和折叠的诊断详情；下载设置独立成页。响应式布局覆盖手机与桌面，后端英文状态统一映射为中文，操作反馈以内嵌提示替代低对比度通知。保留 V0.2.3 的旧版 LuCI 按钮兼容修复及已验证的原生 IPK 安装与恢复后端。
 
-OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。V0.4.0 提供 opkg 管理包（IPK）与 APK 固件用的只读预览管理包（APKv3）；不应跨包管理器混装。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 `--lzma --best` 压缩，然后生成**OpenWrt 原生 gzip(tar) 格式 opkg IPK**，分架构发布到 Releases。
+OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。V0.5.0 提供 opkg 管理包（IPK）与 APK 固件用的原生 APKv3 管理包；不应跨包管理器混装。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 `--lzma --best` 压缩，然后生成**OpenWrt 原生 gzip(tar) 格式 opkg IPK**，分架构发布到 Releases。
 
 ## 设备与边界
 
