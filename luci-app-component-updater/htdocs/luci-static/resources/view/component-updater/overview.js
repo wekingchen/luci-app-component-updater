@@ -119,6 +119,7 @@ return view.extend({
 
     notify: function(result) {
         this.notice = this.noteForResult(result);
+        this.repaint();
     },
 
     renderNotice: function() {
@@ -274,7 +275,7 @@ return view.extend({
                 self.repaint();
             }
             // Pending means a cloud-side build, not a local task.
-            if (self.currentStatus.check_state === 'pending' &&
+            if (!self.operationBusy && self.currentStatus.check_state === 'pending' &&
                 Date.now() - (self.lastPendingCheck || 0) >= 300000) {
                 self.lastPendingCheck = Date.now();
                 return check().then(function() {
@@ -307,6 +308,7 @@ return view.extend({
             self.notify({status:'error', message:String(err)});
         }).then(function() {
             self.operationBusy = false;
+            self.repaint();
             return self.refresh();
         });
     },
@@ -323,6 +325,7 @@ return view.extend({
             self.notify({status:'error', message:String(err)});
         }).then(function() {
             self.operationBusy = false;
+            self.repaint();
             return self.refresh();
         });
     },
@@ -372,7 +375,7 @@ return view.extend({
         return E('div', {'class': 'cu-app'}, [
             E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css')}),
             E('header', {'class': 'cu-page-head'}, [
-                E('span', {'class': 'cu-overline'}, 'OPENWRT · COMPONENT MANAGER'),
+                E('span', {'class': 'cu-overline'}, '安全更新 · 可靠恢复'),
                 E('h2', {}, '组件更新'),
                 E('p', {}, '安全检查、便捷安装、随时恢复。轻松管理路由器中的核心组件。')
             ]),
