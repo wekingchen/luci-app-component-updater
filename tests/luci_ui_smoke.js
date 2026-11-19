@@ -82,8 +82,11 @@ const settings=load('settings.js');
 const map=settings.render();
 assert.strictEqual(map.sections.length,1);
 const fields=map.sections[0].fields;
-assert.deepStrictEqual(Array.from(fields.map(x=>x.name)),['github_proxy_mode','github_proxy_prefix','github_proxy_fallback']);
-const p=fields[1];
+assert.deepStrictEqual(Array.from(fields.map(x=>x.name)),['github_proxy_mode','github_proxy_site','github_proxy_prefix','github_proxy_fallback']);
+const providers=fields[1];
+assert.deepStrictEqual(Array.from(providers.values.map(x=>x[0])),
+  ['gh-proxy.org','ghproxy.cc','ghproxy.com','ghfast.top','custom']);
+const p=fields[2];
 assert.strictEqual(p.validate('main','https://trusted.example/'),true);
 for (const invalid of ['http://test.example/','https://localhost/..','https://evil.example/?p=1','']) {
   assert.notStrictEqual(p.validate('main',invalid),true,invalid);

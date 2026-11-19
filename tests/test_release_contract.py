@@ -104,7 +104,7 @@ class ReleaseContractTests(unittest.TestCase):
     def test_offline_ipk_contains_required_files_and_permissions(self):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,capture_output=True,text=True)
-            pkg=Path(td)/'luci-app-component-updater_0.2.1-1_all.ipk'
+            pkg=Path(td)/'luci-app-component-updater_0.2.2-1_all.ipk'
             self.assertTrue(pkg.is_file())
             self.assertTrue(pkg.read_bytes().startswith(bytes((0x1f,0x8b))))
             with tarfile.open(pkg,mode='r:gz') as archive:

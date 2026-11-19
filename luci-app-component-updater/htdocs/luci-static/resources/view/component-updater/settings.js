@@ -16,11 +16,23 @@ return view.extend({
         mode.default = 'off';
         mode.rmempty = false;
 
-        var prefix = s.option(form.Value, 'github_proxy_prefix', 'HTTPS 反代前缀');
+        var site = s.option(form.ListValue, 'github_proxy_site', '常用反代节点');
+        site.value('gh-proxy.org', 'gh-proxy.org');
+        site.value('ghproxy.cc', 'ghproxy.cc（备用）');
+        site.value('ghproxy.com', 'ghproxy.com（备用）');
+        site.value('ghfast.top', 'ghfast.top');
+        site.value('custom', '自定义 HTTPS 地址');
+        site.default = 'custom'; // Preserve old installations using github_proxy_prefix
+        site.rmempty = false;
+        site.description = '预设节点并非实时可用性保证；建议选择「仅代理下载」，保持官方 API 直连。';
+        site.depends('github_proxy_mode', 'assets');
+        site.depends('github_proxy_mode', 'all');
+
+        var prefix = s.option(form.Value, 'github_proxy_prefix', '自定义 HTTPS 反代前缀');
         prefix.placeholder = 'https://mirror.example/';
-        prefix.description = '格式：HTTPS 镜像前缀 + 完整 GitHub URL，例如 https://mirror.example/https://github.com/...。建议使用自己信任的代理。若同时代理 API 与文件，代理可以影响校验信息，无法提供独立真实性保证。';
-        prefix.depends('github_proxy_mode', 'assets');
-        prefix.depends('github_proxy_mode', 'all');
+        prefix.description = '仅选择「自定义 HTTPS 地址」时需要填写，例如 https://mirror.example/。若把 API 查询也交给反代，该反代能同时影响校验信息。';
+        prefix.depends({github_proxy_mode: 'assets', github_proxy_site: 'custom'});
+        prefix.depends({github_proxy_mode: 'all', github_proxy_site: 'custom'});
         prefix.validate = function(section_id, value) {
             if (!value || !/^https:\/\/[A-Za-z0-9.-]+(?:\/[A-Za-z0-9._~\/-]*)?$/.test(value) || !value.endsWith('/') ||
                 value.indexOf('..') >= 0 || value.indexOf('//', 8) >= 0)

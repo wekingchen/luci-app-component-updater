@@ -33,6 +33,11 @@ LuCI：官方版本 → Release API digest → 下载并校验 Manifest / IPK
 
 ## GitHub 反代
 
+V0.2.2 预置四个可选的 GitHub HTTPS 下载代理：`gh-proxy.org`、`ghproxy.cc`、`ghproxy.com`、`ghfast.top`，并保留自定义前缀输入。只对固定的 GitHub 资源进行代理；预设 URL 自动拼接完整原始地址，例如 `https://gh-proxy.org/https://github.com/.../releases/download/...`。默认关闭反代，推荐「仅下载文件」模式以保持 GitHub API 校验信息直连。
+
+**注意：预设不是在线可用性承诺。** 各代理节点可能被部分网络封禁、限流或停止服务，尤其 `ghproxy.cc`、`ghproxy.com` 仅作为备用选项。选择「API + 文件」必须信任代理，因为代理也会影响 SHA256 校验信息。旧版只配置 `github_proxy_prefix` 的设备升级后继续沿用旧自定义地址。
+
+
 LuCI → 系统 → 组件更新 → GitHub 下载设置：
 
 - **关闭（默认）**：全部走 GitHub 官方域名；

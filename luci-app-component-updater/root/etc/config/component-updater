@@ -7,5 +7,6 @@ config updater 'main'
 
     # off / assets / all. GitHub reverse proxy is transport-only; never a trust source.
     option github_proxy_mode 'off'
+    option github_proxy_site 'gh-proxy.org'
     option github_proxy_prefix ''
     option github_proxy_fallback '1'
