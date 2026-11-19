@@ -184,6 +184,10 @@ jobs:
         run: |
           set -euo pipefail
           ROOTFS=/tmp/ax6s-native-rootfs
+          # /tmp/sysinfo is initialized at boot, not embedded in SquashFS.
+          # Emulate only that volatile board-name file in the extracted rootfs.
+          sudo mkdir -p "$ROOTFS/tmp/sysinfo"
+          printf 'xiaomi,redmi-router-ax6s\n' | sudo tee "$ROOTFS/tmp/sysinfo/board_name" >/dev/null
           sudo chroot "$ROOTFS" /sbin/ubusd -s /tmp/component-test-ubus.sock > /tmp/ax6s-ubusd.log 2>&1 &
           ubusd_pid=$!
           rpcd_pid=''
