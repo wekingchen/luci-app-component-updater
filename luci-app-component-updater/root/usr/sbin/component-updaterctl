@@ -1,0 +1,312 @@
+#!/bin/sh
+# Component Updater 0.1: fixed-source OpenWrt binary updater.
+# No arbitrary URLs, paths or shell expressions are accepted from RPC clients.
+set -u
+umask 077
+
+BASE=/etc/component-updater
+CACHE=/tmp/component-updater
+BACKUPS=$BASE/backups/naiveproxy
+RECEIPT=$BASE/installed/naiveproxy.json
+PLAN=$CACHE/plan.json
+JOB=$CACHE/job.json
+GITHUB=wekingchen/luci-app-component-updater
+UPSTREAM=klzgrad/naiveproxy
+BINARY=/usr/bin/naive
+
+jshn=/usr/share/libubox/jshn.sh
+[ -r "$jshn" ] || { echo '{"error":"missing jshn"}'; exit 1; }
+. "$jshn"
+
+jsonval() {
+    file=$1 expr=$2
+    jsonfilter -i "$file" -e "$expr" 2>/dev/null | head -n 1
+}
+
+json_msg() {
+    json_init
+    json_add_string status "$1"
+    json_add_string message "$2"
+    json_dump
+    echo
+}
+
+create_dirs() {
+    mkdir -p "$CACHE" "$BASE/installed" "$BACKUPS" || return 1
+    chmod 700 "$CACHE" "$BASE" "$BASE/installed" "$BACKUPS" 2>/dev/null || true
+}
+
+safe_tag() {
+    case "$1" in
+        v[0-9]* ) case "$1" in *[!a-zA-Z0-9.+_-]*) return 1;; esac ;;
+        *) return 1;;
+    esac
+}
+
+arch() {
+    [ -r /etc/openwrt_release ] || return 1
+    name=$(sed -n "s/^DISTRIB_ARCH='\([^']*\)'.*/\1/p" /etc/openwrt_release | head -n 1)
+    case "$name" in
+        aarch64_cortex-a53|aarch64_generic) printf '%s\n' "$name";;
+        *) return 1;;
+    esac
+}
+
+current_version() {
+    if [ -x "$BINARY" ]; then
+        "$BINARY" --version 2>/dev/null | head -n 1 | sed 's/^naive //'
+    fi
+}
+
+package_version() {
+    if command -v opkg >/dev/null 2>&1; then
+        opkg status naiveproxy 2>/dev/null | sed -n 's/^Version: //p' | head -n 1
+    elif command -v apk >/dev/null 2>&1; then
+        apk info -v naiveproxy 2>/dev/null | head -n 1
+    fi
+}
+
+job_record() {
+    create_dirs || return 1
+    tmp="$JOB.tmp.$$"
+    json_init
+    json_add_string state "$1"
+    json_add_string message "$2"
+    json_add_string updated "$(date +%s)"
+    json_dump > "$tmp"
+    mv -f "$tmp" "$JOB"
+}
+
+status() {
+    installed=$(current_version)
+    [ -n "$installed" ] || installed="not-installed"
+    pkg=$(package_version)
+    a=$(arch 2>/dev/null || true)
+    receipt_tag=$(jsonval "$RECEIPT" '@.upstream_tag')
+    official_tag=$(jsonval "$CACHE/official.json" '@.tag_name')
+    ready=$(jsonval "$PLAN" '@.ready')
+    job_state=$(jsonval "$JOB" '@.state')
+    job_message=$(jsonval "$JOB" '@.message')
+    runtime_count=$(pidof naive 2>/dev/null | wc -w | tr -d ' ')
+    json_init
+    json_add_string component naiveproxy
+    json_add_string installed_version "$installed"
+    json_add_string package_version "$pkg"
+    json_add_string installed_upstream_tag "$receipt_tag"
+    json_add_string official_tag "$official_tag"
+    json_add_string architecture "$a"
+    json_add_string binary_path "$BINARY"
+    json_add_string package_owner "$(opkg search "$BINARY" 2>/dev/null | head -n 1)"
+    json_add_string runtime_processes "$runtime_count"
+    json_add_string job_state "${job_state:-idle}"
+    json_add_string job_message "$job_message"
+    json_add_string ready "${ready:-false}"
+    json_dump
+    echo
+}
+
+download() {
+    url=$1 dest=$2
+    case "$url" in
+        https://api.github.com/repos/klzgrad/naiveproxy/releases/latest|https://github.com/wekingchen/luci-app-component-updater/releases/download/*) ;;
+        *) return 1;;
+    esac
+    if command -v curl >/dev/null 2>&1; then
+        curl -fSL --connect-timeout 10 --max-time 120 --retry 2 --output "$dest" "$url" >/dev/null 2>&1
+    elif command -v uclient-fetch >/dev/null 2>&1; then
+        uclient-fetch -T 120 -O "$dest" "$url" >/dev/null 2>&1
+    elif command -v wget >/dev/null 2>&1; then
+        wget -T 120 -O "$dest" "$url" >/dev/null 2>&1
+    else
+        return 1
+    fi
+}
+
+space_ok() {
+    tmpfree=$(df -Pk /tmp 2>/dev/null | awk 'NR==2 {print $4}')
+    overlayfree=$(df -Pk /etc 2>/dev/null | awk 'NR==2 {print $4}')
+    case "$tmpfree:$overlayfree" in *[!0-9:]*) return 1;; esac
+    [ "${tmpfree:-0}" -ge 16384 ] && [ "${overlayfree:-0}" -ge 16384 ]
+}
+
+check_update() {
+    create_dirs || { json_msg error 'cannot create cache'; return 1; }
+    a=$(arch 2>/dev/null || true)
+    if [ -z "$a" ]; then json_msg unsupported 'OpenWrt architecture is not supported'; return 1; fi
+    if ! download "https://api.github.com/repos/$UPSTREAM/releases/latest" "$CACHE/official.tmp"; then
+        json_msg error 'official GitHub release request failed'; return 1
+    fi
+    mv -f "$CACHE/official.tmp" "$CACHE/official.json"
+    tag=$(jsonval "$CACHE/official.json" '@.tag_name')
+    if ! safe_tag "$tag"; then json_msg error 'unrecognized official release tag'; return 1; fi
+    build_tag="component-naiveproxy-${tag}-upx521-r1"
+    manifest_url="https://github.com/$GITHUB/releases/download/$build_tag/manifest.json"
+    if ! download "$manifest_url" "$CACHE/manifest.tmp"; then
+        rm -f "$PLAN"
+        json_msg pending 'official release found; verified precompressed build not available'
+        return 0
+    fi
+    mv -f "$CACHE/manifest.tmp" "$CACHE/manifest.json"
+    recorded_tag=$(jsonval "$CACHE/manifest.json" '@.upstream_tag')
+    recorded_build=$(jsonval "$CACHE/manifest.json" '@.release_tag')
+    component=$(jsonval "$CACHE/manifest.json" '@.component')
+    if [ "$tag" != "$recorded_tag" ] || [ "$build_tag" != "$recorded_build" ] || [ "$component" != naiveproxy ]; then
+        json_msg error 'build manifest mismatch'; return 1
+    fi
+    key=$(printf '%s' "$a" | tr '-' '_')
+    filename=$(jsonval "$CACHE/manifest.json" "@.assets.$key.filename")
+    checksum=$(jsonval "$CACHE/manifest.json" "@.assets.$key.sha256")
+    binary_sum=$(jsonval "$CACHE/manifest.json" "@.assets.$key.binary_sha256")
+    case "$filename" in
+        "naiveproxy-${tag}-openwrt-${a}-upx521-r1.tar.xz") ;;
+        *) json_msg error 'missing or unexpected target artifact'; return 1;;
+    esac
+    for h in "$checksum" "$binary_sum"; do
+        [ ${#h} -eq 64 ] || { json_msg error 'invalid SHA256'; return 1; }
+        case "$h" in *[!0-9a-f]*) json_msg error 'invalid SHA256'; return 1;; esac
+    done
+    [ -x "$BINARY" ] || { json_msg unsupported 'existing naive binary not found'; return 1; }
+    space_ok || { json_msg unsupported 'insufficient temporary or persistent storage'; return 1; }
+    json_init
+    json_add_string component naiveproxy
+    json_add_string upstream_tag "$tag"
+    json_add_string build_tag "$build_tag"
+    json_add_string architecture "$a"
+    json_add_string filename "$filename"
+    json_add_string sha256 "$checksum"
+    json_add_string binary_sha256 "$binary_sum"
+    json_add_string ready true
+    json_dump > "$PLAN.tmp"
+    mv -f "$PLAN.tmp" "$PLAN"
+    json_msg ready 'official release and precompressed artifact available; review before install'
+}
+
+has_valid_plan() {
+    [ -r "$PLAN" ] || return 1
+    [ "$(jsonval "$PLAN" '@.ready')" = true ] || return 1
+    [ "$(jsonval "$PLAN" '@.architecture')" = "$(arch)" ] || return 1
+    tag=$(jsonval "$PLAN" '@.upstream_tag')
+    safe_tag "$tag" || return 1
+    [ "$(jsonval "$PLAN" '@.build_tag')" = "component-naiveproxy-${tag}-upx521-r1" ] || return 1
+}
+
+check_sha256() {
+    [ "$(sha256sum "$1" 2>/dev/null | awk '{print $1}')" = "$2" ]
+}
+
+perform_install() {
+    job_record downloading 'Downloading verified archive'
+    has_valid_plan || { job_record failed 'No valid checked plan'; return 1; }
+    space_ok || { job_record failed 'Not enough space'; return 1; }
+    [ -x "$BINARY" ] && [ ! -L "$BINARY" ] || { job_record failed 'Unsafe target path'; return 1; }
+    tag=$(jsonval "$PLAN" '@.upstream_tag')
+    build_tag=$(jsonval "$PLAN" '@.build_tag')
+    filename=$(jsonval "$PLAN" '@.filename')
+    expected=$(jsonval "$PLAN" '@.sha256')
+    expected_binary=$(jsonval "$PLAN" '@.binary_sha256')
+    work="$CACHE/work.$$"
+    mkdir -m 700 "$work" || return 1
+    url="https://github.com/$GITHUB/releases/download/$build_tag/$filename"
+    if ! download "$url" "$work/archive.tar.xz" || ! check_sha256 "$work/archive.tar.xz" "$expected"; then
+        job_record failed 'Artifact download or checksum failed'; return 1
+    fi
+    job_record verifying 'Verifying archive and candidate binary'
+    contents=$(tar -tJf "$work/archive.tar.xz" 2>/dev/null) || { job_record failed 'Unsupported or invalid tar.xz'; return 1; }
+    [ "$contents" = "$(printf 'naive\nMETADATA.json')" ] || { job_record failed 'Unsafe archive members'; return 1; }
+    (cd "$work" && tar -xJf archive.tar.xz naive) >/dev/null 2>&1 || { job_record failed 'Cannot extract binary'; return 1; }
+    check_sha256 "$work/naive" "$expected_binary" || { job_record failed 'Binary digest mismatch'; return 1; }
+    chmod 755 "$work/naive"
+    observed=$("$work/naive" --version 2>/dev/null | head -n 1)
+    base=$(printf '%s' "$tag" | sed 's/^v//; s/-.*$//')
+    [ "$observed" = "naive $base" ] || { job_record failed 'Candidate is not runnable on this firmware'; return 1; }
+    [ -x "$BINARY" ] && [ ! -L "$BINARY" ] || { job_record failed 'Target changed during update'; return 1; }
+    job_record backing_up 'Making persistent backup'
+    timestamp="$(date +%s)-$$"
+    backup="$BACKUPS/$timestamp"
+    mkdir -m 700 "$backup" || return 1
+    cp -p "$BINARY" "$backup/naive" || { job_record failed 'Could not back up existing binary'; return 1; }
+    sha256sum "$backup/naive" | awk '{print $1}' > "$backup/sha256"
+    [ -r "$RECEIPT" ] && cp "$RECEIPT" "$backup/receipt.json" || true
+    new="$BINARY.component-updater.$$"
+    cp "$work/naive" "$new" || { job_record failed 'Could not stage new binary'; return 1; }
+    chmod 755 "$new"
+    check_sha256 "$new" "$expected_binary" || { rm -f "$new"; job_record failed 'Staged binary checksum mismatch'; return 1; }
+    job_record installing 'Replacing installed binary atomically'
+    if ! mv -f "$new" "$BINARY"; then
+        rm -f "$new"; job_record failed 'Atomic replacement failed'; return 1
+    fi
+    if ! check_sha256 "$BINARY" "$expected_binary" || [ "$(current_version)" != "$base" ]; then
+        if cp -p "$backup/naive" "$BINARY.restore.$$" && mv -f "$BINARY.restore.$$" "$BINARY" && check_sha256 "$BINARY" "$(cat "$backup/sha256")"; then
+            job_record rolled_back 'Post-install validation failed; old binary restored'
+        else
+            job_record failed 'CRITICAL: new binary invalid and automatic rollback failed'
+        fi
+        return 1
+    fi
+    json_init
+    json_add_string upstream_tag "$tag"
+    json_add_string build_tag "$build_tag"
+    json_add_string binary_sha256 "$expected_binary"
+    json_add_string previous_backup "$timestamp"
+    json_add_string installed_at "$(date +%s)"
+    json_dump > "$RECEIPT.tmp.$$"
+    mv -f "$RECEIPT.tmp.$$" "$RECEIPT"
+    job_record completed 'Binary updated; running PassWall processes are not restarted'
+    # Keep exactly two newest backups, with no user-configurable deletion paths.
+    ls -1 "$BACKUPS" 2>/dev/null | sort -r | awk 'NR>2' | while IFS= read -r obsolete; do
+        case "$obsolete" in *[!0-9-]*|'') continue;; esac
+        rm -rf "$BACKUPS/$obsolete"
+    done
+    return 0
+}
+
+run() {
+    create_dirs || return 1
+    lock="$CACHE/update.lock"
+    [ ! -d "$CACHE/rollback.lock" ] || { json_msg busy 'Restore in progress'; return 1; }
+    mkdir "$lock" 2>/dev/null || { json_msg busy 'Update in progress'; return 1; }
+    work=''
+    trap '[ -z "${work:-}" ] || rm -rf "$work"; rmdir "$lock" 2>/dev/null || true' EXIT
+    trap 'exit 1' HUP INT TERM
+    perform_install
+}
+
+start() {
+    create_dirs || { json_msg error 'Unable to initialize workspace'; return 1; }
+    if [ -d "$CACHE/update.lock" ] || [ -d "$CACHE/rollback.lock" ]; then json_msg busy 'Already updating'; return 1; fi
+    has_valid_plan || { json_msg error 'Check for updates before installing'; return 1; }
+    job_record queued 'Update queued'
+    ( /usr/sbin/component-updaterctl run > "$CACHE/job.log" 2>&1 </dev/null & )
+    json_msg started 'Update task submitted; inspect job status for result'
+}
+
+rollback() {
+    [ ! -d "$CACHE/update.lock" ] || { json_msg busy 'Update in progress'; return 1; }
+    mkdir "$CACHE/rollback.lock" 2>/dev/null || { json_msg busy 'Restore in progress'; return 1; }
+    trap 'rmdir "$CACHE/rollback.lock" 2>/dev/null || true' EXIT
+    receipt_backup=$(jsonval "$RECEIPT" '@.previous_backup')
+    case "$receipt_backup" in *[!0-9-]*|'') json_msg error 'No managed backup found'; return 1;; esac
+    backup="$BACKUPS/$receipt_backup"
+    [ -f "$backup/naive" ] && [ -r "$backup/sha256" ] || { json_msg error 'Backup incomplete'; return 1; }
+    checksum=$(cat "$backup/sha256")
+    check_sha256 "$backup/naive" "$checksum" || { json_msg error 'Backup hash mismatch'; return 1; }
+    stage="$BINARY.rollback.$$"
+    cp -p "$backup/naive" "$stage" && mv -f "$stage" "$BINARY" || { rm -f "$stage"; json_msg error 'Restore failed'; return 1; }
+    if [ -r "$backup/receipt.json" ]; then
+        cp "$backup/receipt.json" "$RECEIPT"
+    else
+        rm -f "$RECEIPT"
+    fi
+    job_record rolled_back 'Previous binary restored; running services not restarted'
+    json_msg rolled_back 'Previous managed binary restored'
+}
+
+case "${1:-}" in
+    status) status;;
+    check) check_update;;
+    plan) [ -r "$PLAN" ] && cat "$PLAN" || json_msg unavailable 'Run check first';;
+    start) start;;
+    run) run;;
+    rollback) rollback;;
+    *) json_msg error 'Usage: component-updaterctl status|check|plan|start|rollback'; exit 2;;
+esac

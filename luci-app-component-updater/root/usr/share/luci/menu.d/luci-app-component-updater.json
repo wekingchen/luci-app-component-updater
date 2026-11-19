@@ -1,0 +1,13 @@
+{
+  "admin/system/component-updater": {
+    "title": "组件更新",
+    "order": 84,
+    "action": {
+      "type": "view",
+      "path": "component-updater/overview"
+    },
+    "depends": {
+      "acl": ["luci-app-component-updater"]
+    }
+  }
+}

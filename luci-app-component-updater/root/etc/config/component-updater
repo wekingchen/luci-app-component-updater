@@ -1,0 +1,6 @@
+config updater 'main'
+    option update_channel 'stable'
+    option auto_install '0'
+    option keep_backups '2'
+    option upstream_repo 'klzgrad/naiveproxy'
+    option build_repo 'wekingchen/luci-app-component-updater'

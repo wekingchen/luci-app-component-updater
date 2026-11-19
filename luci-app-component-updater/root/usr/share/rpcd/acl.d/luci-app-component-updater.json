@@ -1,0 +1,15 @@
+{
+  "luci-app-component-updater": {
+    "description": "Read component status and manage explicitly approved updates",
+    "read": {
+      "ubus": {
+        "component-updater": ["status", "check", "plan"]
+      }
+    },
+    "write": {
+      "ubus": {
+        "component-updater": ["start", "rollback"]
+      }
+    }
+  }
+}

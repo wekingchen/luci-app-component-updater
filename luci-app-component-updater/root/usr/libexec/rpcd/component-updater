@@ -1,0 +1,20 @@
+#!/bin/sh
+# rpcd executable plugin, compatible with legacy OpenWrt rpcd (no rpcd-mod-ucode).
+# No caller-provided URLs, paths, or commands are forwarded.
+case "$1" in
+    list)
+        printf '%s\n' '{"status":{},"check":{},"plan":{},"start":{},"rollback":{}}'
+        ;;
+    call)
+        case "$2" in
+            status|check|plan|start|rollback)
+                exec /usr/sbin/component-updaterctl "$2"
+                ;;
+            *)
+                printf '%s\n' '{"error":"unsupported RPC method"}'
+                exit 1
+                ;;
+        esac
+        ;;
+    *) exit 1;;
+esac

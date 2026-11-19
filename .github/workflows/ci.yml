@@ -1,0 +1,35 @@
+name: Component Updater / CI & IPK
+on:
+  push:
+    branches: [main, 'feat/**', 'fix/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-and-package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install static checks
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Validate component definitions and tests
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 -m py_compile tools/component_builder.py tools/package_ipk.py
+          python3 -m json.tool components/naiveproxy.json >/dev/null
+          python3 -m json.tool luci-app-component-updater/root/usr/share/luci/menu.d/luci-app-component-updater.json >/dev/null
+          python3 -m json.tool luci-app-component-updater/root/usr/share/rpcd/acl.d/luci-app-component-updater.json >/dev/null
+      - name: Check backend scripts and LuCI JavaScript syntax
+        run: |
+          sh -n luci-app-component-updater/root/usr/sbin/component-updaterctl
+          sh -n luci-app-component-updater/root/usr/libexec/rpcd/component-updater
+          shellcheck -S warning luci-app-component-updater/root/usr/sbin/component-updaterctl luci-app-component-updater/root/usr/libexec/rpcd/component-updater
+          node -e "const fs=require('fs');new Function(fs.readFileSync('luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/overview.js','utf8'));console.log('LuCI JS parse OK')"
+      - name: Build installable IPK
+        run: python3 tools/package_ipk.py --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-component-updater-ipk
+          path: dist/*.ipk
+          if-no-files-found: error
