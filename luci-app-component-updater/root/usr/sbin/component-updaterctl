@@ -1,5 +1,6 @@
 #!/bin/sh
-# Component Updater / native opkg IPK adapter. Fixed component and package ID.
+# Component Updater / native opkg IPK adapter with read-only APK detection.
+# APK firmware must never receive an IPK update or an opkg rollback.
 # NEVER executes remote scripts and NEVER restarts PassWall.
 # OpenWrt jshn.sh (especially 21.02) uses unset globals; nounset breaks RPC calls.
 umask 077
@@ -56,6 +57,41 @@ job_record() {
 arch() {
     a=$(sed -n "s/^DISTRIB_ARCH='\([^']*\)'.*/\1/p" /etc/openwrt_release 2>/dev/null | head -n 1)
     case "$a" in aarch64_cortex-a53|aarch64_generic) printf '%s\n' "$a";; *) return 1;; esac
+}
+# Distinguish native APK v3 from opkg even if a compatibility binary exists.
+# An APK database has precedence and is never handled by the opkg adapter.
+package_manager() {
+    if [ -d /lib/apk/db ] && command -v apk >/dev/null 2>&1; then
+        printf 'apk\\n'
+    elif command -v opkg >/dev/null 2>&1; then
+        printf 'opkg\\n'
+    else
+        printf 'unknown\\n'
+    fi
+}
+firmware_target() {
+    sed -n "s/^DISTRIB_TARGET='\\([^']*\\)'.*/\\1/p" /etc/openwrt_release 2>/dev/null | head -n 1
+}
+device_board() {
+    if [ -r /tmp/sysinfo/board_name ]; then
+        head -n 1 /tmp/sysinfo/board_name
+    else
+        printf 'unknown\\n'
+    fi
+}
+ax6s_apk_target() {
+    [ "$(package_manager)" = apk ] && [ "$(arch)" = aarch64_cortex-a53 ] &&
+    [ "$(firmware_target)" = mediatek/mt7622 ] || return 1
+    case "$(device_board)" in
+        *redmi-router-ax6s*|*redmi_router_ax6s*) return 0;;
+        *) return 1;;
+    esac
+}
+require_opkg() {
+    [ "$(package_manager)" = opkg ] || {
+        json_msg unsupported 'Native APK firmware requires a verified APK package and rollback workflow; no changes made'
+        return 1
+    }
 }
 current_version() {
     [ -x "$BINARY" ] && "$BINARY" --version 2>/dev/null | head -n 1 | sed 's/^naive //' || true
@@ -169,18 +205,50 @@ status() {
     j=$(jsonval "$JOB" '@.state')
     m=$(jsonval "$JOB" '@.message')
     if [ -r "$TXN" ]; then j=recovery_required; m='Previous IPK transaction needs manual rollback'; fi
+    manager=$(package_manager)
+    device=$(device_board)
+    target=$(firmware_target)
     r=$(jsonval "$PLAN" '@.ready')
     [ ! -r "$TXN" ] || r=false
     json_init
     json_add_string component naiveproxy
+    json_add_string package_manager "$manager"
+    json_add_string firmware_target "$target"
+    json_add_string device_board "$device"
+    if [ "$manager" = apk ]; then
+        if ax6s_apk_target; then
+            json_add_string compatibility 'ax6s-apk-readonly'
+        else
+            json_add_string compatibility 'apk-unsupported'
+        fi
+    else
+        json_add_string compatibility 'opkg-native'
+    fi
     json_add_string installed_version "$v"
-    json_add_string package_version "$(package_version)"
+    if [ "$manager" = opkg ]; then
+        json_add_string package_version "$(package_version)"
+    elif [ "$manager" = apk ]; then
+        json_add_string package_version "$(apk info -v naiveproxy 2>/dev/null | sed -n 's/^naiveproxy-//p' | head -n 1)"
+    else
+        json_add_string package_version ''
+    fi
     json_add_string installed_upstream_tag "$(jsonval "$RECEIPT" '@.upstream_tag')"
     json_add_string official_tag "$(jsonval "$CACHE/official.json" '@.tag_name')"
     json_add_string architecture "$a"
     json_add_string binary_path "$BINARY"
-    json_add_string package_owner "$(opkg search "$BINARY" 2>/dev/null | head -n 1)"
-    json_add_string install_method 'opkg-native-ipk'
+    if [ "$manager" = opkg ]; then
+        json_add_string package_owner "$(opkg search "$BINARY" 2>/dev/null | head -n 1)"
+    elif [ "$manager" = apk ]; then
+        json_add_string package_owner "$(apk info -W "$BINARY" 2>/dev/null | head -n 1)"
+    else
+        json_add_string package_owner ''
+    fi
+    if [ "$manager" = opkg ]; then
+        json_add_string install_method 'opkg-native-ipk'
+    else
+        json_add_string install_method 'apk-readonly-preflight'
+        r=false
+    fi
     json_add_string github_proxy_mode "$(config_get github_proxy_mode off)"
     json_add_string github_proxy_site "$(config_get github_proxy_site custom)"
     json_add_string source_integrity 'GitHub Release API asset digest (no independent signing)'
@@ -198,6 +266,7 @@ runtime_dep_ok() {
     opkg status libgcc1 2>/dev/null | grep -q '^Status: .*installed'
 }
 check_update() {
+    require_opkg || return 1
     create_dirs || return 1
     rm -f "$PLAN"
     [ ! -r "$TXN" ] || { check_msg recovery_required 'Previous update must be restored first'; return 1; }
@@ -343,6 +412,7 @@ restore_previous() {
     return 0
 }
 perform_install() {
+    require_opkg || return 1
     has_valid_plan || { job_record failed 'Check for updates before installing'; return 1; }
     [ -x "$BINARY" ] && [ ! -L "$BINARY" ] && snapshot_owner_ok ||
         { job_record failed 'Package ownership is unsafe or includes additional files'; return 1; }
@@ -423,6 +493,7 @@ perform_install() {
     done
 }
 run() {
+    require_opkg || return 1
     create_dirs || return 1
     lock=$CACHE/update.lock
     mkdir "$lock" 2>/dev/null || { json_msg busy 'Update in progress'; return 1; }
@@ -432,6 +503,7 @@ run() {
     perform_install
 }
 start() {
+    require_opkg || return 1
     create_dirs || return 1
     [ ! -d "$CACHE/update.lock" ] || { json_msg busy 'Already updating'; return 1; }
     has_valid_plan || { json_msg error 'Check for updates before installing'; return 1; }
@@ -440,6 +512,7 @@ start() {
     json_msg started 'Native IPK installation started'
 }
 rollback() {
+    require_opkg || return 1
     create_dirs || return 1
     lock=$CACHE/update.lock
     mkdir "$lock" 2>/dev/null || { json_msg busy 'Update or recovery in progress'; return 1; }
@@ -457,7 +530,7 @@ rollback() {
 case "${1:-}" in
     status) status;;
     check) check_update;;
-    plan) [ -r "$PLAN" ] && cat "$PLAN" || json_msg unavailable 'Run check first';;
+    plan) [ "$(package_manager)" = opkg ] && [ -r "$PLAN" ] && cat "$PLAN" || json_msg unavailable 'No native package candidate for this package manager';;
     start) start;;
     run) run;;
     rollback) rollback;;
