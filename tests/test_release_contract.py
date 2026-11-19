@@ -101,10 +101,19 @@ class ReleaseContractTests(unittest.TestCase):
         b.validate_definition(raw)
         self.assertEqual(b.release_tag(raw,'v1.2.3'),'component-another-program-v1.2.3-raw-r1')
 
+    def test_manager_package_version_is_consistent(self):
+        manager=(ROOT/'luci-app-component-updater/Makefile').read_text()
+        wrapper=(ROOT/'tools/package_ipk.py').read_text()
+        workflow=(ROOT/'.github/workflows/ci.yml').read_text()
+        self.assertIn('PKG_VERSION:=0.3.0',manager)
+        self.assertIn('PKG_RELEASE:=1',manager)
+        self.assertIn('VERSION = "0.3.0-1"',wrapper)
+        self.assertIn('luci-app-component-updater_0.3.0-1_all.ipk',workflow)
+
     def test_offline_ipk_contains_required_files_and_permissions(self):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,capture_output=True,text=True)
-            pkg=Path(td)/'luci-app-component-updater_0.2.3-1_all.ipk'
+            pkg=Path(td)/'luci-app-component-updater_0.3.0-1_all.ipk'
             self.assertTrue(pkg.is_file())
             self.assertTrue(pkg.read_bytes().startswith(bytes((0x1f,0x8b))))
             with tarfile.open(pkg,mode='r:gz') as archive:
@@ -119,6 +128,7 @@ class ReleaseContractTests(unittest.TestCase):
                     './usr/share/rpcd/acl.d/luci-app-component-updater.json',
                     './usr/share/luci/menu.d/luci-app-component-updater.json',
                     './www/luci-static/resources/view/component-updater/overview.js',
+                    './www/luci-static/resources/component-updater/design.css',
                 ]:
                     self.assertIn(path,names)
                 self.assertEqual(t.getmember('./usr/sbin/component-updaterctl').mode,0o755)
