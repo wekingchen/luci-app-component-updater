@@ -6,6 +6,7 @@ on:
       - 'tools/component_builder.py'
       - 'tools/validate_artifacts.py'
       - 'tools/smoke_arm64.py'
+      - 'tools/runtime-smoke.Dockerfile'
       - 'tests/**'
       - '.github/workflows/builder-smoke.yml'
   workflow_dispatch:
@@ -58,11 +59,8 @@ jobs:
         with:
           name: verified-naiveproxy-candidates
           path: dist
-      - name: Install musl loader for original OpenWrt ARM64 executables
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq musl
-          test -e /lib/ld-musl-aarch64.so.1
+      - name: Build isolated ARM64 musl and libgcc runtime
+        run: docker build --file tools/runtime-smoke.Dockerfile --tag component-updater-arm64-smoke:alpine-3.22 tools/
       - name: Validate actual compressed executable from both IPKs
         run: |
           python3 tools/validate_artifacts.py --manifest dist/manifest.json

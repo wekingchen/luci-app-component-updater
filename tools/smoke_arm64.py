@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run both original and UPX-packed official binaries on native AArch64 Linux.
+"""Run original and UPX-packed binaries in a musl/libgcc ARM64 container.
 
 A failed packed binary with a successful original isolates an UPX/runtime issue;
 neither success alone is equivalent to GL firmware or N1 functional acceptance.
@@ -22,7 +22,15 @@ def run_native(blob: bytes, label: str) -> tuple[int,str,str]:
         path=Path(td)/'naive'
         path.write_bytes(blob)
         path.chmod(0o755)
-        result=subprocess.run([str(path),'--version'],capture_output=True,text=True,timeout=45)
+        Path(td).chmod(0o755)
+        result=subprocess.run([
+            'docker','run','--rm','--network','none','--read-only',
+            '--cap-drop','ALL','--security-opt','no-new-privileges',
+            '--user','65534:65534',
+            '--mount',f'type=bind,source={td},target=/candidate,readonly',
+            'component-updater-arm64-smoke:alpine-3.22',
+            '/candidate/naive','--version'
+        ],capture_output=True,text=True,timeout=65)
         print(label, 'rc='+str(result.returncode),
               'stdout='+repr(result.stdout.strip()),
               'stderr='+repr(result.stderr.strip()),flush=True)

@@ -9,6 +9,7 @@ on:
       - 'tools/package_component_ipk.py'
       - 'tools/validate_artifacts.py'
       - 'tools/smoke_arm64.py'
+      - 'tools/runtime-smoke.Dockerfile'
   schedule:
     # Cloud-side prebuild; router does not wait for compression.
     - cron: '7,27,47 * * * *'
@@ -115,11 +116,8 @@ jobs:
         with:
           name: native-ipk-candidates
           path: dist
-      - name: Install OpenWrt-compatible musl runtime
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq musl
-          test -e /lib/ld-musl-aarch64.so.1
+      - name: Prepare isolated ARM64 musl and libgcc runtime
+        run: docker build --file tools/runtime-smoke.Dockerfile --tag component-updater-arm64-smoke:alpine-3.22 tools/
       - name: Verify native ARM64 executable version for each candidate
         run: |
           set -euo pipefail
