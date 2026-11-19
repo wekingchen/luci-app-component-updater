@@ -47,7 +47,7 @@ class RpcdCompatibilityTests(unittest.TestCase):
             control=subprocess.check_output(['ar','p',str(p),'control.tar.gz'])
             with tarfile.open(fileobj=io.BytesIO(control),mode='r:gz') as tar:
                 dep=tar.extractfile('./control').read().decode()
-            self.assertIn('usign',dep)
+            self.assertIn('opkg',dep)
             data=subprocess.check_output(['ar','p',str(p),'data.tar.gz'])
             with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as tar:
                 members=set(tar.getnames())

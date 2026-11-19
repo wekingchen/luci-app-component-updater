@@ -16,7 +16,7 @@ class BuilderTests(unittest.TestCase):
 
     def test_definition_targets_and_tag(self):
         self.assertEqual(len(self.cfg["platforms"]), 2)
-        self.assertEqual(b.release_tag(self.cfg, "v154.0.8037.49-5"), "component-naiveproxy-v154.0.8037.49-5-upx521-r1")
+        self.assertEqual(b.release_tag(self.cfg, "v154.0.8037.49-5"), "component-naiveproxy-v154.0.8037.49-5-upx521-r2")
         with self.assertRaises(b.BuildError):
             b.release_tag(self.cfg, "$(malicious)")
 

@@ -74,7 +74,7 @@ jobs:
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: validated-ipk-candidates
+          name: native-ipk-candidates
           path: dist/
           if-no-files-found: error
 
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: unsigned-component-candidates
+          name: native-ipk-candidates
           path: dist
       - name: Validate once more and publish native IPKs
         env:
@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           mapfile -t MANIFESTS < <(find dist -mindepth 2 -maxdepth 2 -name manifest.json -type f | sort)
           if [[ "${#MANIFESTS[@]}" -eq 0 ]]; then
-            echo 'Nothing new to sign or publish'
+            echo 'No new component IPK candidates to publish'
             exit 0
           fi
           for MANIFEST in "${MANIFESTS[@]}"; do

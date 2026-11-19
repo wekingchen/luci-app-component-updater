@@ -53,22 +53,22 @@ return view.extend({
         var section = E('div', {'class':'cbi-section', style:'padding:1em;border:1px solid var(--border-color-low, #ddd);border-radius:12px'}, [
             E('div', {style:'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1em'}, [
                 E('div', {}, [E('h3', {style:'margin:0'}, 'NaiveProxy'), E('small', {}, '官方来源：klzgrad/naiveproxy')]),
-                E('span', {'class':'label'}, ready ? '压缩更新已就绪' : (jobBusy ? '更新中' : (checkState === 'pending' ? '云端压缩准备中' : (checkState === 'signature_error' ? '签名验证失败' : (checkState === 'trust_unconfigured' ? '缺少可信签名配置' : (checkState === 'error' ? '检查失败' : '等待检查'))))))
+                E('span', {'class':'label'}, ready ? '原生 IPK 已就绪' : (jobBusy ? '更新中' : (checkState === 'pending' ? '云端压缩准备中' : (checkState === 'error' ? '检查失败' : '等待检查'))))
             ]),
             this.row('实际程序版本', version),
             this.row('官方最新 Release', official),
             this.row('本工具安装的完整版本', currentTag),
-            this.row('opkg / apk 记录', status.package_version),
+            this.row('opkg 已安装版本', status.package_version),
             this.row('设备软件架构', status.architecture),
             this.row('GitHub 反代', status.github_proxy_mode === 'off' ? '关闭（直连）' : (status.github_proxy_mode === 'assets' ? '仅下载包' : '查询与下载')),
-            this.row('可信签名', status.signing_status === 'configured' ? '公钥及 usign 已配置' : '缺少可信公钥或 usign，禁止安装'),
+            this.row('安装机制', '原生 IPK · opkg'),
             this.row('运行中 NaiveProxy 进程', status.runtime_processes),
             this.row('当前任务状态', progress),
             this.row('最近检查结果', checkMessage),
             checkState === 'pending' ? E('p', {'class':'description'}, '云端正在等待预压缩产物发布。页面保持打开时每 5 分钟自动复查一次；当前程序继续正常运行。') : E('span'),
             status.job_message ? E('p', {'class':'alert-message'}, status.job_message) : E('span'),
             E('p', {'class':'description'}, 'GitHub Actions 在云端预先压缩并发布；点击更新不会现场等待压缩。如果发现官方新版但尚无候选包，此页显示准备中，稍后重新检查即可。'),
-            E('p', {'class':'description',style:'margin-top:1em'}, '更新仅替换已备份的 /usr/bin/naive；不修改 opkg 数据库，不自动重启 PassWall。原有进程可能仍在使用旧版本。'),
+            E('p', {'class':'description',style:'margin-top:1em'}, '使用 opkg 安装经过校验的原生 IPK，opkg 版本同步更新；安装前准备旧版恢复 IPK。更新器不会主动重启 PassWall；已运行进程可能暂时保持旧版本。'),
             E('div', {style:'display:flex;flex-wrap:wrap;gap:0.6em;margin-top:1em'}, [
                 E('button', {'class':'btn cbi-button cbi-button-action', disabled:jobBusy, click:function(){self.handleCheck();}}, '检查官方更新'),
                 E('button', {'class':'btn cbi-button cbi-button-positive', disabled:!ready || jobBusy, click:function(){self.confirmInstall();}}, '下载并更新'),
@@ -80,7 +80,7 @@ return view.extend({
             this.row('构建来源', 'wekingchen/luci-app-component-updater'),
             this.row('构建版本', plan.build_tag || '尚未获取'),
             this.row('下载资源', plan.filename || '尚未获取'),
-            E('p', {'class':'description'}, 'GitHub Actions 对官方二进制执行 UPX --lzma --best；由云端每 20 分钟轮询官方版本（调度可能延迟）。安装前必须验证 usign/Ed25519 签名、SHA256 和程序可执行性；真机代理功能需要单独验收。')
+            E('p', {'class':'description'}, 'GitHub Actions 对官方二进制执行 UPX --lzma --best；由云端每 20 分钟轮询官方版本（调度可能延迟）。安装包及 Manifest 的 SHA256 与 GitHub Release API 摘要对比；不采用独立签名。反代 API 时真实性依赖该代理与 HTTPS，真机功能仍需验收。')
         ]);
         return [section, extra, E('p', {}, E('a', {href: L.url('admin/system/component-updater/settings')}, 'GitHub 反代及下载设置'))];
     },
@@ -117,7 +117,7 @@ return view.extend({
     confirmInstall: function() {
         var self = this;
         ui.showModal('确认更新 NaiveProxy', [
-            E('p', {}, '本操作会备份并替换 /usr/bin/naive。正在运行的 PassWall 进程不会被自动重启。若通过 opkg 安装，软件包数据库版本仍可能保持旧值。'),
+            E('p', {}, '本操作将先生成旧版恢复 IPK，再通过 opkg 正式升级 naiveproxy，opkg 中的版本会同步更新。更新器不会主动重启 PassWall。'),
             E('div', {'class':'right'}, [
                 E('button', {'class':'btn', click:ui.hideModal}, '取消'),
                 ' ',
@@ -132,7 +132,7 @@ return view.extend({
     confirmRollback: function() {
         var self = this;
         ui.showModal('恢复旧版', [
-            E('p', {}, '从上次受本工具管理的备份恢复 NaiveProxy 二进制。运行中的 PassWall 不会自动重启。'),
+            E('p', {}, '通过 opkg 安装旧版恢复 IPK，并恢复旧版本记录和二进制。运行中的 PassWall 不会被更新器主动重启。'),
             E('div', {'class':'right'}, [
                 E('button', {'class':'btn', click:ui.hideModal}, '取消'),
                 ' ',

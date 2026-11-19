@@ -15,12 +15,12 @@ define Package/luci-app-component-updater
   SUBMENU:=3. Applications
   TITLE:=Generic component updater (NaiveProxy first)
   PKGARCH:=all
-  DEPENDS:=+luci-base +rpcd +jsonfilter +libubox +usign
+  DEPENDS:=+luci-base +rpcd +jsonfilter +libubox +opkg
 endef
 
 define Package/luci-app-component-updater/description
   Config-driven GitHub component updater with official version discovery,
-  precompressed binaries, backup and rollback. No proxy configuration changes.
+  precompressed native opkg IPKs, package-aware backup and rollback. No proxy configuration changes.
 endef
 
 define Build/Compile

@@ -19,6 +19,7 @@ if [ -r /etc/component-updater/transaction.json ]; then
 fi
 old=$(sha256sum /usr/bin/naive | awk '{print $1}')
 old_version=$(/usr/bin/naive --version 2>&1 | head -n1)
+old_pkg=$(opkg status naiveproxy 2>/dev/null | sed -n 's/^Version: //p' | head -n1)
 owner=$(opkg search /usr/bin/naive 2>/dev/null || true)
 link=$(readlink /tmp/etc/passwall/bin/naive 2>/dev/null || true)
 echo "Before: $old_version SHA256=$old"
@@ -37,10 +38,14 @@ fi
 new=$(sha256sum /usr/bin/naive | awk '{print $1}')
 [ "$old" != "$new" ] || { echo 'NOT_TESTED: binary was unchanged'; exit 3; }
 echo "Installed candidate: $(/usr/bin/naive --version 2>&1 | head -n1) SHA256=$new"
+new_pkg=$(opkg status naiveproxy 2>/dev/null | sed -n 's/^Version: //p' | head -n1)
+[ "$old_pkg" != "$new_pkg" ] || { echo 'FAIL: opkg version unchanged after native IPK upgrade'; exit 1; }
 echo 'Restoring previous managed binary...'
 /usr/sbin/component-updaterctl rollback
 restored=$(sha256sum /usr/bin/naive | awk '{print $1}')
 [ "$old" = "$restored" ] || { echo 'FAIL: restored SHA256 mismatch'; exit 1; }
+restored_pkg=$(opkg status naiveproxy 2>/dev/null | sed -n 's/^Version: //p' | head -n1)
+[ "$restored_pkg" = "$old_pkg" ] || { echo 'FAIL: opkg version not rolled back'; exit 1; }
 if [ -n "$link" ]; then
     [ "$(readlink /tmp/etc/passwall/bin/naive 2>/dev/null)" = "$link" ] || {
         echo 'FAIL: PassWall runtime symlink changed'
@@ -51,5 +56,5 @@ fi
     echo 'FAIL: recovery transaction marker still exists'
     exit 1
 }
-echo 'PASS: signed install and rollback restored original SHA256; PassWall was not restarted.'
+echo 'PASS: native IPK install and rollback restored original SHA256; PassWall was not restarted.'
 echo 'NOTE: Proxy functionality and browser/ACL still require separate real device validation.'

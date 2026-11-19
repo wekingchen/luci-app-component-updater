@@ -1,38 +1,39 @@
-# 签名、GitHub 反代与双设备真机验收
+# GitHub 反代、供应链完整性与原生 IPK 更新
 
-## 可信签名：必须由管理员完成密钥初始化
+## 原生 IPK 模式（V0.1）
 
-V0.1 安装事务只接受通过 **usign (Ed25519)** 验证的 Manifest。原始发布文件的 SHA256 存在 Manifest 中；反代无法绕过验签。
+GitHub Actions 预压缩官方程序，生成 `naiveproxy_<version>_<arch>.ipk`，通过 `opkg install` 升级，因此 opkg 版本随实际安装软件包变化。V0.1 不需要 usign 私钥、公钥或 GitHub Secret。
 
-1. 在可信电脑离线运行（不要在路由器上生成）：`usign -G -s component-updater.sec -p trust.pub -c "Component Updater Release Key"`
-2. **仅将公钥** `trust.pub` 放进仓库 `luci-app-component-updater/root/usr/share/component-updater/trust.pub` 并提交 PR。通过 IPK 固定部署，不从下载服务器动态信任新公钥。
-3. 私钥保存在安全位置；将 `base64 < component-updater.sec | tr -d '\\n'` 的结果作为仓库 Settings → Secrets and variables → Actions 的 `COMPONENT_USIGN_PRIVATE_KEY_B64`。不要将原始私钥上传 GitHub 文件或发送到对话。
-4. 从主分支运行通用 `Component Builder / Official Releases & UPX` 工作流，签名 `manifest.json` 生成 `manifest.json.sig`，在发布前使用仓库固定公钥执行 `usign -V`。
-5. 无公钥、无 usign、签名缺失、签名校验失败、发布资产被篡改均拒绝生成安装预案。
+每次检查读取 NaiveProxy 官方 Release 版本、组件构建 Release 的 GitHub API `digest`，验证下载的 Manifest SHA256，校验它声明的 IPK 哈希与 GitHub API 中的 IPK `digest` 一致。安装前再核对 IPK 实际 SHA256。
 
-**签名能力已编码，但签名密钥不由项目自动生成或托管**。在公钥和 GitHub Secret 未由管理员配置之前，不能发布正式可安装更新。签名密钥丢失需要在受控更新器版本中进行公钥轮换，不能通过不可信远程清单替换。
+**这不是端到端数字签名：** GitHub 账户被侵入、代理篡改 GitHub API 响应与文件、或本机管理员权限被恶意利用时，哈希不能保证来源真实性。默认只允许手动确认安装，建议使用可信自有反代，不启用自动升级。
 
 ## GitHub 反代
 
-在 **系统 → 组件更新 → GitHub 下载设置** 选择：
-- 关闭（默认）：直接访问 GitHub 官方 API 和 Releases。
-- 仅下载包：官方 API 直接查询，Releases 文件、Manifest 及签名经自定义 HTTPS 前缀。
-- 查询与下载：查询和文件都经自定义 HTTPS 前缀。
+LuCI → 系统 → 组件更新 → GitHub 下载设置。
+- 关闭：完全直连 GitHub。
+- 仅文件：API 直连；Manifest 与 IPK 可以经过 HTTPS 前缀反代（安全性优先）。
+- API + 文件：所有请求经过自定义 HTTPS 前缀；适用于 API 也无法直连的环境，但需要信任反代服务。
+- 支持代理失败时直连回退。不要关闭 HTTPS 证书验证。
 
-采用 `https://mirror.example/` 前缀约定，最终地址为 `https://mirror.example/https://github.com/... `。这不是任意 HTTP 代理，不支持用户名密码、HTTP 或本地地址；反代失败后是否直接连接 GitHub 由独立开关控制。
+## 回滚行为
 
-反代只能改善下载连接，不能作为供应链信任根。若反代将清单或文件改动，签名或 SHA256 校验必须失败；不能退回无签名模式。
+更新前检查旧 naiveproxy 包只拥有 `/usr/bin/naive`，避免覆盖其他程序配置。生成一个使用当前 `opkg` 包版本、架构、依赖信息和当前二进制的本地恢复 IPK，并在持久化目录备份。升级使用 `opkg install`；失败时安装备份的 IPK（允许降级）并检查旧 SHA256 和软件包版本。
 
-## 两台设备的验收
+用户原先手动 UPX 覆盖的文件与 opkg 记录本来可能不同：恢复时会准确恢复更新前的*文件及 opkg 软件包版本记录*，两者仍可能不同。更新器不重启 PassWall，但原软件包升级的旧维护脚本可能有副作用；必须真机验证。
 
-- GL-MT3600BE / 定制 21.02 / aarch64_cortex-a53：检查已有 LuCI JS、rpcd executable plugin、usign、UCI 和 opkg，留存完整安装和回滚报告。
-- N1 / LEDE 24.10 / aarch64_generic：重复同一套验收，不因为架构同属 ARM64 而跳过。
-- 在安装 IPK 后运行 `sh /usr/libexec/component-updater/device-readonly-acceptance.sh`（只读）。此脚本不重启服务、不下载新程序、不修改 `/usr/bin/naive`。
-- 桌面/手机分别打开 LuCI，核对组件列表、反代配置、版本字段和 ACL 权限。只读脚本不能代替 UI 交互验收。
-- 确认有物理或独立 LAN 管理方式后，明确设置 `COMPONENT_ACCEPT_LIVE=I_UNDERSTAND`，运行 `sh /usr/libexec/component-updater/device-live-acceptance.sh --install-and-rollback`。此脚本真实替换并回滚当前程序，**不自动重启 PassWall**，失败时必须保留现场和日志。
-- 若官方最新与当前二进制完全一致，或云端签名产物尚未就绪，应记录 **NOT_TESTED**，不能称为成功验收。
+## 真机验收
 
-### G0-G4 发布判定
+分别在 GL-MT3600BE、N1 安装 CI 产生的开发 IPK 后执行只读检查：
 
-G0 单元与 Shell/JS、代理边界；G1 双架构真实上游压缩 + usign 测试；G2 每台设备 LuCI/rpcd 只读测试；G3 每台设备真实更新及回滚；G4 签名密钥已部署、全部日志与代理功能回归验证。**G2/G3/G4 尚未拿到两台真机报告前，禁止宣称生产可用。**
+```sh
+sh /usr/libexec/component-updater/device-readonly-acceptance.sh
+```
 
+双设备只读门禁通过之后，在具备物理/局域网管理能力时，才执行包含真实安装及恢复的测试：
+
+```sh
+COMPONENT_ACCEPT_LIVE=I_UNDERSTAND sh /usr/libexec/component-updater/device-live-acceptance.sh --install-and-rollback
+```
+
+通过须证明 opkg 包版本、文件 SHA256、实际程序版本、回滚时的旧版记录均正确；且 PassWall 的符号链接不受影响。实际用户设备测试还没有执行，不得把 CI 绿灯当作 G2/G3 真机通过。

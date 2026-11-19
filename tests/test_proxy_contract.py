@@ -53,10 +53,10 @@ class ProxyTests(unittest.TestCase):
     def test_unknown_url_never_proxies(self):
         self.assertNotEqual(self.probe('all','https://mirror.example/','https://evil.example/bad').returncode,0)
 
-    def test_fail_closed_signature_and_tls_contract(self):
+    def test_tls_and_known_release_sources_contract(self):
         code=BACKEND.read_text()
-        self.assertIn('usign -V -q -m "$CACHE/manifest.tmp"',code)
-        self.assertIn("check_msg signature_error 'Manifest signature verification failed'",code)
+        self.assertIn('release_digest()',code)
+        self.assertIn('GitHub Release API asset digest',code)
         self.assertIn("--proto '=https' --proto-redir '=https'",code)
         for phrase in ['--no-check-certificate','--insecure']:
             self.assertNotIn(phrase,code)

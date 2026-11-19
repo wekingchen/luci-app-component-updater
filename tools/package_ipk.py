@@ -34,8 +34,8 @@ def main():
         (folder / "debian-binary").write_text("2.0\n")
         control = ("Package: luci-app-component-updater\nVersion: " + VERSION +
                    "\nArchitecture: all\nMaintainer: wekingchen\n" +
-                   "Depends: luci-base, rpcd, jsonfilter, libubox, usign\n" +
-                   "Section: luci\nDescription: GitHub component updater (NaiveProxy adapter)\n")
+                   "Depends: luci-base, rpcd, jsonfilter, libubox, opkg\n" +
+                   "Section: luci\nDescription: GitHub native IPK updater (NaiveProxy adapter)\n")
         postinst = ("#!/bin/sh\n[ -n \"${IPKG_INSTROOT:-}\" ] && exit 0\n"
                     "rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true\n"
                     "[ ! -x /etc/init.d/rpcd ] || /etc/init.d/rpcd restart >/dev/null 2>&1 || true\n"
