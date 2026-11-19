@@ -1,4 +1,4 @@
-name: Component Updater / CI & IPK
+name: Component Updater / CI & native IPK/APK
 on:
   push:
     branches: [main, 'feat/**', 'fix/**']
@@ -73,7 +73,8 @@ jobs:
   publish-luci-candidate:
     name: Publish verified LuCI manager pre-release
     needs: test-and-package
-    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    # Do not publish the manager before actual AX6S hardware acceptance.
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.AX6S_APK_AUTO_PUBLISH == 'true' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
