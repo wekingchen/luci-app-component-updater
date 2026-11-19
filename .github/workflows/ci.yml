@@ -45,13 +45,20 @@ jobs:
           sh -n luci-app-component-updater/root/usr/libexec/component-updater/device-ax6s-apk-preflight.sh
       - name: Build installable opkg IPK
         run: python3 tools/package_ipk.py --out dist
-      - name: Build and inspect genuine APKv3 with host apk-tools
+      - name: Build and inspect genuine APKv3 with pinned non-minimal apk-tools
         run: |
           docker run --rm -v "$PWD:/src" -w /src alpine:edge sh -ec '
-            apk --version
-            apk mkpkg --help >/dev/null
-            sh tools/package_manager_apk.sh dist
-            apk adbdump --format json dist/luci-app-component-updater-0.4.0-r1.apk > dist/manager-apk-adbdump.json
+            set -eu
+            apk add --no-cache build-base git meson ninja pkgconf openssl-dev zlib-dev
+            git clone --depth=1 --branch v3.0.7 https://github.com/alpinelinux/apk-tools.git /tmp/apk-src
+            test "$(git -C /tmp/apk-src rev-parse HEAD)" = 522171e05c72c8a0dd2a9392f053c89196fbdb9b
+            meson setup /tmp/apk-build /tmp/apk-src \
+              -Dminimal=false -Dhelp=disabled -Ddocs=disabled -Dlua=disabled \
+              -Dpython=disabled -Dtests=disabled -Dzstd=disabled -Durl_backend=wget
+            ninja -C /tmp/apk-build
+            APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
+            /tmp/apk-build/src/apk adbdump --format json \
+              dist/luci-app-component-updater-0.4.0-r1.apk > dist/manager-apk-adbdump.json
             grep -q "luci-app-component-updater" dist/manager-apk-adbdump.json
           '
       - uses: actions/upload-artifact@v4
