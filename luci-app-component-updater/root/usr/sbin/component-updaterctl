@@ -14,9 +14,9 @@ GITHUB=wekingchen/luci-app-component-updater
 UPSTREAM=klzgrad/naiveproxy
 BINARY=/usr/bin/naive
 
-jshn=/usr/share/libubox/jshn.sh
-[ -r "$jshn" ] || { echo '{"error":"missing jshn"}'; exit 1; }
-. "$jshn"
+[ -r /usr/share/libubox/jshn.sh ] || { echo '{"error":"missing jshn"}'; exit 1; }
+# shellcheck source=/dev/null
+. /usr/share/libubox/jshn.sh
 
 jsonval() {
     file=$1 expr=$2
@@ -255,7 +255,7 @@ perform_install() {
     # Keep exactly two newest backups, with no user-configurable deletion paths.
     ls -1 "$BACKUPS" 2>/dev/null | sort -r | awk 'NR>2' | while IFS= read -r obsolete; do
         case "$obsolete" in *[!0-9-]*|'') continue;; esac
-        rm -rf "$BACKUPS/$obsolete"
+        rm -rf "${BACKUPS:?}/$obsolete"
     done
     return 0
 }
@@ -266,7 +266,7 @@ run() {
     [ ! -d "$CACHE/rollback.lock" ] || { json_msg busy 'Restore in progress'; return 1; }
     mkdir "$lock" 2>/dev/null || { json_msg busy 'Update in progress'; return 1; }
     work=''
-    trap '[ -z "${work:-}" ] || rm -rf "$work"; rmdir "$lock" 2>/dev/null || true' EXIT
+    trap '[ -z "${work:-}" ] || rm -rf "${work:?}"; rmdir "$lock" 2>/dev/null || true' EXIT
     trap 'exit 1' HUP INT TERM
     perform_install
 }
