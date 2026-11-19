@@ -251,4 +251,35 @@ jobs:
             test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
             test ! -r /etc/component-updater/transaction.json
             echo "PASS: Native firmware controller install / rollback with modified config"
+            # Simulate a persisted interrupted transaction after an upgrade:
+            # check must refuse installation and the original package must
+            # remain recoverable even across a fresh controller invocation.
+            /usr/sbin/component-updaterctl check
+            /usr/sbin/component-updaterctl run
+            id=$(jsonfilter -i /etc/component-updater/installed/naiveproxy.json -e "@.previous_backup")
+            test -n "$id"
+            printf "{\"manager\":\"apk\",\"backup_id\":\"%s\"}\n" "$id" > /etc/component-updater/transaction.json
+            if /usr/sbin/component-updaterctl check; then
+              echo "BLOCK: an unfinished transaction must stop updates"
+              exit 1
+            fi
+            grep -q recovery_required /tmp/component-updater/check-state.json
+            recovery="/etc/component-updater/backups/naiveproxy/$id/previous.apk"
+            test -s "$recovery"
+            cp "$recovery" /tmp/untampered-previous.apk
+            printf X >> "$recovery"
+            if /usr/sbin/component-updaterctl rollback; then
+              echo "BLOCK: corrupted recovery APK must be rejected"
+              exit 1
+            fi
+            test -r /etc/component-updater/transaction.json
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r3"
+            mv /tmp/untampered-previous.apk "$recovery"
+            /usr/sbin/component-updaterctl rollback
+            test ! -r /etc/component-updater/transaction.json
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r1"
+            test "$(sha256sum /usr/bin/naive | awk "{print \$1}")" = "$source_root"
+            test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
+            echo "PASS: crash-recovery marker, tampered rollback protection and manual recovery"
+
           '
