@@ -142,10 +142,10 @@ jobs:
             candidate_version=$(basename "$candidate" | sed -e "s/^naiveproxy_//" -e "s/_aarch64_cortex-a53.apk$//")
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks --simulate add \
-              /src/$candidate
+              "$candidate"
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks add \
-              /src/$candidate
+              "$candidate"
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy | \
               grep -Fx "naiveproxy $candidate_version"
