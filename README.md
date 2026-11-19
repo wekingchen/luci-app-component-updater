@@ -58,7 +58,7 @@ component-updaterctl status
 component-updaterctl rollback
 ```
 
-LuCI → 系统 → 组件更新。设备端需要可用的 GitHub HTTPS、CA 证书以及支持 xz 的 tar 命令；若条件不满足应报错，不会强制安装依赖或跳过校验。
+LuCI → 系统 → 组件更新 → GitHub 下载设置：关闭反代（默认）、仅 Release 下载反代、API 与 Release 都反代；支持 HTTPS 自定义前缀及失败时直连回退。反代不会替代本机 usign 公钥验签。设备端需要可用的 HTTPS、CA 证书、usign 及支持 xz 的 tar 命令；条件不满足不会跳过校验。详见 [签名/反代/真机验收手册](docs/signing-proxy-device-acceptance.md)。
 
 ### MT3600BE 已知安装方式
 
@@ -73,7 +73,7 @@ LuCI → 系统 → 组件更新。设备端需要可用的 GitHub HTTPS、CA �
 - 校验官方资产 SHA256、设备下载资产 SHA256、二进制 SHA256、实际可执行版本；更新前必须有可读备份与磁盘空间。
 - 固定主程序路径 `/usr/bin/naive`，不跟随其软链接写入，临时文件在目标目录创建并通过 `mv` 替换。
 - 安装与回滚不会主动重启 PassWall 或修改节点配置。
-- **重要：首版 Manifest 尚未启用独立密码学签名，校验哈希用于完整性，并不能防御构建仓库发布权限遭到入侵。** 正式稳定版需要可信公钥验证和签名发布门禁；在此之前保持手动更新、无自动安装。
+- **Manifest 签名验证已采用固定公钥 usign/Ed25519，GitHub Actions 的签名发布阶段与 UPX 构建阶段相互隔离。** 发布私钥必须由维护者单独设置到仓库 Secret，公钥须随 IPK 固定打包。任一缺失时设备拒绝安装，工作流拒绝无签名发布。暂未完成密钥初始化和真机验收，因此保持开发候选、无自动安装。
 - GitHub Actions 流水线及 IPK 构建与路由器真机兼容、代理实际功能测试是不同等级的验收，不能等同。
 
 ## 扩展组件
@@ -93,4 +93,6 @@ LuCI → 系统 → 组件更新。设备端需要可用的 GitHub HTTPS、CA �
 - [x] 离线单元测试、IPK 组包
 - [x] GitHub Actions 两个 ARM64 官方文件实际 UPX 5.2.1 压缩成功（仅基础验证）
 - [ ] MT3600BE / N1 真机安装、服务验证及断电恢复测试
-- [ ] 独立签名 Manifest、公钥固定及正式稳定发布
+- [x] usign 签名验签、反代控制、独立签名发布 Job 和异常拦截代码
+- [ ] 维护者提供公钥 + GitHub Secret，发布首个真实签名产物
+- [ ] 两台真机 LuCI/rpcd、真实更新与回滚正式验收后发布稳定版

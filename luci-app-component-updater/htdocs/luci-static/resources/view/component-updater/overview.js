@@ -53,7 +53,7 @@ return view.extend({
         var section = E('div', {'class':'cbi-section', style:'padding:1em;border:1px solid var(--border-color-low, #ddd);border-radius:12px'}, [
             E('div', {style:'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1em'}, [
                 E('div', {}, [E('h3', {style:'margin:0'}, 'NaiveProxy'), E('small', {}, '官方来源：klzgrad/naiveproxy')]),
-                E('span', {'class':'label'}, ready ? '压缩更新已就绪' : (jobBusy ? '更新中' : (checkState === 'pending' ? '云端压缩准备中' : (checkState === 'error' ? '检查失败' : '等待检查'))))
+                E('span', {'class':'label'}, ready ? '压缩更新已就绪' : (jobBusy ? '更新中' : (checkState === 'pending' ? '云端压缩准备中' : (checkState === 'signature_error' ? '签名验证失败' : (checkState === 'trust_unconfigured' ? '缺少可信签名配置' : (checkState === 'error' ? '检查失败' : '等待检查'))))))
             ]),
             this.row('实际程序版本', version),
             this.row('官方最新 Release', official),

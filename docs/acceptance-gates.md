@@ -10,7 +10,8 @@
 2. `shellcheck -S warning`、`sh -n`、LuCI JS 解析、JSON 定义/ACL 合法性检查。
 3. 生成 `all.ipk`，验证 `ar` 布局、脚本执行权限、ACL、菜单与前端文件。
 4. 测试只使用隔离的临时目录与本地 GitHub 响应/下载文件模拟。**禁止**测试脚本读写设备原生 `/usr/bin/naive` 或连接真实代理。
-5. 失败立即阻止候选 IPK 进入推荐下载位置。
+5. 反代 off/assets/all、HTTPS 约束、拒绝本地/无效前缀、usign 篡改与缺失签名测试全部必须通过。
+6. 失败立即阻止候选 IPK 进入推荐下载位置。
 
 ## G1 — 真实官方发布包与 GitHub Release 构建（自动化必过）
 
@@ -18,7 +19,7 @@
 2. 两个 OpenWrt ARM64 目标：`aarch64_cortex-a53`、`aarch64_generic`。
 3. 使用 UPX 5.2.1 `--lzma --best`；`upx -t`、解压往返字节完全相同、ELF e_machine、大小检查。
 4. `tools/validate_artifacts.py --manifest dist/manifest.json`：所有 tar.xz 与 Manifest SHA256 匹配；归档仅允许目标二进制和 METADATA.json；原始来源和压缩后哈希一致。
-5. 工作流**只能**发布 `--prerelease` 候选。CI Artifacts 和预发布 Release 是两个不同的验收状态。
+5. 构建 Job 不接触签名私钥；独立发布 Job 重新校验并使用固定公钥验签后只能发布 `--prerelease` 候选，缺私钥/公钥则拒绝发布。CI Artifacts 和预发布 Release 是两个不同的验收状态。
 6. 发布后再从 GitHub Releases 下载公开的同名文件，复验哈希和 Archive；发布失败或缺文件时设备端只能显示“云端未就绪”。
 
 ## G2 — 软件安装与前端验收（双真机必过）
@@ -44,7 +45,7 @@
 
 ## G4 — 正式推荐门禁（暂未满足）
 
-1. 签名 Manifest + 设备端固定公钥验签（当前只有 SHA256，不能等同认证来源）。
+1. 已实施 Manifest 的 usign/Ed25519 签名与固定公钥验签代码，必须由维护者离线生成密钥、提交公钥并在 GitHub Secret 配置私钥，实际签名产物发布验证通过后才算完成。
 2. GL-MT3600BE 与 N1 各完成 G2/G3 验收，并保留检查结果、实际设备固件信息与日志。
 3. 使用正式打包工具链及两种固件的依赖检查；确认安装后 rpcd/LuCI 兼容。
 4. 无 P0/P1 未解决问题，才允许将版本从预发布提升到正式稳定 Release；无人值守**自动安装不纳入首版**。

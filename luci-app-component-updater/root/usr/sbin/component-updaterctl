@@ -169,8 +169,6 @@ download_once() {
         curl -fSL --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 120 --retry 2 --output "$dest" "$url" >/dev/null 2>&1
     elif command -v uclient-fetch >/dev/null 2>&1; then
         uclient-fetch -T 120 -O "$dest" "$url" >/dev/null 2>&1
-    elif command -v wget >/dev/null 2>&1; then
-        wget -T 120 -O "$dest" "$url" >/dev/null 2>&1
     else
         return 1
     fi
