@@ -35,3 +35,11 @@ jobs:
                 /tmp/rootfs/etc/config/naiveproxy || true
             fi
           done
+          echo '== Original firmware APK version, dependencies and owned files =='
+          docker run --rm -v /tmp/rootfs:/firmware alpine:edge sh -ec '
+            apk --root /firmware info -v naiveproxy
+            apk --root /firmware info -R naiveproxy
+            apk --root /firmware info -L naiveproxy
+            apk --root /firmware info -W /usr/bin/naive
+            apk --root /firmware query -e "name = naiveproxy" -f json || true
+          '
