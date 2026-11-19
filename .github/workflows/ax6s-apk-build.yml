@@ -118,3 +118,72 @@ jobs:
             dist/manifest.json
             dist/release-tag.txt
           if-no-files-found: error
+
+  native-arm64-controller:
+    name: Actual AX6S firmware chroot / full updater upgrade and rollback
+    needs: package-and-rollback
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ax6s-native-apk-verified-candidates
+          path: dist
+      - name: Extract full hash-verified AX6S firmware in isolated ARM64 test root
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq u-boot-tools squashfs-tools
+          curl -fL --retry 3 --connect-timeout 15 --max-time 180 \
+            https://github.com/golldenstj/AX6Sproject/releases/download/2026.11.17-2044-AX6S-MTK/immortalwrt-mediatek-mt7622-xiaomi_redmi-router-ax6s-squashfs-sysupgrade.itb \
+            -o /tmp/ax6s.itb
+          echo 'a963222763cf7c2c1b9bc521730a9d1b06b2e261caca156e6c7ebdebe1afc181  /tmp/ax6s.itb' | sha256sum -c
+          dumpimage -T flat_dt -p 2 -o /tmp/ax6s.squashfs /tmp/ax6s.itb
+          sudo unsquashfs -f -d /tmp/ax6s-native-rootfs /tmp/ax6s.squashfs
+          sudo chroot /tmp/ax6s-native-rootfs /bin/sh -c 'apk --version; command -v jsonfilter; test -f /lib/apk/db/installed'
+          sudo chown -R "$(id -u):$(id -g)" /tmp/ax6s-native-rootfs/tmp
+      - name: Prepare only network-transport fixtures; use actual updater shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo python3 tools/ax6s_native_rootfs_fixtures.py /tmp/ax6s-native-rootfs \
+            dist/manifest.json \
+            dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk \
+            dist/naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.apk
+      - name: Verify fail closed, updated package DB, config preservation and actual APK rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=/tmp/ax6s-native-rootfs
+          sudo chroot "$ROOTFS" /bin/sh -eu -c '
+            set -e
+            source_root=$(sha256sum /usr/bin/naive | awk "{print \$1}")
+            test "$source_root" = 94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861
+            printf "\n# local-user-config-test\n" >> /etc/config/naiveproxy
+            config_sha=$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")
+            /usr/sbin/component-updaterctl check
+            test -s /tmp/component-updater/plan.json
+            cp /tmp/component-acceptance-fixtures/candidate.apk /tmp/good-candidate.apk
+            printf X >> /tmp/component-acceptance-fixtures/candidate.apk
+            if /usr/sbin/component-updaterctl run; then
+              echo "BLOCK: tampered package unexpectedly installed"
+              exit 1
+            fi
+            test ! -r /etc/component-updater/transaction.json
+            test "$(sha256sum /usr/bin/naive | awk "{print \$1}")" = "$source_root"
+            mv /tmp/good-candidate.apk /tmp/component-acceptance-fixtures/candidate.apk
+            /usr/sbin/component-updaterctl check
+            /usr/sbin/component-updaterctl run
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r3"
+            test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
+            test ! -r /etc/component-updater/transaction.json
+            test -s /etc/component-updater/installed/naiveproxy-active.apk
+            /usr/sbin/component-updaterctl rollback
+            test "$(apk --no-network list --installed --manifest naiveproxy)" = "naiveproxy 154.0.8037.49.5-r1"
+            test "$(sha256sum /usr/bin/naive | awk "{print \$1}")" = "$source_root"
+            test "$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")" = "$config_sha"
+            test ! -r /etc/component-updater/transaction.json
+            echo "PASS: Native firmware controller install / rollback with modified config"
+          '
