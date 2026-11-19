@@ -1,7 +1,7 @@
 #!/bin/sh
 # Component Updater / native opkg IPK adapter. Fixed component and package ID.
 # NEVER executes remote scripts and NEVER restarts PassWall.
-set -u
+# OpenWrt jshn.sh (especially 21.02) uses unset globals; nounset breaks RPC calls.
 umask 077
 
 BASE=/etc/component-updater
