@@ -25,12 +25,12 @@ link=$(readlink /tmp/etc/passwall/bin/naive 2>/dev/null || true)
 echo "Before: $old_version SHA256=$old"
 echo "Owner: $owner"
 echo "Runtime link: $link"
-echo 'Checking official release and signed prebuilt artifact...'
+echo 'Checking official release and native IPK candidate...'
 /usr/sbin/component-updaterctl check
 [ -r /tmp/component-updater/plan.json ] || { echo 'NOT_TESTED: no approved install plan'; exit 3; }
 ready=$(jsonfilter -i /tmp/component-updater/plan.json -e '@.ready' 2>/dev/null || true)
-[ "$ready" = true ] || { echo 'NOT_TESTED: signed plan is not ready'; exit 3; }
-echo 'Installing signed candidate; PassWall will NOT be restarted'
+[ "$ready" = true ] || { echo 'NOT_TESTED: verified native IPK plan is not ready'; exit 3; }
+echo 'Installing native IPK candidate; PassWall will NOT be restarted'
 if ! /usr/sbin/component-updaterctl run; then
     echo 'FAIL: install aborted; inspect updater status and persistent transaction record'
     exit 1
@@ -40,7 +40,7 @@ new=$(sha256sum /usr/bin/naive | awk '{print $1}')
 echo "Installed candidate: $(/usr/bin/naive --version 2>&1 | head -n1) SHA256=$new"
 new_pkg=$(opkg status naiveproxy 2>/dev/null | sed -n 's/^Version: //p' | head -n1)
 [ "$old_pkg" != "$new_pkg" ] || { echo 'FAIL: opkg version unchanged after native IPK upgrade'; exit 1; }
-echo 'Restoring previous managed binary...'
+echo 'Restoring previous opkg package...'
 /usr/sbin/component-updaterctl rollback
 restored=$(sha256sum /usr/bin/naive | awk '{print $1}')
 [ "$old" = "$restored" ] || { echo 'FAIL: restored SHA256 mismatch'; exit 1; }

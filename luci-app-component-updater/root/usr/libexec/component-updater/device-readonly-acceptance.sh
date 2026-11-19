@@ -13,17 +13,30 @@ date -Iseconds 2>/dev/null || date
 ubus call system board 2>/dev/null || fail "ubus system board inaccessible"
 cat /etc/openwrt_release 2>/dev/null || fail "/etc/openwrt_release missing"
 uname -a
-for name in ubus rpcd jsonfilter usign sha256sum tar uci opkg; do command_check "$name"; done
+for name in ubus rpcd jsonfilter sha256sum tar uci opkg; do command_check "$name"; done
 if command -v uclient-fetch >/dev/null 2>&1 || command -v curl >/dev/null 2>&1; then
     pass "HTTPS download client available"
 else
     fail "no curl or uclient-fetch"
 fi
-if [ -s /usr/share/component-updater/trust.pub ]; then
-    pass "pinned usign trust.pub installed"
-    sha256sum /usr/share/component-updater/trust.pub
-else
-    fail "public signing key not installed; updates intentionally disabled"
+# V0.2+ installs checked native IPKs; no detached signature/key dependency.
+if command -v opkg >/dev/null 2>&1; then
+    arch=$(sed -n "s/^DISTRIB_ARCH='\\([^']*\\)'.*/\\1/p" /etc/openwrt_release 2>/dev/null | head -n 1)
+    case "$arch" in
+        aarch64_cortex-a53|aarch64_generic) pass "supported opkg architecture: $arch";;
+        *) fail "unsupported opkg architecture: $arch";;
+    esac
+    if opkg status naiveproxy 2>/dev/null | grep -q '^Status: .*installed'; then
+        pass "naiveproxy installed through opkg"
+        opkg status naiveproxy | grep -E '^(Package|Version|Architecture|Status):'
+    else
+        fail "naiveproxy not installed through opkg"
+    fi
+    if opkg files naiveproxy 2>/dev/null | grep -q '^/usr/bin/naive$'; then
+        pass "naive binary is owned by opkg package"
+    else
+        fail "opkg ownership of /usr/bin/naive not confirmed"
+    fi
 fi
 if [ -x /usr/sbin/component-updaterctl ]; then
     pass "component-updaterctl installed"
@@ -56,15 +69,15 @@ if [ -r /usr/share/luci/menu.d/luci-app-component-updater.json ] &&
 else
     fail "LuCI menu or ACL missing"
 fi
-if [ -x /usr/bin/naive ]; then
+if [ -x /usr/bin/naive ] && [ ! -L /usr/bin/naive ]; then
     pass "naive executable detected"
     /usr/bin/naive --version 2>&1 | head -n 2
     sha256sum /usr/bin/naive
     ls -l /usr/bin/naive /tmp/etc/passwall/bin/naive 2>/dev/null || true
     printf 'Active naive PIDs: '; pidof naive 2>/dev/null || true
 else
-    fail "/usr/bin/naive missing"
+    fail "/usr/bin/naive missing or unexpectedly symlinked"
 fi
 df -h /overlay /tmp 2>/dev/null || true
-printf '\nAcceptance summary: PASS=%s BLOCK=%s\n' "$ok" "$failed"
+printf '\nAcceptance summary: PASS=%s BLOCK=%s (read-only; no update performed)\n' "$ok" "$failed"
 [ "$failed" -eq 0 ]
