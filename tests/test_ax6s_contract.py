@@ -40,7 +40,7 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
         self.assertIn("Native APK firmware requires a verified",UI)
 
     def test_signed_release_does_not_enable_unsafe_install(self):
-        self.assertIn('apk mkpkg',MANAGER)
+        self.assertIn('"$APK_TOOL" mkpkg',MANAGER)
         self.assertIn('--info "arch:noarch"',MANAGER)
         self.assertIn('conffiles_static',MANAGER)
         self.assertIn('post-upgrade',MANAGER)
