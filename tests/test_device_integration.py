@@ -47,7 +47,7 @@ st=Path(os.environ['TEST_PKG']);s=json.loads(st.read_text())
 a=sys.argv[1:];cmd=a[0] if a else ''
 if cmd=='status' and len(a)>1 and a[1]=='libgcc1':
  if os.environ.get('TEST_MISSING_LIBGCC'): sys.exit(1)
- print('Package: libgcc1\\nStatus: install user installed')
+ print('Package: libgcc1\nStatus: install user installed')
 elif cmd=='status':
  print('Package: naiveproxy\nVersion: '+s['version']+'\nArchitecture: '+s['arch']+'\nDepends: libc')
 elif cmd=='files':
