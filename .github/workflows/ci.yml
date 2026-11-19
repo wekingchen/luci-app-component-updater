@@ -66,11 +66,23 @@ jobs:
           set -euo pipefail
           tag=luci-app-component-updater-v0.3.0-rc1
           test -s dist/luci-app-component-updater_0.3.0-1_all.ipk
+          pkg=luci-app-component-updater_0.3.0-1_all.ipk
+          (cd dist && sha256sum "$pkg" > SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "::error::Manager tag $tag already exists. Bump the package version before republishing."
+            # Reusing an immutable release is safe only if the candidate
+            # matches the exact checksum of the previously published IPK.
+            previous="$(mktemp -d)"
+            trap 'rm -rf "$previous"' EXIT
+            gh release download "$tag" --pattern SHA256SUMS.txt --dir "$previous"
+            expected="$(awk -v name="$pkg" '$2 == name {print $1}' "$previous/SHA256SUMS.txt")"
+            actual="$(awk '{print $1}' dist/SHA256SUMS.txt)"
+            if [[ -n "$expected" && "$actual" == "$expected" ]]; then
+              echo "::notice::Release $tag already exists with identical IPK; no republish needed."
+              exit 0
+            fi
+            echo "::error::Release $tag exists but IPK contents changed. Bump the manager version."
             exit 1
           fi
-          (cd dist && sha256sum luci-app-component-updater_0.3.0-1_all.ipk > SHA256SUMS.txt)
           gh release create "$tag" dist/luci-app-component-updater_0.3.0-1_all.ipk dist/SHA256SUMS.txt \
             --title "Component Updater V0.3.0 RC1" --latest=false --prerelease \
             --notes "Product interface release candidate. Core update and rollback behavior is unchanged; new responsive Chinese UI, inline action feedback, state mapping and LuCI compatibility regressions are covered by CI. The redesigned interface still requires separate MT3600BE / N1 browser acceptance."
