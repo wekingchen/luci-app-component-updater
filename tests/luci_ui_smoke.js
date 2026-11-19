@@ -133,6 +133,25 @@ async function main() {
   assert.strictEqual(modal,null,'APK protection must reject direct modal invocations');
   dashboard.currentStatus = status;
 
+  // Production APK adapter uses the very same UI controls when a verified
+  // candidate exists. Unknown APK firmware still fails closed.
+  const liveApk = {...status, package_manager:'apk', compatibility:'ax6s-apk-native',
+    firmware_target:'mediatek/mt7622', check_state:'ready'};
+  const liveNodes = dashboard.renderContent(liveApk, plan);
+  assert(visibleText(liveNodes).includes('原生 APK'));
+  assert(visibleText(liveNodes).includes('新版本已准备就绪'));
+  for (const caption of ['检查官方更新','下载并更新','恢复上一个版本'])
+    assert.strictEqual(disabledInRealDom(button(liveNodes,caption)),false,'native APK: '+caption);
+  dashboard.currentStatus = liveApk;
+  dashboard.currentPlan = plan;
+  modal = null;
+  dashboard.confirmInstall();
+  assert(modal && visibleText(modal.content).includes('备份当前版本'));
+  dashboard.confirmRollback();
+  assert(modal && visibleText(modal.content).includes('还原'));
+  dashboard.currentStatus = status;
+  modal = null;
+
   // Never surface raw English diagnostic messages in white LuCI toast boxes.
   dashboard.notify({status:'up_to_date',message:'Installed native IPK matches the latest official build'});
   assert(visibleText(dashboard.renderContent(status,plan)).includes('当前安装版本与官方最新构建一致'));
