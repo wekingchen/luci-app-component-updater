@@ -1,0 +1,37 @@
+name: AX6S original firmware package discovery (temporary)
+on:
+  push:
+    branches: [feat/v0.5.0-ax6s-apk-update-rollback]
+    paths: [.github/workflows/ax6s-firmware-probe.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  examine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Obtain exact hash-matched AX6S firmware and examine package layers
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq u-boot-tools squashfs-tools file
+          curl -fL --retry 3 --connect-timeout 15 --max-time 240 \
+            https://github.com/golldenstj/AX6Sproject/releases/download/2026.11.17-2044-AX6S-MTK/immortalwrt-mediatek-mt7622-xiaomi_redmi-router-ax6s-squashfs-sysupgrade.itb \
+            -o /tmp/ax6s.itb
+          echo 'a963222763cf7c2c1b9bc521730a9d1b06b2e261caca156e6c7ebdebe1afc181  /tmp/ax6s.itb' | sha256sum -c
+          dumpimage -l /tmp/ax6s.itb
+          for i in 0 1 2 3; do
+            dumpimage -T flat_dt -p "$i" -o "/tmp/layer$i" /tmp/ax6s.itb || continue
+            file "/tmp/layer$i"
+            if file "/tmp/layer$i" | grep -qi 'Squashfs'; then
+              unsquashfs -ll "/tmp/layer$i" | grep -E '(lib/apk/db|usr/bin/naive|etc/init.d/naiveproxy|etc/config/naiveproxy)' | head -n 25 || true
+              mkdir -p /tmp/rootfs
+              unsquashfs -f -d /tmp/rootfs "/tmp/layer$i" \
+                'lib/apk/db/*' 'usr/bin/naive' 'etc/init.d/naiveproxy' 'etc/config/naiveproxy' || true
+              ls -l /tmp/rootfs/lib/apk/db/ /tmp/rootfs/usr/bin/naive \
+                /tmp/rootfs/etc/init.d/naiveproxy /tmp/rootfs/etc/config/naiveproxy || true
+              sha256sum /tmp/rootfs/usr/bin/naive /tmp/rootfs/etc/init.d/naiveproxy \
+                /tmp/rootfs/etc/config/naiveproxy || true
+            fi
+          done
