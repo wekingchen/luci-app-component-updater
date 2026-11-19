@@ -360,9 +360,9 @@ jobs:
   publish-native-apk-candidate:
     name: Publish immutable AX6S native APK preview after native CI gates
     needs: [package-and-rollback, native-arm64-controller]
-    # Hardware must be explicitly accepted once before automatic cloud
-    # publishing is enabled. The feature branch never publishes.
-    if: ${{ github.ref == 'refs/heads/main' && vars.AX6S_APK_AUTO_PUBLISH == 'true' && github.event_name != 'pull_request' }}
+    # V0.5.0 RC explicitly authorized one-time on merge; recurring automatic
+    # release requires AX6S hardware acceptance. PR never publishes.
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (vars.AX6S_APK_AUTO_PUBLISH == 'true' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-v0.5.0-rc1]'))) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
