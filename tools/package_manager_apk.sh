@@ -11,10 +11,8 @@ RELEASE=$(sed -n 's/^PKG_RELEASE:=//p' "$APP/Makefile" | head -n1)
 [ -n "$VERSION" ] && [ -n "$RELEASE" ] || { echo 'missing package version'; exit 1; }
 VERSION="$VERSION-r$RELEASE"
 command -v "$APK_TOOL" >/dev/null 2>&1 || { echo 'apk-tools host executable missing'; exit 1; }
-"$APK_TOOL" mkpkg --help >/dev/null 2>&1 || {
-    echo 'apk-tools 3 mkpkg is required; do not use APKv2 tar fallback'
-    exit 1
-}
+# Run the actual mkpkg command later: older apk-tools builds return an
+# error for '--help' even when the non-minimal mkpkg subcommand exists.
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 stage="$work/root"
