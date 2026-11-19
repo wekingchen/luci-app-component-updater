@@ -29,12 +29,12 @@ class NativeArtifactTests(unittest.TestCase):
         self.assertEqual(ctl['Version'],self.ver);self.assertEqual(b,self.bin)
     def test_ancient_opkg_uses_exact_ar_names_without_slash(self):
         blob=self.asset.read_bytes()
-        self.assertTrue(blob.startswith(b'!<arch>\\n'))
+        self.assertTrue(blob.startswith(b'!<arch>\n'))
         pos=8
         names=[]
         while pos < len(blob):
             header=blob[pos:pos+60]
-            self.assertEqual(header[58:],b'`\\n')
+            self.assertEqual(header[58:],b'`\n')
             member=header[:16].decode('ascii').rstrip(' ')
             self.assertFalse(member.endswith('/'),member)
             names.append(member)
