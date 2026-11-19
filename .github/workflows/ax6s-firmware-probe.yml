@@ -28,11 +28,11 @@ jobs:
               unsquashfs -ll "/tmp/layer$i" | grep -E '(lib/apk/db|usr/bin/naive|etc/init.d/naiveproxy|etc/config/naiveproxy)' | head -n 25 || true
               mkdir -p /tmp/rootfs
               unsquashfs -f -d /tmp/rootfs "/tmp/layer$i" \
-                'lib/apk/db/*' 'etc/apk/*' 'usr/bin/naive' 'etc/init.d/naiveproxy' 'etc/config/naiveproxy' || true
+                'lib/apk/db/*' 'lib/apk/packages/naiveproxy.*' 'etc/apk/*' 'usr/bin/naive' 'etc/init.d/naiveproxy' 'etc/config/naiveproxy' || true
               ls -l /tmp/rootfs/lib/apk/db/ /tmp/rootfs/usr/bin/naive \
                 /tmp/rootfs/etc/init.d/naiveproxy /tmp/rootfs/etc/config/naiveproxy || true
               sha256sum /tmp/rootfs/usr/bin/naive /tmp/rootfs/etc/init.d/naiveproxy \
-                /tmp/rootfs/etc/config/naiveproxy || true
+                /tmp/rootfs/etc/config/naiveproxy /tmp/rootfs/lib/apk/packages/naiveproxy.* || true
             fi
           done
           echo '== Original firmware APK version, dependencies and owned files =='
