@@ -39,3 +39,32 @@ jobs:
           name: luci-app-component-updater-ipk
           path: dist/*.ipk
           if-no-files-found: error
+
+  publish-luci-candidate:
+    name: Publish verified LuCI manager pre-release
+    needs: test-and-package
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: luci-app-component-updater-ipk
+          path: dist
+      - name: Publish immutable tested manager IPK as prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=luci-app-component-updater-v0.2.1-rc1
+          test -s dist/luci-app-component-updater_0.2.1-1_all.ipk
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Manager tag $tag already exists. Bump the package version before republishing."
+            exit 1
+          fi
+          (cd dist && sha256sum luci-app-component-updater_0.2.1-1_all.ipk > SHA256SUMS.txt)
+          gh release create "$tag" dist/luci-app-component-updater_0.2.1-1_all.ipk dist/SHA256SUMS.txt \
+            --title "Component Updater V0.2.1 RC1" --latest=false --prerelease \
+            --notes "Release candidate only. CI has verified native OpenWrt 21.02.5 / 24.10.5 opkg install, old-version recovery, real rpcd executable plugin, UCI configuration preservation and LuCI JS actions. GL-MT3600BE / N1 customized-firmware hardware validation remains separate."
