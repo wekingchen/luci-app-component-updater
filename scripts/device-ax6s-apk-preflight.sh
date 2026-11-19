@@ -30,7 +30,7 @@ fi
 if command -v apk >/dev/null 2>&1; then
     if apk info -e naiveproxy >/dev/null 2>&1; then pass 'NaiveProxy 已登记在 APK 数据库'; else block 'APK 数据库中没有 NaiveProxy'; fi
     printf '\n%s\n' '--- 已安装 NaiveProxy 版本 ---'
-    apk info -v naiveproxy 2>&1 | head -n10 || true
+    apk --no-network list --installed --manifest naiveproxy 2>&1 | head -n10 || true
     printf '\n%s\n' '--- 当前 APK 软件包拥有的文件 ---'
     apk info -L naiveproxy 2>&1 | head -n60 || true
     printf '\n%s\n' '--- 程序文件归属 ---'
