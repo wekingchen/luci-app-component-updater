@@ -197,6 +197,18 @@ jobs:
             sha256sum -c /tmp/naive-old.sha
             opkg status naiveproxy | grep -Fx "Version: 150.0.7871.63.1-r1"
           '
+      - name: Inspect rpcd and ubus prerequisites in official rootfs
+        run: |
+          sudo chroot "$ROOTFS" /bin/sh -c '
+            echo "== baseline components =="
+            for name in ubusd ubus rpcd uci jsonfilter; do
+              command -v "$name" || true
+            done
+            echo "== rpcd packages =="
+            opkg status rpcd 2>/dev/null | grep -E "^(Package|Version|Status):" || true
+            echo "== package feeds =="
+            cat /etc/opkg/distfeeds.conf 2>/dev/null || true
+          '
       - name: Verify native opkg installs LuCI manager and preserves UCI configuration
         shell: bash
         run: |
