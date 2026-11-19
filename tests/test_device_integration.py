@@ -45,7 +45,10 @@ from pathlib import Path
 from package_component_ipk import inspect_ipk
 st=Path(os.environ['TEST_PKG']);s=json.loads(st.read_text())
 a=sys.argv[1:];cmd=a[0] if a else ''
-if cmd=='status':
+if cmd=='status' and len(a)>1 and a[1]=='libgcc1':
+ if os.environ.get('TEST_MISSING_LIBGCC'): sys.exit(1)
+ print('Package: libgcc1\\nStatus: install user installed')
+elif cmd=='status':
  print('Package: naiveproxy\nVersion: '+s['version']+'\nArchitecture: '+s['arch']+'\nDepends: libc')
 elif cmd=='files':
  print('Package naiveproxy files:\n/usr/bin/naive')
@@ -155,6 +158,13 @@ else:sys.exit(2)
         self.assertEqual(rc,0,out)
         self.assertEqual(self.bin.read_bytes(),binary('150.0.7871.63'))
         self.assertEqual(json.loads(self.pkg.read_text())['version'],NEW)
+
+    def test_missing_libgcc_dependency_blocks_before_download_and_install(self):
+        rc,out=self.call('check',{'TEST_MISSING_LIBGCC':'1'})
+        self.assertNotEqual(rc,0,out)
+        self.assertEqual(out['status'],'unsupported')
+        self.assertFalse((self.cache/'plan.json').exists())
+        self.assertEqual(json.loads(self.pkg.read_text())['version'],OLD)
 
     def test_corrupt_ipk_never_installs(self):
         self.checked()

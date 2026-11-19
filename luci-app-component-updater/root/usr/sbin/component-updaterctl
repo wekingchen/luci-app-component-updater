@@ -178,6 +178,11 @@ status() {
     json_add_string ready "${r:-false}"
     json_dump; echo
 }
+runtime_dep_ok() {
+    # Never let opkg auto-install dependency packages from unknown/stale feeds
+    # during a NaiveProxy update. Require the local libgcc1 runtime beforehand.
+    opkg status libgcc1 2>/dev/null | grep -q '^Status: .*installed'
+}
 check_update() {
     create_dirs || return 1
     rm -f "$PLAN"
@@ -186,6 +191,7 @@ check_update() {
     a=$(arch) || { check_msg unsupported 'Unsupported OpenWrt architecture'; return 1; }
     [ -x "$BINARY" ] && [ ! -L "$BINARY" ] || { check_msg unsupported 'Existing naive binary is missing or symlinked'; return 1; }
     [ -n "$(package_version)" ] || { check_msg unsupported 'naiveproxy must already be installed through opkg'; return 1; }
+    runtime_dep_ok || { check_msg unsupported 'Missing installed libgcc1 runtime dependency; no package changes made'; return 1; }
     space_ok || { check_msg unsupported 'Insufficient tmp or overlay space'; return 1; }
     download https://api.github.com/repos/klzgrad/naiveproxy/releases/latest "$CACHE/official.tmp" ||
         { check_msg error 'Official GitHub API unavailable'; return 1; }
@@ -327,6 +333,7 @@ perform_install() {
     [ -x "$BINARY" ] && [ ! -L "$BINARY" ] && snapshot_owner_ok ||
         { job_record failed 'Package ownership is unsafe or includes additional files'; return 1; }
     space_ok || { job_record failed 'Not enough storage'; return 1; }
+    runtime_dep_ok || { job_record failed 'libgcc1 must already be installed'; return 1; }
     build_tag=$(jsonval "$PLAN" '@.build_tag')
     filename=$(jsonval "$PLAN" '@.filename')
     desired=$(jsonval "$PLAN" '@.package_version')
