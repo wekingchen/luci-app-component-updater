@@ -142,7 +142,9 @@ jobs:
           echo 'a963222763cf7c2c1b9bc521730a9d1b06b2e261caca156e6c7ebdebe1afc181  /tmp/ax6s.itb' | sha256sum -c
           dumpimage -T flat_dt -p 2 -o /tmp/ax6s.squashfs /tmp/ax6s.itb
           sudo unsquashfs -f -d /tmp/ax6s-native-rootfs /tmp/ax6s.squashfs
+          sudo mount -t proc proc /tmp/ax6s-native-rootfs/proc
           sudo chroot /tmp/ax6s-native-rootfs /bin/sh -c 'apk --version; command -v jsonfilter; test -f /lib/apk/db/installed'
+          sudo chroot /tmp/ax6s-native-rootfs /bin/sh -c 'df -Pk /tmp /etc; ls -l /proc/mounts'
           sudo chown -R "$(id -u):$(id -g)" /tmp/ax6s-native-rootfs/tmp
       - name: Prepare only network-transport fixtures; use actual updater shell
         shell: bash
