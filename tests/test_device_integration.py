@@ -84,7 +84,7 @@ else:sys.exit(2)
  esac
 }
 """
-        controller=controller.replace('space_ok() {',stub+'\nspace_ok() {')
+        controller=controller.replace('release_digest() {',stub+'\nrelease_digest() {')
         self.cmd=self.root/'component-updaterctl'
         self.cmd.write_text(controller);self.cmd.chmod(0o755)
         self.build_fixture()
