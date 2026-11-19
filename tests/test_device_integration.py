@@ -134,7 +134,7 @@ else:sys.exit(2)
         # Older 21.02-era GL.iNet opkg requires exact archive member names:
         # GNU ar-style suffix '/' makes even a valid IPK unparsable.
         recovery=oldpack[0].read_bytes()
-        self.assertTrue(recovery.startswith(b'!<arch>\\n'))
+        self.assertTrue(recovery.startswith(b'!<arch>\n'))
         pos=8; members=[]
         while pos<len(recovery):
             header=recovery[pos:pos+60]
