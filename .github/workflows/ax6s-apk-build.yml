@@ -96,14 +96,14 @@ jobs:
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks add \
               /src/dist/naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.apk
-            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 info -v naiveproxy | \
-              grep -Fx naiveproxy-154.0.8037.49.5-r3
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy | \
+              grep -Fx 'naiveproxy 154.0.8037.49.5-r3'
             test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" != "$original"
             apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
               --no-scripts --no-commit-hooks add \
               /src/dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk
-            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 info -v naiveproxy | \
-              grep -Fx naiveproxy-154.0.8037.49.5-r1
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 list --installed --manifest naiveproxy | \
+              grep -Fx 'naiveproxy 154.0.8037.49.5-r1'
             test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" = "$original"
             test "$(sha256sum /tmp/ax6s-root/etc/init.d/naiveproxy | cut -d " " -f1)" = 4d9dec9eb81586c5ea932260500329b68fc60f8c38af0712516b7a0f0ae59849
             echo "AX6S native APK install and rollback: PASS"
