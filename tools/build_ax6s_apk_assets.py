@@ -79,7 +79,7 @@ def check_original_metadata(root: Path, apk_tool: str) -> None:
                            capture_output=True,text=True).stdout
     paths = {line.strip().lstrip("/") for line in files.splitlines()
              if line.strip().startswith(("etc/","usr/","/etc/","/usr/"))}
-    if paths != set(BASE_SHA).union(METADATA_NAMES):
+    if paths not in (set(BASE_SHA),set(BASE_SHA).union(METADATA_NAMES)):
         raise ValueError("original APK package owns unexpected paths: "+repr(sorted(paths)))
 
 
