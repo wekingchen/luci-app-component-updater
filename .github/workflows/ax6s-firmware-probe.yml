@@ -28,7 +28,7 @@ jobs:
               unsquashfs -ll "/tmp/layer$i" | grep -E '(lib/apk/db|usr/bin/naive|etc/init.d/naiveproxy|etc/config/naiveproxy)' | head -n 25 || true
               mkdir -p /tmp/rootfs
               unsquashfs -f -d /tmp/rootfs "/tmp/layer$i" \
-                'lib/apk/db/*' 'usr/bin/naive' 'etc/init.d/naiveproxy' 'etc/config/naiveproxy' || true
+                'lib/apk/db/*' 'etc/apk/*' 'usr/bin/naive' 'etc/init.d/naiveproxy' 'etc/config/naiveproxy' || true
               ls -l /tmp/rootfs/lib/apk/db/ /tmp/rootfs/usr/bin/naive \
                 /tmp/rootfs/etc/init.d/naiveproxy /tmp/rootfs/etc/config/naiveproxy || true
               sha256sum /tmp/rootfs/usr/bin/naive /tmp/rootfs/etc/init.d/naiveproxy \
@@ -37,9 +37,10 @@ jobs:
           done
           echo '== Original firmware APK version, dependencies and owned files =='
           docker run --rm -v /tmp/rootfs:/firmware alpine:edge sh -ec '
-            apk --root /firmware info -v naiveproxy
-            apk --root /firmware info -R naiveproxy
-            apk --root /firmware info -L naiveproxy
-            apk --root /firmware info -W /usr/bin/naive
-            apk --root /firmware query -e "name = naiveproxy" -f json || true
+            ls -l /firmware/etc/apk/ /firmware/lib/apk/db/
+            apk --root /firmware --arch aarch64_cortex-a53 info -v naiveproxy
+            apk --root /firmware --arch aarch64_cortex-a53 info -R naiveproxy
+            apk --root /firmware --arch aarch64_cortex-a53 info -L naiveproxy
+            apk --root /firmware --arch aarch64_cortex-a53 info -W /usr/bin/naive
+            apk --root /firmware --arch aarch64_cortex-a53 query -e "name = naiveproxy" -f json || true
           '
