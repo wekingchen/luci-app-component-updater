@@ -7,6 +7,17 @@ const base = 'luci-app-component-updater/htdocs/luci-static/resources/view/compo
 const E = (tag, attributes, children) => ({
   tag, attributes: attributes || {}, children: children == null ? [] : children
 });
+// LuCI dom.attr(): null is skipped, all other non-functions use setAttribute().
+function disabledInRealDom(node) {
+  return Object.prototype.hasOwnProperty.call(node.attributes, 'disabled') &&
+    node.attributes.disabled != null;
+}
+function simulateEnabledClick(node) {
+  assert.strictEqual(typeof node.attributes.click,'function');
+  if (disabledInRealDom(node)) return false;
+  node.attributes.click();
+  return true;
+}
 const callbacks = [];
 let modal = null;
 const ctx = {
@@ -53,10 +64,31 @@ const buttons=nodes.filter(n=>n.tag==='button');
 assert.strictEqual(buttons.length,3);
 const update=buttons.find(b=>b.children==='下载并更新');
 assert(update);
-assert.strictEqual(update.attributes.disabled,false);
+// Regression: LuCI turns { disabled: false } into HTML disabled="false",
+ // which still disables the button in *real browsers*.
+const checkButton=buttons.find(b=>b.children==='检查官方更新');
+const rollbackButton=buttons.find(b=>b.children==='恢复上一个版本');
+assert(checkButton && rollbackButton);
+assert.strictEqual(disabledInRealDom(checkButton),false,
+  'idle status MUST permit the official update check to be clicked');
+assert.strictEqual(disabledInRealDom(update),false);
+assert.strictEqual(disabledInRealDom(rollbackButton),false);
+assert.strictEqual(simulateEnabledClick(checkButton),true);
+assert(callbacks.includes('check'));
+
 const readOnlyNodes=flatten(dashboard.renderContent({...status,job_state:'installing'},plan));
-assert.strictEqual(readOnlyNodes.find(b=>b.tag==='button'&&b.children==='下载并更新').attributes.disabled,true);
-assert.strictEqual(flatten(dashboard.renderContent(status,{ready:'false'})).find(b=>b.tag==='button'&&b.children==='下载并更新').attributes.disabled,true);
+assert.strictEqual(disabledInRealDom(readOnlyNodes.find(b=>b.tag==='button'&&b.children==='下载并更新')),true);
+assert.strictEqual(disabledInRealDom(readOnlyNodes.find(b=>b.tag==='button'&&b.children==='检查官方更新')),true);
+assert.strictEqual(disabledInRealDom(readOnlyNodes.find(b=>b.tag==='button'&&b.children==='恢复上一个版本')),true);
+const noPlanButtons=flatten(dashboard.renderContent(
+  {...status, check_state:'', job_state:'idle'}, {ready:'false'}
+)).filter(b=>b.tag==='button');
+assert.strictEqual(disabledInRealDom(noPlanButtons.find(b=>b.children==='下载并更新')),true);
+assert.strictEqual(disabledInRealDom(noPlanButtons.find(b=>b.children==='检查官方更新')),false,
+  'check must remain usable before the first update check');
+assert.strictEqual(disabledInRealDom(noPlanButtons.find(b=>b.children==='恢复上一个版本')),false,
+  'rollback must remain clickable when idle; backend checks actual backup');
+
 dashboard.confirmInstall();
 assert(modal && modal.title.includes('NaiveProxy'));
 dashboard.confirmRollback();

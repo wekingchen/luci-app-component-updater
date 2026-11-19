@@ -1,5 +1,7 @@
 # luci-app-component-updater
 
+> V0.2.3 RC1 修复老版 LuCI 的操作按钮禁用属性：DOM 的 `disabled="false"` 仍会禁止点击，所以所有未禁用按钮必须使用 `null` 删除属性。新增模拟 LuCI 实际 DOM attribute 行为的回归测试。
+
 OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 `--lzma --best` 压缩，然后生成**OpenWrt 原生 gzip(tar) 格式 opkg IPK**，分架构发布到 Releases。
 
 ## 设备与边界

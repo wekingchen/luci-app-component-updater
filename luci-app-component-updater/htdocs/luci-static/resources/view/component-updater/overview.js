@@ -70,9 +70,9 @@ return view.extend({
             E('p', {'class':'description'}, 'GitHub Actions 在云端预先压缩并发布；点击更新不会现场等待压缩。如果发现官方新版但尚无候选包，此页显示准备中，稍后重新检查即可。'),
             E('p', {'class':'description',style:'margin-top:1em'}, '使用 opkg 安装经过校验的原生 IPK，opkg 版本同步更新；安装前准备旧版恢复 IPK。更新器不会主动重启 PassWall；已运行进程可能暂时保持旧版本。'),
             E('div', {style:'display:flex;flex-wrap:wrap;gap:0.6em;margin-top:1em'}, [
-                E('button', {'class':'btn cbi-button cbi-button-action', disabled:jobBusy, click:function(){self.handleCheck();}}, '检查官方更新'),
-                E('button', {'class':'btn cbi-button cbi-button-positive', disabled:!ready || jobBusy, click:function(){self.confirmInstall();}}, '下载并更新'),
-                E('button', {'class':'btn cbi-button cbi-button-neutral', disabled:jobBusy, click:function(){self.confirmRollback();}}, '恢复上一个版本')
+                E('button', {'class':'btn cbi-button cbi-button-action', disabled:jobBusy ? true : null, click:function(){return self.handleCheck();}}, '检查官方更新'),
+                E('button', {'class':'btn cbi-button cbi-button-positive', disabled:(!ready || jobBusy) ? true : null, click:function(){self.confirmInstall();}}, '下载并更新'),
+                E('button', {'class':'btn cbi-button cbi-button-neutral', disabled:jobBusy ? true : null, click:function(){self.confirmRollback();}}, '恢复上一个版本')
             ])
         ]);
         var extra = E('div', {'class':'cbi-section', style:'margin-top:1.5em'}, [
@@ -149,7 +149,7 @@ return view.extend({
         poll.add(this.refresh.bind(this), 5);
         return E('div', {}, [
             E('h2', {}, '组件更新'),
-            E('p', {}, '通用组件更新引擎 · V0.2.2 首批支持 NaiveProxy'),
+            E('p', {}, '通用组件更新引擎 · V0.2.3 首批支持 NaiveProxy'),
             this.page
         ]);
     }
