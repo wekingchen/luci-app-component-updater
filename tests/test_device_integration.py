@@ -133,7 +133,8 @@ download() {
         env['PATH']=str(self.mockbin)+os.pathsep+env['PATH']
         env['TEST_FIXTURES']=str(self.fixtures)
         if extra: env.update(extra)
-        r=subprocess.run(['/bin/sh',str(self.cmd),action],cwd=self.root,env=env,capture_output=True,text=True,timeout=25)
+        shell = ['busybox', 'sh'] if env.get('COMPONENT_TEST_SHELL') == 'busybox' else ['/bin/sh']
+        r=subprocess.run(shell+[str(self.cmd),action],cwd=self.root,env=env,capture_output=True,text=True,timeout=25)
         try:
             out=json.loads(r.stdout.strip().splitlines()[-1])
         except Exception:
