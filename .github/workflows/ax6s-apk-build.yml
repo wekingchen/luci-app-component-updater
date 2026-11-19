@@ -1,0 +1,118 @@
+name: Component Builder / AX6S native APK install and rollback
+on:
+  push:
+    branches: [main, feat/v0.5.0-ax6s-apk-update-rollback]
+    paths:
+      - .github/workflows/ax6s-apk-build.yml
+      - tools/build_ax6s_apk_assets.py
+      - tools/package_component_ipk.py
+      - tests/test_ax6s_contract.py
+      - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+  pull_request:
+    paths:
+      - .github/workflows/ax6s-apk-build.yml
+      - tools/build_ax6s_apk_assets.py
+      - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ax6s-apk-release
+  cancel-in-progress: false
+jobs:
+  package-and-rollback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract original AX6S APK database and owned files from verified firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq u-boot-tools squashfs-tools
+          mkdir -p dist source
+          curl -fL --retry 3 --connect-timeout 15 --max-time 180 \
+            https://github.com/golldenstj/AX6Sproject/releases/download/2026.11.17-2044-AX6S-MTK/immortalwrt-mediatek-mt7622-xiaomi_redmi-router-ax6s-squashfs-sysupgrade.itb \
+            -o /tmp/ax6s.itb
+          echo 'a963222763cf7c2c1b9bc521730a9d1b06b2e261caca156e6c7ebdebe1afc181  /tmp/ax6s.itb' | sha256sum -c
+          dumpimage -T flat_dt -p 2 -o /tmp/ax6s.squashfs /tmp/ax6s.itb
+          unsquashfs -f -d firmware-root /tmp/ax6s.squashfs \
+            'lib/apk/db/*' 'lib/apk/packages/naiveproxy.*' 'etc/apk/*' \
+            'usr/bin/naive' 'etc/init.d/naiveproxy' 'etc/config/naiveproxy'
+          test -s firmware-root/lib/apk/db/installed
+          sha256sum firmware-root/usr/bin/naive
+      - name: Retrieve existing upstream-verified UPX package (no recompression)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(gh api repos/klzgrad/naiveproxy/releases/latest --jq .tag_name)
+          case "$tag" in v[0-9]*) ;; *) exit 1;; esac
+          source_tag="component-naiveproxy-$tag-upx521-r3"
+          gh release download "$source_tag" --dir source --pattern manifest.json
+          gh release download "$source_tag" --dir source --pattern "naiveproxy_*_aarch64_cortex-a53.ipk"
+          test -s source/manifest.json
+          ls -lh source/
+      - name: Build exact APKv3 recovery and update using pinned full apk-tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/src" -v "$PWD/firmware-root:/firmware" -w /src alpine:edge sh -ec '
+              apk add --no-cache build-base git meson ninja pkgconf openssl-dev zlib-dev linux-headers python3
+              git clone -q --depth=1 --branch v3.0.7 https://github.com/alpinelinux/apk-tools.git /tmp/apk-src
+              test "$(git -C /tmp/apk-src rev-parse HEAD)" = 522171e05c72c8a0dd2a9392f053c89196fbdb9b
+              meson setup /tmp/apk-build /tmp/apk-src \
+                -Dminimal=false -Dhelp=disabled -Ddocs=disabled -Dlua=disabled \
+                -Dpython=disabled -Dtests=disabled -Dzstd=disabled -Durl_backend=wget
+              ninja -C /tmp/apk-build
+              set -- source/naiveproxy_*_aarch64_cortex-a53.ipk
+              test "$#" -eq 1
+              python3 tools/build_ax6s_apk_assets.py \
+                --rootfs /firmware --source-manifest source/manifest.json \
+                --source-ipk "$1" --apk-tool /tmp/apk-build/src/apk --out dist
+              /tmp/apk-build/src/apk adbdump --format json \
+                dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk \
+                > dist/ax6s-recovery-adb.json
+              grep -q naiveproxy dist/ax6s-recovery-adb.json
+              for package in dist/naiveproxy_*.apk; do
+                /tmp/apk-build/src/apk --allow-untrusted verify "$package"
+              done
+            '
+      - name: Real APK database install and downgrade in isolated AX6S rootfs
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src" -w /src alpine:edge sh -ec '
+            set -eu
+            cp -a firmware-root /tmp/ax6s-root
+            original=$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)
+            test "$original" = 94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
+              --no-scripts --no-commit-hooks --simulate add \
+              /src/dist/naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.apk
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
+              --no-scripts --no-commit-hooks add \
+              /src/dist/naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.apk
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 info -v naiveproxy | \
+              grep -Fx naiveproxy-154.0.8037.49.5-r3
+            test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" != "$original"
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 --no-network --allow-untrusted \
+              --no-scripts --no-commit-hooks add \
+              /src/dist/naiveproxy_154.0.8037.49.5-r1_aarch64_cortex-a53.apk
+            apk --root /tmp/ax6s-root --arch aarch64_cortex-a53 info -v naiveproxy | \
+              grep -Fx naiveproxy-154.0.8037.49.5-r1
+            test "$(sha256sum /tmp/ax6s-root/usr/bin/naive | cut -d " " -f1)" = "$original"
+            test "$(sha256sum /tmp/ax6s-root/etc/init.d/naiveproxy | cut -d " " -f1)" = 4d9dec9eb81586c5ea932260500329b68fc60f8c38af0712516b7a0f0ae59849
+            echo "AX6S native APK install and rollback: PASS"
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ax6s-native-apk-verified-candidates
+          path: |
+            dist/*.apk
+            dist/manifest.json
+            dist/release-tag.txt
+          if-no-files-found: error
