@@ -33,7 +33,8 @@ def paged(path: str):
     items = []
     page = 1
     while True:
-        part = gh_api("repos/%s/%s?per_page=%d&page=%d" % (REPOSITORY, path, PAGE_SIZE, page))
+        separator = "&" if "?" in path else "?"
+        part = gh_api("repos/%s/%s%sper_page=%d&page=%d" % (REPOSITORY, path, separator, PAGE_SIZE, page))
         if not isinstance(part, list):
             raise RuntimeError("GitHub API returned a non-list response")
         items.extend(part)
