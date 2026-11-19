@@ -1,6 +1,6 @@
 # luci-app-component-updater
 
-> V0.2.3 RC1 修复老版 LuCI 的操作按钮禁用属性：DOM 的 `disabled="false"` 仍会禁止点击，所以所有未禁用按钮必须使用 `null` 删除属性。新增模拟 LuCI 实际 DOM attribute 行为的回归测试。
+> **V0.3.0 RC1 · 中文产品化界面**：首页改为组件状态、版本对比、三项主要操作和折叠的诊断详情；下载设置独立成页。响应式布局覆盖手机与桌面，后端英文状态统一映射为中文，操作反馈以内嵌提示替代低对比度通知。保留 V0.2.3 的旧版 LuCI 按钮兼容修复及已验证的原生 IPK 安装与恢复后端。
 
 OpenWrt 通用应用更新平台，首个适配程序 **NaiveProxy**。通用 GitHub Actions 提前下载官方稳定版并使用 UPX 5.2.1 `--lzma --best` 压缩，然后生成**OpenWrt 原生 gzip(tar) 格式 opkg IPK**，分架构发布到 Releases。
 
@@ -61,7 +61,7 @@ python3 tools/validate_artifacts.py --manifest dist/manifest.json
 python3 tools/package_ipk.py --out dist
 ```
 
-通用构建工作流预先发布两个设备架构的 NaiveProxy 原生 IPK；LuCI 更新时**不会等待现场 UPX 压缩**。默认分支已经启用定时提前构建；本轮 r3 开发候选仍留在 Draft PR，不会从 PR 发布生产 Release。
+通用构建工作流预先发布两个设备架构的 NaiveProxy 原生 IPK；LuCI 更新时**不会等待现场 UPX 压缩**。默认分支已经启用定时提前构建；开发分支仅运行自动化测试并输出候选 IPK；合入默认分支后，才会通过发布工作流生成新的预发布版本。
 
 ### 真机只读检查
 
@@ -77,4 +77,4 @@ sh /usr/libexec/component-updater/device-readonly-acceptance.sh
 COMPONENT_ACCEPT_LIVE=I_UNDERSTAND sh /usr/libexec/component-updater/device-live-acceptance.sh --install-and-rollback
 ```
 
-详见 [验收门禁](docs/acceptance-gates.md) 和 [GitHub 反代 / 回滚细节](docs/signing-proxy-device-acceptance.md)。**CI 成功不代表两台真机已经验收。**
+详见 [验收门禁](docs/acceptance-gates.md)、[GitHub 反代 / 回滚细节](docs/signing-proxy-device-acceptance.md) 和 [界面验收清单](docs/product-ui-acceptance.md)。**CI 成功不代表两台真机已经验收。**
