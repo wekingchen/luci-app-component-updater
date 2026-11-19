@@ -137,7 +137,9 @@ def extract_member(blob: bytes, member_name: str, kind: str = "tar.xz") -> bytes
     if kind in ("tar.xz", "tar.gz"):
         mode = "r:xz" if kind == "tar.xz" else "r:gz"
         with tarfile.open(fileobj=io.BytesIO(blob), mode=mode) as t:
-            candidates = [m for m in t.getmembers() if m.name.removeprefix("./") == member_name and m.isfile()]
+            candidates = [m for m in t.getmembers() if m.isfile() and
+                          m.name.rsplit("/", 1)[-1] == member_name and
+                          not m.name.startswith("/") and ".." not in m.name.split("/")]
             if len(candidates) != 1:
                 raise BuildError("expected exactly one regular binary in official archive")
             member = candidates[0]
@@ -149,7 +151,9 @@ def extract_member(blob: bytes, member_name: str, kind: str = "tar.xz") -> bytes
             return extracted.read(MAX_BINARY + 1)
     if kind == "zip":
         with zipfile.ZipFile(io.BytesIO(blob)) as z:
-            members = [m for m in z.infolist() if m.filename == member_name and not m.is_dir()]
+            members = [m for m in z.infolist() if m.filename.rsplit("/", 1)[-1] == member_name and
+                       not m.filename.startswith("/") and ".." not in m.filename.split("/") and
+                       not m.is_dir()]
             if len(members) != 1 or members[0].file_size > MAX_BINARY:
                 raise BuildError("invalid binary in ZIP archive")
             with z.open(members[0]) as f:
