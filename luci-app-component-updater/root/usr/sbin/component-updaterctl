@@ -14,6 +14,7 @@ JOB=$CACHE/job.json
 TXN=$BASE/transaction.json
 BINARY=/usr/bin/naive
 GITHUB=wekingchen/luci-app-component-updater
+APK_BACKEND=/usr/libexec/component-updater/ax6s-apkctl.sh
 
 [ -r /usr/share/libubox/jshn.sh ] || { echo '{"error":"missing jshn"}'; exit 1; }
 . /usr/share/libubox/jshn.sh
@@ -86,6 +87,13 @@ ax6s_apk_target() {
         *redmi-router-ax6s*|*redmi_router_ax6s*) return 0;;
         *) return 1;;
     esac
+}
+load_apk_backend() {
+    [ -r "$APK_BACKEND" ] || {
+        json_msg unsupported 'APK adapter unavailable; no package changes made'
+        return 1
+    }
+    . "$APK_BACKEND"
 }
 require_opkg() {
     [ "$(package_manager)" = opkg ] || {
@@ -216,8 +224,8 @@ status() {
     json_add_string firmware_target "$target"
     json_add_string device_board "$device"
     if [ "$manager" = apk ]; then
-        if ax6s_apk_target; then
-            json_add_string compatibility 'ax6s-apk-readonly'
+        if ax6s_apk_target && [ -r "$APK_BACKEND" ]; then
+            json_add_string compatibility 'ax6s-apk-native'
         else
             json_add_string compatibility 'apk-unsupported'
         fi
@@ -228,7 +236,7 @@ status() {
     if [ "$manager" = opkg ]; then
         json_add_string package_version "$(package_version)"
     elif [ "$manager" = apk ]; then
-        json_add_string package_version "$(apk info -v naiveproxy 2>/dev/null | sed -n 's/^naiveproxy-//p' | head -n 1)"
+        json_add_string package_version "$(apk --no-network list --installed --manifest naiveproxy 2>/dev/null | awk '$1 == "naiveproxy" {print $2}' | head -n1)"
     else
         json_add_string package_version ''
     fi
@@ -245,6 +253,9 @@ status() {
     fi
     if [ "$manager" = opkg ]; then
         json_add_string install_method 'opkg-native-ipk'
+    elif [ "$manager" = apk ] && ax6s_apk_target && [ -r "$APK_BACKEND" ]; then
+        json_add_string install_method 'apk-native-v3'
+        [ "$(jsonval "$PLAN" '@.manager')" = apk ] || r=false
     else
         json_add_string install_method 'apk-readonly-preflight'
         r=false
@@ -266,6 +277,11 @@ runtime_dep_ok() {
     opkg status libgcc1 2>/dev/null | grep -q '^Status: .*installed'
 }
 check_update() {
+    if [ "$(package_manager)" = apk ]; then
+        load_apk_backend || return 1
+        apk_check
+        return
+    fi
     require_opkg || return 1
     create_dirs || return 1
     rm -f "$PLAN"
@@ -493,25 +509,44 @@ perform_install() {
     done
 }
 run() {
-    require_opkg || return 1
+    manager=$(package_manager)
+    if [ "$manager" = apk ]; then load_apk_backend || return 1
+    else require_opkg || return 1; fi
     create_dirs || return 1
     lock=$CACHE/update.lock
     mkdir "$lock" 2>/dev/null || { json_msg busy 'Update in progress'; return 1; }
     work=''
     trap 'if [ -n "$work" ]; then rm -rf "$work"; fi; rmdir "$lock" 2>/dev/null || true' EXIT
     trap 'exit 1' HUP INT TERM
-    perform_install
+    if [ "$manager" = apk ]; then apk_perform
+    else perform_install; fi
 }
 start() {
-    require_opkg || return 1
+    manager=$(package_manager)
+    if [ "$manager" = apk ]; then load_apk_backend || return 1
+    else require_opkg || return 1; fi
     create_dirs || return 1
     [ ! -d "$CACHE/update.lock" ] || { json_msg busy 'Already updating'; return 1; }
-    has_valid_plan || { json_msg error 'Check for updates before installing'; return 1; }
-    job_record queued 'Native IPK installation queued'
+    if [ "$manager" = apk ]; then
+        apk_plan_ok || { json_msg error 'Check for verified APK update before installing'; return 1; }
+        job_record queued 'Native APK installation queued'
+    else
+        has_valid_plan || { json_msg error 'Check for updates before installing'; return 1; }
+        job_record queued 'Native IPK installation queued'
+    fi
     (/usr/sbin/component-updaterctl run > "$CACHE/job.log" 2>&1 </dev/null &)
-    json_msg started 'Native IPK installation started'
+    if [ "$manager" = apk ]; then
+        json_msg started 'Native APK installation started'
+    else
+        json_msg started 'Native IPK installation started'
+    fi
 }
 rollback() {
+    if [ "$(package_manager)" = apk ]; then
+        load_apk_backend || return 1
+        apk_rollback
+        return
+    fi
     require_opkg || return 1
     create_dirs || return 1
     lock=$CACHE/update.lock
@@ -530,7 +565,12 @@ rollback() {
 case "${1:-}" in
     status) status;;
     check) check_update;;
-    plan) [ "$(package_manager)" = opkg ] && [ -r "$PLAN" ] && cat "$PLAN" || json_msg unavailable 'No native package candidate for this package manager';;
+    plan)
+        if [ "$(package_manager)" = apk ]; then
+            if load_apk_backend && apk_plan_ok; then cat "$PLAN"
+            else json_msg unavailable 'No verified native APK installation candidate'; fi
+        elif [ -r "$PLAN" ]; then cat "$PLAN"
+        else json_msg unavailable 'Run check first'; fi;;
     start) start;;
     run) run;;
     rollback) rollback;;
