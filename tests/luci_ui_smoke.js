@@ -27,7 +27,9 @@ const ctx = {
   Promise, Date
 };
 function load(name) {
-  return vm.runInNewContext(fs.readFileSync(base+name,'utf8'),ctx,{filename:name});
+  const source=fs.readFileSync(base+name,'utf8');
+  // LuCI wraps view modules in a function so top-level return is supported.
+  return vm.runInNewContext('(function(){\\n'+source+'\\n})()',ctx,{filename:name});
 }
 function flatten(node) {
   if (Array.isArray(node)) return node.flatMap(flatten);
