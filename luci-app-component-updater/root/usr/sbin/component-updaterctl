@@ -93,6 +93,7 @@ load_apk_backend() {
         json_msg unsupported 'APK adapter unavailable; no package changes made'
         return 1
     }
+    # shellcheck disable=SC1090 -- loaded only from a fixed, locally packaged path.
     . "$APK_BACKEND"
 }
 require_opkg() {
