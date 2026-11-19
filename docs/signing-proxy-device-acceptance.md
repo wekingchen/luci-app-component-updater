@@ -1,8 +1,8 @@
 # GitHub 反代、供应链完整性与原生 IPK 更新
 
-## 原生 IPK 模式（V0.1）
+## 原生 IPK 模式（V0.2.1）
 
-GitHub Actions 预压缩官方程序，生成 `naiveproxy_<version>_<arch>.ipk`，通过 `opkg install` 升级，因此 opkg 版本随实际安装软件包变化。V0.1 不需要 usign 私钥、公钥或 GitHub Secret。
+GitHub Actions 预压缩官方程序，生成 `naiveproxy_<version>_<arch>.ipk`，使用 OpenWrt 官方 gzip(tar) 外层 IPK，通过 `opkg install` 升级，因此 opkg 版本随实际安装软件包变化。V0.2.1 不需要 usign 私钥、公钥或 GitHub Secret。
 
 每次检查读取 NaiveProxy 官方 Release 版本、组件构建 Release 的 GitHub API `digest`，验证下载的 Manifest SHA256，校验它声明的 IPK 哈希与 GitHub API 中的 IPK `digest` 一致。安装前再核对 IPK 实际 SHA256。
 
@@ -18,7 +18,7 @@ LuCI → 系统 → 组件更新 → GitHub 下载设置。
 
 ## 回滚行为
 
-更新前检查旧 naiveproxy 包只拥有 `/usr/bin/naive`，避免覆盖其他程序配置。生成一个使用当前 `opkg` 包版本、架构、依赖信息和当前二进制的本地恢复 IPK，并在持久化目录备份。升级使用 `opkg install`；失败时安装备份的 IPK（允许降级）并检查旧 SHA256 和软件包版本。
+更新前检查旧 naiveproxy 包只拥有 `/usr/bin/naive`，避免覆盖其他程序配置。生成一个使用当前 `opkg` 包版本、架构、依赖信息和当前二进制的本地恢复 IPK，并在持久化目录备份。更新前要求设备已安装 `libgcc1`，不允许在更新时临时从软件源补装依赖。升级使用 `opkg install`；失败时安装备份的 IPK（允许降级）并检查旧 SHA256 和软件包版本。
 
 用户原先手动 UPX 覆盖的文件与 opkg 记录本来可能不同：恢复时会准确恢复更新前的*文件及 opkg 软件包版本记录*，两者仍可能不同。更新器不重启 PassWall，但原软件包升级的旧维护脚本可能有副作用；必须真机验证。
 
