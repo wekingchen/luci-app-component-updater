@@ -27,6 +27,7 @@ fixture.mkdir(parents=True,exist_ok=True)
 shutil.copyfile(manifest_path,fixture/"manifest.json")
 shutil.copyfile(original,fixture/"original.apk")
 shutil.copyfile(candidate,fixture/"candidate.apk")
+(fixture/"expected_version").write_text(m["candidate"]["version"]+"\n")
 (fixture/"official.json").write_text(json.dumps({"tag_name":m["upstream_tag"]}))
 release={
  "tag_name":m["release_tag"],
