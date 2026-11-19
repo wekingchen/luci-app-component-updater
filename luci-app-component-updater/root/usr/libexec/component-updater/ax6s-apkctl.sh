@@ -166,14 +166,21 @@ apk_restore() {
     rid=$1
     case "$rid" in ''|*[!0-9-]*) return 1;; esac
     rd="$BACKUPS/$rid"
-    for n in previous.apk previous.sha256 version binary.sha256 config.sha256 config-original; do
+    for n in previous.apk previous.sha256 version binary.sha256 config.sha256 config-original world world.sha256; do
         [ -f "$rd/$n" ] && [ ! -L "$rd/$n" ] || return 1
     done
     oldsha=$(cat "$rd/previous.sha256")
     valid_hash "$oldsha" && check_sha "$rd/previous.apk" "$oldsha" || return 1
+    worldsum=$(cat "$rd/world.sha256")
+    valid_hash "$worldsum" && check_sha "$rd/world" "$worldsum" || return 1
     apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add \
         "$rd/previous.apk" > "$rd/restore.log" 2>&1 || return 1
     cp -p "$rd/config-original" /etc/config/naiveproxy || return 1
+    # APK 'add <localfile>' pins a content hash into /etc/apk/world even
+    # when replacing an already installed package. Preserve the pre-update
+    # firmware world exactly so future repository upgrades are not blocked.
+    cp -p "$rd/world" /etc/apk/world || return 1
+    check_sha /etc/apk/world "$worldsum" || return 1
     [ "$(apk_pkgversion)" = "$(cat "$rd/version")" ] &&
     check_sha "$BINARY" "$(cat "$rd/binary.sha256")" &&
     check_sha /etc/config/naiveproxy "$(cat "$rd/config.sha256")" &&
@@ -213,9 +220,12 @@ apk_perform() {
     printf '%s\n' "$oldhash" > "$bak/binary.sha256"
     printf '%s\n' "$oldver" > "$bak/version"
     sha256sum /etc/config/naiveproxy | awk '{print $1}' > "$bak/config.sha256"
+    [ -f /etc/apk/world ] && [ ! -L /etc/apk/world ] &&
+    cp -p /etc/apk/world "$bak/world" &&
+    sha256sum /etc/apk/world | awk '{print $1}' > "$bak/world.sha256" &&
     cp -p /etc/config/naiveproxy "$bak/config-original" &&
     cp -p "$BINARY" "$bak/naive-old" || {
-        job_record failed 'Could not preserve current NaiveProxy files'
+        job_record failed 'Could not preserve current NaiveProxy files or APK world policy'
         return 1
     }
     [ -r "$RECEIPT" ] && cp "$RECEIPT" "$bak/receipt.json" || true
@@ -254,6 +264,8 @@ apk_perform() {
     job_record installing 'Installing native APK; PassWall will not be restarted'
     if ! apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add \
             "$work/update.apk" > "$work/install.log" 2>&1 ||
+       ! cp -p "$bak/world" /etc/apk/world ||
+       ! check_sha /etc/apk/world "$(cat "$bak/world.sha256")" ||
        [ "$(apk_pkgversion)" != "$newver" ] ||
        ! check_sha "$BINARY" "$binary" ||
        ! check_sha /etc/config/naiveproxy "$(cat "$bak/config.sha256")" ||
