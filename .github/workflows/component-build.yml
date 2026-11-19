@@ -223,6 +223,14 @@ jobs:
             grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
           '
 
+      - name: Verify installed rpcd handler works directly before ubus integration
+        run: |
+          sudo chroot "$ROOTFS" /bin/sh -c '
+            echo "== jshn paths =="
+            ls -l /usr/share/libubox/jshn.sh /usr/bin/jshn 2>&1 || true
+            echo "== controller status =="
+            /usr/sbin/component-updaterctl status
+          '
       - name: Test real rpcd executable plugin over ubus on OpenWrt
         shell: bash
         run: |
