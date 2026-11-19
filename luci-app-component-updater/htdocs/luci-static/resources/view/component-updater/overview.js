@@ -63,6 +63,7 @@ return view.extend({
             this.row('运行中 NaiveProxy 进程', status.runtime_processes),
             this.row('当前任务状态', progress),
             this.row('最近检查结果', checkMessage),
+            checkState === 'pending' ? E('p', {'class':'description'}, '云端正在等待预压缩产物发布。页面保持打开时每 5 分钟自动复查一次；当前程序继续正常运行。') : E('span'),
             status.job_message ? E('p', {'class':'alert-message'}, status.job_message) : E('span'),
             E('p', {'class':'description'}, 'GitHub Actions 在云端预先压缩并发布；点击更新不会现场等待压缩。如果发现官方新版但尚无候选包，此页显示准备中，稍后重新检查即可。'),
             E('p', {'class':'description',style:'margin-top:1em'}, '更新仅替换已备份的 /usr/bin/naive；不修改 opkg 数据库，不自动重启 PassWall。原有进程可能仍在使用旧版本。'),
@@ -87,11 +88,24 @@ return view.extend({
         return Promise.all([getStatus(), getPlan()]).then(function(data) {
             if (self.page)
                 dom.content(self.page, self.renderContent(data[0], data[1]));
+            // Pending is a cloud-side build, not a local job. Recheck only once
+            // per five minutes while the page stays open (avoid API polling spam).
+            if (data[0] && data[0].check_state === 'pending' &&
+                Date.now() - (self.lastPendingCheck || 0) >= 300000) {
+                self.lastPendingCheck = Date.now();
+                return check().then(function() {
+                    return Promise.all([getStatus(), getPlan()]);
+                }).then(function(next) {
+                    if (self.page)
+                        dom.content(self.page, self.renderContent(next[0], next[1]));
+                }).catch(function() { /* next manual check will show the error */ });
+            }
         });
     },
 
     handleCheck: function() {
         var self = this;
+        self.lastPendingCheck = Date.now();
         return check().then(function(result) {
             self.notify(result);
             return self.refresh();
