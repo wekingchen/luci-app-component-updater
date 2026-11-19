@@ -85,6 +85,6 @@ LuCI → 系统 → 组件更新。设备端需要可用的 GitHub HTTPS、CA �
 - [x] 空仓库初始化、通用构建器、NaiveProxy 定义、两目标构建矩阵
 - [x] LuCI 页面、rpcd Shell 兼容接口、基本安装回滚事务
 - [x] 离线单元测试、IPK 组包
-- [ ] GitHub Actions 首次在线构建成功及构建日志审计
+- [x] GitHub Actions 两个 ARM64 官方文件实际 UPX 5.2.1 压缩成功（仅基础验证）
 - [ ] MT3600BE / N1 真机安装、服务验证及断电恢复测试
 - [ ] 独立签名 Manifest、公钥固定及正式稳定发布
