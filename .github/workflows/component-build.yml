@@ -207,7 +207,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/package_ipk.py --out /tmp/manager-build
-          sudo cp /tmp/manager-build/luci-app-component-updater_0.2.1-1_all.ipk "$ROOTFS/tmp/manager.ipk"
+          managers=(/tmp/manager-build/luci-app-component-updater_*_all.ipk)
+          [ "${#managers[@]}" -eq 1 ] || { echo "::error::Expected one LuCI IPK, found ${#managers[@]}"; exit 1; }
+          sudo cp "${managers[0]}" "$ROOTFS/tmp/manager.ipk"
           sudo chroot "$ROOTFS" /bin/sh -eu -c '
             # The clean rootfs deliberately lacks LuCI dependencies; force-depends
             # tests package installation semantics only, not full UI/runtime.
