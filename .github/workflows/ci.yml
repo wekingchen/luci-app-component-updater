@@ -22,6 +22,7 @@ jobs:
           busybox | head -n 1
       - name: Validate component definitions and tests
         run: |
+          python3 tools/check_docs.py
           python3 -m unittest discover -s tests -v
           COMPONENT_TEST_SHELL=busybox python3 -m unittest discover -s tests -p test_device_integration.py -k test_native_install_then_rollback -v
           python3 -m py_compile tools/component_builder.py tools/package_ipk.py tools/validate_artifacts.py
@@ -73,8 +74,8 @@ jobs:
   publish-luci-candidate:
     name: Publish verified LuCI manager pre-release
     needs: test-and-package
-    # A single explicitly authorized V0.5.0 RC merge may publish once.\n    # All later automatic releases remain blocked until hardware acceptance.
-    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (vars.AX6S_APK_AUTO_PUBLISH == 'true' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-v0.5.0-rc1]'))) }}
+    # Further releases require AX6S real hardware acceptance.
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (vars.AX6S_APK_AUTO_PUBLISH == 'true') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write

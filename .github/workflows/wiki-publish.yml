@@ -1,0 +1,78 @@
+name: Documentation / Publish GitHub Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'wiki-src/**'
+      - 'AGENTS.md'
+      - 'docs/project-governance.md'
+      - 'docs/acceptance-gates.md'
+      - 'docs/ax6s-hardware-acceptance-checklist.md'
+      - 'tools/check_docs.py'
+      - 'tools/wiki_sync.py'
+      - '.github/workflows/wiki-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: false
+
+jobs:
+  publish-wiki:
+    # No wiki write credentials on PR/fork.
+    if: github.repository == 'wekingchen/luci-app-component-updater' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate Wiki and repository contracts
+        run: |
+          python3 tools/check_docs.py
+          python3 -m unittest discover -s tests -p test_docs_contract.py -v
+      - name: Publish only managed Markdown pages
+        env:
+          WIKI_TOKEN: ${{ secrets.WIKI_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WIKI_TOKEN"
+          export GIT_TERMINAL_PROMPT=0
+          url="https://github.com/$GITHUB_REPOSITORY.wiki.git"
+          auth=$(printf 'x-access-token:%s' "$WIKI_TOKEN" | base64 -w 0)
+          mkdir -p /tmp/wiki-stage
+          # Do not put credentials in remote URL or git config.
+          if git -c "http.extraheader=AUTHORIZATION: basic $auth" \
+              clone -q "$url" /tmp/wiki-stage/checkout 2>/tmp/wiki-clone.err; then
+            echo "Existing Wiki repository available"
+          else
+            echo "::notice::Wiki clone unavailable: attempting initial Wiki commit"
+            mkdir -p /tmp/wiki-stage/checkout
+            git -C /tmp/wiki-stage/checkout init -q -b master
+          fi
+          python3 tools/wiki_sync.py --source wiki-src --target /tmp/wiki-stage/checkout
+          cd /tmp/wiki-stage/checkout
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- Home.md _Sidebar.md System-Architecture.md Compatibility-and-Devices.md \
+            Security-and-Recovery.md Operations-and-Troubleshooting.md \
+            Release-and-Verification.md Developer-Guide.md
+          if git diff --cached --quiet; then
+            echo "Wiki already matches canonical pages"
+            exit 0
+          fi
+          git commit -qm "docs(wiki): sync reviewed main-branch knowledge pages"
+          wiki_branch=$(git symbolic-ref --short HEAD)
+          if ! git -c "http.extraheader=AUTHORIZATION: basic $auth" \
+              push "$url" "HEAD:$wiki_branch" 2>/tmp/wiki-push.err; then
+            echo "::error::Wiki 仍未发布：GitHub Wiki 可能未初始化或令牌没有 Wiki 写权限。请创建 Wiki 首页，必要时配置 WIKI_PUSH_TOKEN 后重新运行。"
+            exit 1
+          fi
+          echo "GitHub Wiki is updated at https://github.com/$GITHUB_REPOSITORY/wiki"
