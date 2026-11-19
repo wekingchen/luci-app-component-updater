@@ -1,30 +1,95 @@
 name: Component Builder / Official Releases & UPX
 on:
   schedule:
-    # Prebuild in the cloud every 20 min (GitHub schedule may be delayed).
+    # Cloud-side prebuild; router does not wait for compression.
     - cron: '7,27,47 * * * *'
   workflow_dispatch:
     inputs:
       component:
-        description: Component ID (or all enabled components)
+        description: Component ID, or all
         type: string
         default: all
       publish:
-        description: Publish successfully validated artifacts into immutable Releases
+        description: Publish signed assets after validation
         type: boolean
         default: true
+
 permissions:
-  contents: write
+  contents: read
+
 concurrency:
   group: component-release
   cancel-in-progress: false
+
 jobs:
-  discover-and-build:
+  build:
+    name: Build candidates without signing credentials
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Build OpenWrt usign from pinned source
+      - name: Discover and verify upstream component assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMPONENT: ${{ inputs.component || 'all' }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # A marker ensures artifact download also works when no new version exists.
+          echo "scan completed" > dist/discovery.txt
+          mapfile -t COMPONENTS < <(python3 - <<'PY'
+          import os,sys
+          sys.path.insert(0,'tools')
+          import component_builder as b
+          print('\n'.join(x['id'] for x in b.definitions(os.environ['COMPONENT'])))
+          PY
+          )
+          for COMPONENT_ID in "${COMPONENTS[@]}"; do
+            export COMPONENT_ID
+            TAG=$(python3 - <<'PY'
+          import os,sys
+          sys.path.insert(0,'tools')
+          import component_builder as b
+          cfg=b.definitions(os.environ['COMPONENT_ID'])[0]
+          release=b.github_json('https://api.github.com/repos/'+cfg['upstream']['repository']+'/releases/latest',os.environ.get('GITHUB_TOKEN',''))
+          print(b.release_tag(cfg,release['tag_name']))
+          PY
+            )
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              if ! gh release view "$TAG" --json assets -q '.assets[].name' | grep -Fxq 'manifest.json.sig'; then
+                echo "::error::Unsigned legacy release $TAG; bump component revision, never silently reuse unsigned assets."
+                exit 1
+              fi
+              echo "Already has a signed release: $TAG"
+              continue
+            fi
+            OUT="dist/$COMPONENT_ID"
+            python3 tools/component_builder.py --component "$COMPONENT_ID" --output "$OUT"
+            [[ "$(cat "$OUT/release-tag.txt")" == "$TAG" ]] || exit 1
+            python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-component-candidates
+          path: dist/
+          if-no-files-found: error
+
+  sign-and-publish:
+    name: Separately sign and publish verified candidates
+    needs: build
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish == true) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: unsigned-component-candidates
+          path: dist
+      - name: Install pinned OpenWrt usign on isolated publish runner
         run: |
           set -euo pipefail
           git clone --quiet https://github.com/openwrt/usign.git /tmp/component-usign
@@ -32,81 +97,38 @@ jobs:
           cmake -S /tmp/component-usign -B /tmp/component-usign/build -DUSE_LIBUBOX=OFF
           cmake --build /tmp/component-usign/build -j2
           sudo install -m755 /tmp/component-usign/build/usign /usr/local/bin/usign
-      - name: Build and publish each enabled component independently
+      - name: Validate once more, sign and release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMPONENT: ${{ inputs.component || 'all' }}
-          PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
           SIGNING_KEY_B64: ${{ secrets.COMPONENT_USIGN_PRIVATE_KEY_B64 }}
         run: |
           set -euo pipefail
-          if [[ "$PUBLISH" == 'true' && "$GITHUB_REF" != 'refs/heads/main' ]]; then
-            echo '::error::Only the default main branch may publish signed releases'
+          PUBKEY="luci-app-component-updater/root/usr/share/component-updater/trust.pub"
+          if [[ -z "$SIGNING_KEY_B64" || ! -s "$PUBKEY" ]]; then
+            echo '::error::Missing private signing key GitHub Secret or pinned public key. Unsigned publication refused.'
             exit 1
           fi
-          mapfile -t COMPONENTS < <(python3 - <<'PY'
-          import os, sys
-          sys.path.insert(0, 'tools')
-          import component_builder as b
-          print('\n'.join(cfg['id'] for cfg in b.definitions(os.environ['COMPONENT'])))
-          PY
-          )
-          if [[ "${#COMPONENTS[@]}" -eq 0 ]]; then
-            echo 'No enabled components'; exit 1
+          umask 077
+          PRIVATE=$(mktemp)
+          trap 'rm -f "$PRIVATE"' EXIT
+          printf '%s' "$SIGNING_KEY_B64" | base64 -d > "$PRIVATE"
+          mapfile -t MANIFESTS < <(find dist -mindepth 2 -maxdepth 2 -name manifest.json -type f | sort)
+          if [[ "${#MANIFESTS[@]}" -eq 0 ]]; then
+            echo 'Nothing new to sign or publish'
+            exit 0
           fi
-          for COMPONENT_ID in "${COMPONENTS[@]}"; do
-            echo "::group::${COMPONENT_ID}"
-            export COMPONENT_ID
-            TAG=$(python3 - <<'PY'
-          import os, sys
-          sys.path.insert(0, 'tools')
-          import component_builder as b
-          cfg=b.definitions(os.environ['COMPONENT_ID'])[0]
-          release=b.github_json('https://api.github.com/repos/'+cfg['upstream']['repository']+'/releases/latest', os.environ.get('GITHUB_TOKEN',''))
-          print(b.release_tag(cfg,release['tag_name']))
-          PY
-            )
-            echo "Component release: $TAG"
+          for MANIFEST in "${MANIFESTS[@]}"; do
+            OUT=$(dirname "$MANIFEST")
+            python3 tools/validate_artifacts.py --manifest "$MANIFEST"
+            TAG=$(cat "$OUT/release-tag.txt")
+            [[ "$TAG" == component-* && "$TAG" != *'/'* ]] || exit 1
             if gh release view "$TAG" >/dev/null 2>&1; then
-              if ! gh release view "$TAG" --json assets -q '.assets[].name' | grep -Fxq 'manifest.json.sig'; then
-                echo "::error::Release $TAG is unsigned. Do not reuse it: increment component revision and publish a new tag."
-                exit 1
-              fi
-              echo "Signed release already published; skip: $TAG"
-              echo '::endgroup::'
-              continue
+              echo "::error::Release appeared during build: $TAG. Refusing to overwrite."
+              exit 1
             fi
-            OUT="dist/$COMPONENT_ID"
-            python3 tools/component_builder.py --component "$COMPONENT_ID" --output "$OUT"
-            [[ "$(cat "$OUT/release-tag.txt")" == "$TAG" ]] || { echo 'Release changed during build'; exit 1; }
-            python3 tools/validate_artifacts.py --manifest "$OUT/manifest.json"
-            if [[ "$PUBLISH" == 'true' ]]; then
-              PUBKEY="luci-app-component-updater/root/usr/share/component-updater/trust.pub"
-              if [[ -z "$SIGNING_KEY_B64" || ! -s "$PUBKEY" ]]; then
-                echo '::error::Missing COMPONENT_USIGN_PRIVATE_KEY_B64 secret or trusted public key. Refusing unsigned publish.'
-                exit 1
-              fi
-              umask 077
-              KEY_FILE=$(mktemp)
-              trap 'rm -f "$KEY_FILE"' EXIT
-              printf '%s' "$SIGNING_KEY_B64" | base64 -d > "$KEY_FILE"
-              usign -S -m "$OUT/manifest.json" -s "$KEY_FILE" -x "$OUT/manifest.json.sig"
-              usign -V -q -m "$OUT/manifest.json" -p "$PUBKEY" -x "$OUT/manifest.json.sig"
-              rm -f "$KEY_FILE"
-              trap - EXIT
-              gh release create "$TAG" "$OUT"/*.tar.xz "$OUT/manifest.json" "$OUT/manifest.json.sig" \
-                --title "$TAG" --latest=false --prerelease \
-                --notes "Signed pre-release candidate. SHA256/provenance/UPX round-trip verified, signed manifest with pinned usign key. Router functional verification still required."
-            fi
-            echo '::endgroup::'
+            usign -S -m "$MANIFEST" -s "$PRIVATE" -x "$OUT/manifest.json.sig"
+            usign -V -q -m "$MANIFEST" -p "$PUBKEY" -x "$OUT/manifest.json.sig"
+            gh release create "$TAG" "$OUT"/*.tar.xz "$MANIFEST" "$OUT/manifest.json.sig" \
+              --title "$TAG" --latest=false --prerelease \
+              --notes "Signed candidate: pinned usign/Ed25519 manifest; official asset digests and UPX round-trip checked. Device proxy functionality requires separate real-router acceptance."
           done
-      - uses: actions/upload-artifact@v4
-        if: ${{ always() }}
-        with:
-          name: component-build-artifacts
-          path: |
-            dist/*/*.tar.xz
-            dist/*/manifest.json
-            dist/*/manifest.json.sig
-          if-no-files-found: ignore
