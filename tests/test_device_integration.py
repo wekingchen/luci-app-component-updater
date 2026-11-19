@@ -73,12 +73,26 @@ except Exception:
  pass
 ''')
         self.mock_cmd('opkg', '#!/bin/sh\necho "Version: 150.0.7871.63.1-r1"\n')
+        self.trust=self.root/'trusted.pub'
+        self.trust.write_text('test-only-local-public-key')
+        self.mock_cmd('usign', '''#!/bin/sh
+while [ "$#" -gt 0 ]; do
+ case "$1" in
+  -m) f="$2"; shift 2 ;;
+  -x) sig="$2"; shift 2 ;;
+  *) shift ;;
+ esac
+done
+[ -r "$f" ] && [ -r "$sig" ] || exit 1
+[ "$(sha256sum "$f" | awk '{print $1}')" = "$(cat "$sig")" ]
+''')
         self.mock_cmd('pidof', '#!/bin/sh\nexit 1\n')
         s = BACKEND.read_text()
         for before, after in [
             ('BASE=/etc/component-updater', 'BASE=' + shlex.quote(str(self.base))),
             ('CACHE=/tmp/component-updater', 'CACHE=' + shlex.quote(str(self.cache))),
             ('BINARY=/usr/bin/naive', 'BINARY=' + shlex.quote(str(self.bin))),
+            ('TRUST_KEY=/usr/share/component-updater/trust.pub', 'TRUST_KEY=' + shlex.quote(str(self.trust))),
             ('/usr/share/libubox/jshn.sh', str(self.jshn)),
             ('/etc/openwrt_release', str(self.release)),
         ]:
@@ -92,6 +106,8 @@ download() {
          cp "$TEST_FIXTURES/official.json" "$2";;
       */manifest.json)
          cp "$TEST_FIXTURES/manifest.json" "$2";;
+      */manifest.json.sig)
+         cp "$TEST_FIXTURES/manifest.json.sig" "$2";;
       */*.tar.xz)
          cp "$TEST_FIXTURES/archive.tar.xz" "$2";;
       *) return 1;;
@@ -127,6 +143,8 @@ download() {
                       'sha256':reported_checksum or sha(self.archive.read_bytes()),
                       'binary_sha256':sha(data)}}
         }))
+
+        (self.fixtures/'manifest.json.sig').write_text(sha((self.fixtures/'manifest.json').read_bytes())+'\n')
 
     def call(self, action, extra=None):
         env=os.environ.copy()
@@ -174,6 +192,30 @@ download() {
         (self.fixtures/'official.json').unlink()
         rc,d=self.call('check')
         self.assertNotEqual(rc,0)
+        self.assertFalse((self.cache/'plan.json').exists())
+
+    def test_tampered_signed_manifest_is_rejected(self):
+        d=json.loads((self.fixtures/'manifest.json').read_text())
+        d['assets']['aarch64_cortex_a53']['sha256']='f'*64
+        (self.fixtures/'manifest.json').write_text(json.dumps(d))
+        rc,report=self.call('check')
+        self.assertNotEqual(rc,0)
+        self.assertEqual(report['status'],'signature_error')
+        self.assertFalse((self.cache/'plan.json').exists())
+        self.assertEqual(self.bin.read_bytes(),self.old)
+
+    def test_missing_signed_manifest_is_rejected(self):
+        (self.fixtures/'manifest.json.sig').unlink()
+        rc,report=self.call('check')
+        self.assertNotEqual(rc,0)
+        self.assertEqual(report['status'],'signature_error')
+        self.assertFalse((self.cache/'plan.json').exists())
+
+    def test_missing_public_key_disables_install(self):
+        self.trust.unlink()
+        rc,report=self.call('check')
+        self.assertNotEqual(rc,0)
+        self.assertEqual(report['status'],'trust_unconfigured')
         self.assertFalse((self.cache/'plan.json').exists())
 
     def test_forged_manifest_is_rejected(self):
