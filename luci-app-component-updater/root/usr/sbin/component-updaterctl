@@ -87,7 +87,20 @@ proxy_target() {
         https://github.com/*) ;;
         *) return 1;;
     esac
-    prefix=$(config_get github_proxy_prefix '')
+    # Preset domains are fixed; legacy devices without github_proxy_site
+    # continue to use their previously configured custom URL.
+    site=$(config_get github_proxy_site custom)
+    case "$site" in
+        gh-proxy.org|ghproxy.cc|ghproxy.com|ghfast.top)
+            prefix="https://$site/"
+            ;;
+        custom)
+            prefix=$(config_get github_proxy_prefix '')
+            ;;
+        *)
+            return 1
+            ;;
+    esac
     case "$prefix" in https://*/*) ;; *) return 1;; esac
     host=${prefix#https://}; host=${host%%/*}
     case "$host" in ''|localhost|*.localhost|127.*|10.*|192.168.*|172.16.*|172.17.*|172.18.*|172.19.*|172.2?.*|172.30.*|172.31.*|[0-9]*|*:*|*[!A-Za-z0-9.-]*) return 1;; esac
@@ -169,6 +182,7 @@ status() {
     json_add_string package_owner "$(opkg search "$BINARY" 2>/dev/null | head -n 1)"
     json_add_string install_method 'opkg-native-ipk'
     json_add_string github_proxy_mode "$(config_get github_proxy_mode off)"
+    json_add_string github_proxy_site "$(config_get github_proxy_site custom)"
     json_add_string source_integrity 'GitHub Release API asset digest (no independent signing)'
     json_add_string runtime_processes "$(pidof naive 2>/dev/null | wc -w | tr -d ' ')"
     json_add_string job_state "${j:-idle}"

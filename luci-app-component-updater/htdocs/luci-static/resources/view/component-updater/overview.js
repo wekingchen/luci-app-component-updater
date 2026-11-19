@@ -60,7 +60,7 @@ return view.extend({
             this.row('本工具安装的完整版本', currentTag),
             this.row('opkg 已安装版本', status.package_version),
             this.row('设备软件架构', status.architecture),
-            this.row('GitHub 反代', status.github_proxy_mode === 'off' ? '关闭（直连）' : (status.github_proxy_mode === 'assets' ? '仅下载包' : '查询与下载')),
+            this.row('GitHub 反代', status.github_proxy_mode === 'off' ? '关闭（直连）' : ((status.github_proxy_site === 'custom' ? '自定义节点' : (status.github_proxy_site || '自定义节点')) + ' · ' + (status.github_proxy_mode === 'assets' ? '仅下载包' : '查询与下载'))),
             this.row('安装机制', '原生 IPK · opkg'),
             this.row('运行中 NaiveProxy 进程', status.runtime_processes),
             this.row('当前任务状态', progress),

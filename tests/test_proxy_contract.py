@@ -8,13 +8,14 @@ ROOT=Path(__file__).resolve().parents[1]
 BACKEND=ROOT/'luci-app-component-updater/root/usr/sbin/component-updaterctl'
 
 class ProxyTests(unittest.TestCase):
-    def probe(self, mode, prefix, url):
+    def probe(self, mode, prefix, url, site='custom'):
         s=BACKEND.read_text()
         start=s.index('proxy_target() {')
         end=s.index('\ndownload_once() {',start)
         script="""config_get() {
             case "$1" in
                 github_proxy_mode) printf '%s\\n' "$TEST_MODE";;
+                github_proxy_site) printf '%s\\n' "$TEST_SITE";;
                 github_proxy_prefix) printf '%s\\n' "$TEST_PREFIX";;
             esac
         }
@@ -24,6 +25,7 @@ class ProxyTests(unittest.TestCase):
         env=os.environ.copy()
         env['TEST_MODE']=mode
         env['TEST_PREFIX']=prefix
+        env['TEST_SITE']=site
         return subprocess.run(['/bin/sh','-c',script,'probe',url],env=env,
                               text=True,capture_output=True,timeout=5)
 
@@ -32,6 +34,20 @@ class ProxyTests(unittest.TestCase):
         r=self.probe('assets','https://mirror.example/',url)
         self.assertEqual(r.returncode,0,r.stderr)
         self.assertEqual(r.stdout.strip(),'https://mirror.example/'+url)
+
+    def test_known_proxy_nodes_build_prefix_correctly(self):
+        url='https://github.com/wekingchen/luci-app-component-updater/releases/download/tag/update.ipk'
+        for provider in ('gh-proxy.org','ghproxy.cc','ghproxy.com','ghfast.top'):
+            with self.subTest(provider=provider):
+                r=self.probe('assets','https://wrong.example/',url,provider)
+                self.assertEqual(r.returncode,0,r.stderr)
+                self.assertEqual(r.stdout.strip(),'https://'+provider+'/'+url)
+
+    def test_unknown_proxy_node_fails_closed(self):
+        url='https://github.com/wekingchen/luci-app-component-updater/releases/download/tag/update.ipk'
+        for provider in ('evil.example','http://evil.example','off','gh-proxy.org/../'):
+            with self.subTest(provider=provider):
+                self.assertNotEqual(self.probe('assets','https://mirror.example/',url,provider).returncode,0)
 
     def test_api_only_in_all_mode(self):
         url='https://api.github.com/repos/klzgrad/naiveproxy/releases/latest'
