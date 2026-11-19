@@ -21,6 +21,7 @@ import zipfile
 import tempfile
 import urllib.error
 import urllib.request
+from package_component_ipk import build_ipk, package_version
 
 BASE = Path(__file__).resolve().parents[1]
 REPO = "wekingchen/luci-app-component-updater"
@@ -71,6 +72,13 @@ def validate_definition(cfg: dict) -> dict:
             raise BuildError("invalid archive suffix")
         if not isinstance(target.get("elf_machine"), int):
             raise BuildError("invalid ELF machine")
+    install=cfg.get("install", {})
+    if install.get("type")!="opkg" or install.get("package")!=cfg["id"]:
+        raise BuildError("native opkg package definition required")
+    if cfg.get("binary", {}).get("install_path") != "/usr/bin/" + cfg["binary"]["archive_member"]:
+        raise BuildError("install path must be the reviewed /usr/bin binary")
+    if not install.get("dependencies") or not all(re.fullmatch(r"[a-z][a-z0-9+.-]*",d) for d in install["dependencies"]):
+        raise BuildError("invalid package dependencies")
     return cfg
 
 
@@ -232,23 +240,26 @@ def build_one(cfg: dict, release: dict, target: dict, upx: str, out: Path) -> di
     original = extract_member(archive_bytes, cfg["binary"]["archive_member"], target["asset_suffix"].split(".", 1)[1])
     verify_elf(original, target["elf_machine"])
     packed = compress(original, target["elf_machine"], upx) if cfg["compression"]["type"] == "upx" else original
+    version = package_version(tag, cfg["compression"]["revision"])
     method = "upx" + cfg["compression"]["version"].replace(".", "") if cfg["compression"]["type"] == "upx" else "raw"
-    name = f"{cfg['id']}-{tag}-openwrt-{target['id']}-{method}-r{cfg['compression']['revision']}.tar.xz"
-    metadata = {
-        "component": cfg["id"], "upstream_tag": tag, "architecture": target["id"],
-        "source_asset": upstream_name, "source_archive_sha256": origin_sha,
-        "original_binary_sha256": hashlib.sha256(original).hexdigest(),
-        "compressed_binary_sha256": hashlib.sha256(packed).hexdigest(),
-        "compression": cfg["compression"]["type"], "upx_version": cfg["compression"].get("version"),
-    }
+    package = cfg["install"]["package"]
+    name = f"{package}_{version}_{target['id']}.ipk"
+    payload = build_ipk(
+        package=package, version=version, architecture=target["id"],
+        target=cfg["binary"]["install_path"], binary=packed,
+        depends=cfg["install"]["dependencies"])
     path = out / name
-    archive(path, packed, metadata, cfg["binary"]["archive_member"])
+    path.write_bytes(payload)
     return {
-        "filename": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-        "bytes": path.stat().st_size, "binary_sha256": metadata["compressed_binary_sha256"],
+        "filename": name, "format": "ipk", "package": package,
+        "package_version": version, "package_arch": target["id"],
+        "install_path": cfg["binary"]["install_path"], "sha256": hashlib.sha256(payload).hexdigest(),
+        "bytes": len(payload), "binary_sha256": hashlib.sha256(packed).hexdigest(),
         "source_sha256": origin_sha, "original_bytes": len(original),
-        "compressed_bytes": len(packed),
-        "validation": {"elf": "passed", "upx_test": "passed" if cfg["compression"]["type"] == "upx" else "not-applicable", "round_trip": "passed" if cfg["compression"]["type"] == "upx" else "not-applicable", "device_runtime": "unverified"}
+        "compressed_bytes": len(packed), "compression_method": method,
+        "validation": {"elf": "passed", "upx_test": "passed" if cfg["compression"]["type"] == "upx" else "not-applicable",
+                       "round_trip": "passed" if cfg["compression"]["type"] == "upx" else "not-applicable",
+                       "device_runtime": "unverified"}
     }
 
 
