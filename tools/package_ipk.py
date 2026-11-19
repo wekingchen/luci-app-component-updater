@@ -13,7 +13,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "luci-app-component-updater"
 NAME = "luci-app-component-updater"
-VERSION = "0.3.0-1"
+VERSION = "0.4.0-1"
 
 
 def create_tar(path: Path, files: list[tuple[str, bytes, int]]) -> None:
@@ -77,7 +77,7 @@ def main():
         for path in (APP / "root").rglob("*"):
             if path.is_file():
                 target = path.relative_to(APP / "root").as_posix()
-                mode = 0o755 if target in ("usr/sbin/component-updaterctl", "usr/libexec/rpcd/component-updater", "usr/libexec/component-updater/device-readonly-acceptance.sh", "usr/libexec/component-updater/device-live-acceptance.sh") else 0o644
+                mode = 0o755 if target in ("usr/sbin/component-updaterctl", "usr/libexec/rpcd/component-updater", "usr/libexec/component-updater/device-readonly-acceptance.sh", "usr/libexec/component-updater/device-live-acceptance.sh", "usr/libexec/component-updater/device-ax6s-apk-preflight.sh") else 0o644
                 data.append(("./" + target, path.read_bytes(), mode))
         for path in (APP / "htdocs").rglob("*"):
             if path.is_file():
