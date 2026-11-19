@@ -1,5 +1,13 @@
 name: Component Builder / Official Releases & UPX
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/component-build.yml'
+      - 'components/**'
+      - 'tools/component_builder.py'
+      - 'tools/package_component_ipk.py'
+      - 'tools/validate_artifacts.py'
   schedule:
     # Cloud-side prebuild; router does not wait for compression.
     - cron: '7,27,47 * * * *'
@@ -81,7 +89,7 @@ jobs:
   publish:
     name: Revalidate and publish verified native IPKs
     needs: build
-    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish == true) }}
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push' || inputs.publish == true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
