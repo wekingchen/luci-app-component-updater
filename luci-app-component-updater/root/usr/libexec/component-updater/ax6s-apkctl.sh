@@ -96,15 +96,15 @@ apk_candidate_binary_bytes() {
 apk_overlay_budget_ok() {
     old_bytes=$1
     new_bytes=$2
-    binary_bytes=$3
-    for n in "$old_bytes" "$new_bytes" "$binary_bytes"; do
+    budget_elf_bytes=$3
+    for n in "$old_bytes" "$new_bytes" "$budget_elf_bytes"; do
         case "$n" in ''|0|*[!0-9]*) return 1;; esac
         [ "$n" -le 104857600 ] || return 1
     done
     current_elf=$(wc -c < "$BINARY" 2>/dev/null | tr -d ' ') || return 1
     case "$current_elf" in ''|0|*[!0-9]*) return 1;; esac
     [ "$current_elf" -le 104857600 ] || return 1
-    [ "$current_elf" -le "$binary_bytes" ] || binary_bytes=$current_elf
+    [ "$current_elf" -le "$budget_elf_bytes" ] || budget_elf_bytes=$current_elf
     free_kib=$(df -Pk /etc 2>/dev/null | awk 'NR==2 {print $4}')
     case "$free_kib" in ''|*[!0-9]*) return 1;; esac
     if [ -r "$RECEIPT" ] && [ -f "$APK_ACTIVE" ] &&
@@ -112,7 +112,7 @@ apk_overlay_budget_ok() {
         # A verified hardlink is made from the existing persisted APK.
         old_bytes=0
     fi
-    required_kib=$(((old_bytes+new_bytes+binary_bytes+1023)/1024+1536))
+    required_kib=$(((old_bytes+new_bytes+budget_elf_bytes+1023)/1024+1536))
     [ "$free_kib" -ge "$required_kib" ]
 }
 apk_plan_ok() {
