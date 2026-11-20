@@ -3,6 +3,10 @@ import re
 import unittest
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+OVERVIEW = (ROOT / "luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/overview.js").read_text()
+SETTINGS = (ROOT / "luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/settings.js").read_text()
+FIXTURE = (ROOT / "tests/ui_visual_fixture.html").read_text()
 CSS = (Path(__file__).resolve().parents[1] /
        "luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css").read_text()
 
@@ -47,6 +51,22 @@ class VisualContrastContract(unittest.TestCase):
             self.assertIn(property, root.group(1))
         self.assertNotRegex(CSS, r"(?m)^\s*(?:#mainmenu|#maincontent|body|header|aside)\s*\{")
         self.assertNotRegex(CSS, r"z-index:\s*[1-9]\d*")
+
+    def test_immortalwrt_generic_header_collision_is_regressed(self):
+        # The AX6S screenshot showed a vertical H2 and a header that remained
+        # pinned while scrolling over the hero card. The router's global
+        # header selector must not apply to these page-local headings.
+        self.assertIn("E('div', {'class': 'cu-page-head'}", OVERVIEW)
+        self.assertIn("E('div', {'class': 'cu-settings-heading'}", SETTINGS)
+        self.assertIn('<div class="cu-page-head">', FIXTURE)
+        self.assertIn('.legacy-theme header { display:flex!important; position:sticky!important;', FIXTURE)
+        block = re.search(r"\\.cu-app :is\\(\\.cu-page-head, \\.cu-settings-heading\\)\\s*\\{([^}]+)\\}", CSS, re.S)
+        self.assertIsNotNone(block)
+        for token in ("display: block !important", "position: static !important",
+                      "z-index: auto !important", "overflow: visible !important"):
+            self.assertIn(token, block.group(1))
+        self.assertIn("if(tRect.height>60 || tRect.width<85)", FIXTURE)
+        self.assertIn("if(heroRect.top<hRect.bottom-1)", FIXTURE)
 
     def test_luci_heading_background_is_explicitly_reset(self):
         # Production GL.iNet theme may set H2/H3 to white background and text.
