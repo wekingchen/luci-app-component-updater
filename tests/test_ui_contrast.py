@@ -77,6 +77,14 @@ class VisualContrastContract(unittest.TestCase):
         ):
             self.assertIn(token, CSS)
 
+    def test_ready_button_does_not_animate_from_disabled_gray_to_teal(self):
+        # Without this guard, white text changes immediately while background
+        # transitions for 150ms, producing a low-contrast white-on-gray flash.
+        block = re.search(r"\\.cu-app button\\.cu-btn\\s*\\{([^}]+)\\}", CSS, re.S)
+        self.assertIsNotNone(block)
+        self.assertIn("transition: none !important", block.group(1))
+        self.assertNotIn("transition: background-color", block.group(1))
+
     def test_disabled_button_preserves_full_opacity_and_readable_text(self):
         block = re.search(r"\.cu-app button\.cu-btn:disabled\s*\{([^}]+)\}", CSS, re.S)
         self.assertIsNotNone(block)
