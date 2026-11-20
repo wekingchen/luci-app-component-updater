@@ -82,6 +82,7 @@ class MenuActivationTests(unittest.TestCase):
     def test_sdk_makefile_also_activates_luci_after_live_install(self):
         content = SDK_MAKEFILE.read_text()
         self.assertIn("define Package/luci-app-component-updater/postinst", content)
+        self.assertIn('${IPKG_INSTROOT:-}', content, 'SDK hook must survive GNU Make expansion')
         hook = content.split("define Package/luci-app-component-updater/postinst", 1)[1].split("endef", 1)[0]
         for token in ('IPKG_INSTROOT', '/tmp/luci-indexcache',
                       '/tmp/luci-modulecache', '/etc/init.d/rpcd',
