@@ -56,7 +56,7 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
                          'Packaging must not silently install anything on the device')
         self.assertIn('apk adbdump --format json',CI)
         self.assertIn('dist/*.apk',CI)
-        self.assertIn('luci-app-component-updater-v0.5.5-rc2',CI)
+        self.assertIn('luci-app-component-updater-v0.5.5-rc3',CI)
         self.assertIn('Physical AX6S device and live PassWall traffic validation remain outstanding',CI)
 
     def test_apk_manifest_transport_and_digest_are_separate_fail_closed_paths(self):

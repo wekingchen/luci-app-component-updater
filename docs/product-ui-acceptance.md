@@ -82,3 +82,11 @@ python3 -m unittest discover -s tests -v
 - 以上修复不改变 NaiveProxy 安装许可、包摘要算法、原厂基线哈希、APK world/恢复策略，亦不放宽对未知设备的写入限制。实机最终检查成功与安装/恢复仍未验收。
 
 - 本轮诊断修复产生与早期 V0.5.5-r1 不同的二进制，因此管理器包发布编号提升到 **V0.5.5-r2**（SDK IPK 0.5.5-2、APKv3 0.5.5-r2）；保持独立候选，不覆盖先前构建文件。
+
+## AX6S Overlay 空间预算（V0.5.5-r3，2026-11-20）
+
+- 真实设备：`/tmp` tmpfs 可用 115.9 MiB，`/etc` overlay 可用 12.3 MiB，之前 APK 检查共用 `space_ok()` 的固定 16 MiB overlay 最小值，造成 `Insufficient space for APK backup`，未发出 GitHub 请求。
+- r3 仅 APK 路径改为“查询版本 → Release 摘要及资产大小 → 验证下载的 APK → 在 /tmp 解包并核对 ELF SHA256、大小 → 计算持久 overlay 需求 → 生成有效计划”；实际安装前再次验 SHA256、大小和 overlay 空间。保留 IPK 固定预检及所有原有签名/摘要/平台门槛。
+- overlay 预算至少包含原始恢复 APK、下一次升级使用的已安装 APK 缓存、候选与旧版 ELF 的较大字节数及 1.5 MiB 文件系统/数据库余量；从未把 tmpfs 的容量算作持久回滚空间。r3 删除从未用于恢复的额外旧 ELF 副本；未来升级时对受验证的活动 APK 创建硬链接，不再重复复制。恢复之前仍验证原始包哈希及 world/config 文件。
+- `apk extract` 仅在 tmpfs 对已核验 SHA256 的候选包运行，无脚本安装，不变更持久设备文件。若设备缺少该命令、解包文件/摘要有误、预算仍不足，必须拒绝更新，不能绕过任何保护。
+- 测试门禁：模拟 12.3 MiB / 9 MiB 的准入与拒绝；原生 AX6S chroot 下载/安装/回滚完整演练。上述仍不等于实机 Overlay 写入压力或断电回滚验收完成。

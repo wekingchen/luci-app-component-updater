@@ -74,3 +74,5 @@ GitHub Actions 还包含原生 opkg、APKv3、ARM64 和恢复测试。**CI 绿�
 修改代码时请先阅读 [AGENTS.md](AGENTS.md) 和 [项目治理](docs/project-governance.md)，同步修改事实文档与 [知识库](wiki-src/Home.md)，CI 会检查版本和发布关键规则。
 
 **诊断修复包编号**：V0.5.5-r1 仅为早期页面布局候选；包含 AX6S 检查状态/错误诊断修复的后续包标记为 **V0.5.5-r2**，避免用同一个版本号覆盖不同二进制。尚未完成 AX6S 检查成功的真机验收。
+
+**2026-11-20 AX6S 空间预检真机定位**：实机状态 `check_state=unsupported`、`check_message=Insufficient space for APK backup`，其 `/tmp` 可用 115.9 MiB、`/etc` 所在 overlay 可用 12.3 MiB，之前共用的 `space_ok` 写死要求 overlay ≥16 MiB，因此在请求 GitHub 之前提前退出。V0.5.5-r3 候选改为 APK 专用空间预算：从已核验的 Release 元数据读取新旧 APK 字节数，检查阶段在 tmpfs 预下载并验证候选 APK、仅解包到 /tmp 测量真实 ELF 大小；预算覆盖持久恢复包、新包缓存、新旧 ELF 较大者与预留空间，并在安装前复查。去掉未供回滚使用的重复 `naive-old`，旧候选复用受验证硬链接，保留全量 APK 恢复及 config/world 校验。**12.3 MiB 不保证必然足够，只有动态预算满足才开放安装，真实硬件写入/回滚仍待验证。**
