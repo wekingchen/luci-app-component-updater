@@ -260,8 +260,8 @@ async function main() {
   assert.strictEqual(dashboard.notice.error, true);
   assert(dashboard.notice.text.includes('没有返回有效的操作结果'));
   dashboard.notice = null;
-  assert(visibleText(dashboard.renderContent({...status,package_manager:'apk'},plan)).includes('组件更新器 · v0.5.6-r1'));
-  assert(visibleText(dashboard.renderContent({...status,package_manager:'opkg'},plan)).includes('组件更新器 · v0.5.6-1'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'apk'},plan)).includes('组件更新器 · v0.5.6-r2'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'opkg'},plan)).includes('组件更新器 · v0.5.6-2'));
   assert(css.includes('.cu-app .cu-notice.is-warning'));
   dashboard.confirmInstall();
   assert(modal && modal.title.includes('NaiveProxy'));
@@ -315,7 +315,7 @@ async function main() {
   }
   const managerPage = load('manager.js');
   const readyManager = {status:'ok',busy:'false',recovery_available:'false',
-    recovery_required:'false',current_archive:'false',installed_version:'0.5.6-r1'};
+    recovery_required:'false',current_archive:'false',installed_version:'0.5.6-r2'};
   const managerNodes = managerPage.render(readyManager);
   assert(visibleText(managerNodes).includes('管理器更新'));
   assert(visibleText(managerNodes).includes('上传新版 APK'));

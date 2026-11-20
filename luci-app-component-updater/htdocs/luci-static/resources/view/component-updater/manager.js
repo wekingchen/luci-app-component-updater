@@ -210,7 +210,7 @@ return view.extend({
         this.body=E('div',{},this.renderBody());
         poll.add(this.refresh.bind(this),5);
         return E('div',{'class':'cu-app cu-manager'},[
-            E('link',{rel:'stylesheet',href:L.resource('component-updater/design.css')+'?v=0.5.6-r1'}),
+            E('link',{rel:'stylesheet',href:L.resource('component-updater/design.css')+'?v=0.5.6-r2'}),
             E('div',{'class':'cu-page-head'},[
                 E('a',{'class':'cu-back',href:L.url('admin/system/component-updater')},'‹ 返回组件更新'),
                 E('span',{'class':'cu-overline'},'管理器维护 · 原生 APK'),
