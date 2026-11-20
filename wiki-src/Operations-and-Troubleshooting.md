@@ -60,6 +60,22 @@ rm -rf /tmp/luci-modulecache/*
 
 V0.5.4 修复候选复用一套 IPK/APKv3 post-install 脚本，并通过隔离 mock 服务测试缓存清理与 rpcd/uhttpd 重启。**固件真机 UI 尚未验收通过，暂不进行 NaiveProxy 实机更新。**
 
+## 管理器网页自升级及回滚（V0.5.6-r3）
+
+在已适配的 AX6S 中，通过 LuCI 上传同名管理器的原生 APK 候选包，先核对包身份、版本、SHA256 与本机恢复基线，再启动自升级。若首次从 SSH 安装旧版且没有旧管理器恢复包，应先按页面提示上传当前版本包建立基线；不要自行跳过恢复保护。
+
+2026-11-21 已在实体 AX6S 上验证 `r3 → r4（仅供回归测试）→ r3` 网页升级/手动回滚，升级和回滚后 `busy=false` 且 UCI 配置保留。建议日常保留 r3，**r4 仅测试回归，不是新产品版**。从 r2 升到 r3 的首次动作仍由 r2 旧后台程序执行，可能需要重新登录或手工处理旧版遗留锁；r3 起的新后台程序已通过此次验证。
+
+只读检查可使用：
+
+~~~sh
+apk list --installed --manifest luci-app-component-updater
+/bin/sh /usr/libexec/component-updater/manager-self-update.sh status
+uci show component-updater
+~~~
+
+回滚成功后 `job_state=rolled_back`、`recovery_required=false`、`busy=false` 为正常；`recovery_available=false` 可能只是本轮上一版恢复包已被消耗，不应误判为失败。该能力仅针对**管理器自身**，不代表 NaiveProxy 实时更新/回滚或断电恢复已通过。
+
 ## 常见问题
 
 - **没有新版？** 云端组件包是提前构建并验证的；官方版本已更新但 CI 还未生成候选时，不会在路由器现场压缩。
