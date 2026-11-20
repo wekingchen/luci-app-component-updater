@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>管理器更新 · AX6S 视觉验收</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eef2f5;font:15px -apple-system,BlinkMacSystemFont,"Noto Sans SC",sans-serif}
+.host{background:#5872dc;color:white;padding:12px 18px}
+.shell{max-width:1030px;margin:auto;padding:12px}
+.legacy-theme header{display:flex!important;position:sticky!important;top:0!important;z-index:500!important}
+.legacy-theme h2,.legacy-theme h3{color:white!important;background:white!important;padding:15px!important}
+.legacy-theme button:disabled{opacity:.25!important}
+</style>
+<link rel="stylesheet" href="../luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css?v=0.5.6-r1">
+</head><body class="legacy-theme">
+<header class="host">OpenWrt / 系统 / 组件更新</header>
+<div class="shell"><main class="cu-app cu-manager">
+<div class="cu-page-head">
+<a class="cu-back" href="#">‹ 返回组件更新</a>
+<span class="cu-overline">管理器维护 · 原生 APK</span>
+<div class="cu-page-title-row"><h2>管理器更新</h2></div>
+<p>网页内完成管理器安装与版本恢复，不影响 NaiveProxy 更新流程。</p>
+</div>
+<section class="cu-panel cu-manager-panel">
+<div class="cu-section-head"><h3>管理器更新</h3><span class="cu-section-hint">仅限当前管理器</span></div>
+<p class="cu-manager-intro">直接从 LuCI 上传我们编译的原生 APK，并在安装前完成检查。不会修改系统原有的软件包管理页面。</p>
+<div class="cu-property-list">
+<div class="cu-property"><span class="cu-property-label">当前管理器</span><strong class="cu-property-value">0.5.6-r1</strong></div>
+<div class="cu-property"><span class="cu-property-label">恢复包</span><strong class="cu-property-value">暂无恢复包</strong></div>
+<div class="cu-property"><span class="cu-property-label">当前包缓存</span><strong class="cu-property-value">首次升级需补充</strong></div>
+<div class="cu-property"><span class="cu-property-label">任务状态</span><strong class="cu-property-value">没有正在执行的任务</strong></div>
+</div>
+<div class="cu-manager-actions">
+<button class="cu-btn cu-btn-check">上传新版 APK</button>
+<button class="cu-btn cu-btn-rollback">上传当前版恢复 APK</button>
+<button class="cu-btn cu-btn-check">校验安装包</button>
+<button class="cu-btn cu-btn-update" disabled>确认后安装</button>
+<button class="cu-btn cu-btn-rollback" disabled>恢复上一版</button>
+</div>
+<p class="cu-mini-note">首次网页更新前，若当前管理器没有本地安装包缓存，必须上传完全相同版本的旧 APK 用于离线回滚。此后每次升级自动保存最新包，历史只保留一个可恢复版本。</p>
+<p class="cu-mini-note">上传文件暂存在 /tmp；恢复文件存放于 /etc/component-updater/manager，独立于 NaiveProxy 的恢复目录。</p>
+</section>
+</main></div>
+<script>
+(function(){
+ const problems=[];
+ const block=document.querySelector('.cu-page-head');
+ const title=document.querySelector('.cu-page-title-row h2');
+ const card=document.querySelector('.cu-manager-panel');
+ const tr=title.getBoundingClientRect(), br=block.getBoundingClientRect(), cr=card.getBoundingClientRect();
+ if(getComputedStyle(block).position!=='static')problems.push('sticky-title');
+ if(tr.width<90||tr.height>60)problems.push('vertical-title');
+ if(cr.top<br.bottom-1)problems.push('panel-overlap');
+ if(document.documentElement.scrollWidth>innerWidth+2)problems.push('horizontal-overflow');
+ const g=document.querySelector('.cu-manager-actions');
+ if(!g||g.querySelectorAll('button').length!==5)problems.push('missing-actions');
+ const disabled=g.querySelector('.cu-btn-update');
+ if(!disabled.disabled||Number(getComputedStyle(disabled).opacity)<.99)problems.push('invalid-disabled');
+ document.documentElement.dataset.uiAudit=problems.length?'fail':'pass';
+ document.documentElement.dataset.uiProblems=problems.join(',');
+})();
+</script></body></html>
