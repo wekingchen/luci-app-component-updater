@@ -97,8 +97,16 @@ prune_backup_chain
         self.assertNotEqual(self.prune().returncode, 0)
         self.assertEqual(len(list(self.backups.iterdir())), 2)
 
-    def test_missing_ancestor_fails_closed(self):
+    def test_expired_ancestor_does_not_block_cleanup_after_rollback(self):
+        # D -> C restoration can expose the old C -> B receipt after
+        # B's earlier ancestor has already been safely pruned.
         self.archive("100-1", "900-9")
+        self.archive("300-3")
+        self.select("100-1")
+        self.assertEqual(self.prune().returncode, 0)
+        self.assertEqual(set(p.name for p in self.backups.iterdir()), {"100-1"})
+
+    def test_missing_current_recovery_archive_fails_closed(self):
         self.archive("300-3")
         self.select("100-1")
         self.assertNotEqual(self.prune().returncode, 0)
