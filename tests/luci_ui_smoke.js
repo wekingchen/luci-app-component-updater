@@ -245,6 +245,14 @@ async function main() {
   const notificationText = visibleText(dashboard.renderContent(status,plan));
   assert(notificationText.includes('操作没有成功'));
   assert(!notificationText.includes('Unexpected unlocalized'));
+  dashboard.notify({status:'storage_limited',message:'Insufficient space for APK backup'});
+  assert.strictEqual(dashboard.notice.error, false);
+  assert.strictEqual(dashboard.notice.warning, true);
+  let warningNode = dashboard.renderNotice();
+  assert(warningNode.attributes.class.includes('is-warning'));
+  assert(!warningNode.attributes.class.includes('is-error'));
+  assert.strictEqual(warningNode.attributes.role, 'status');
+  assert(visibleText(warningNode).includes('Overlay'));
   dashboard.notify({status:'unsupported',message:'Insufficient space for APK backup'});
   assert.strictEqual(dashboard.notice.error, true);
   assert(dashboard.notice.text.includes('空间不足'));
@@ -252,7 +260,8 @@ async function main() {
   assert.strictEqual(dashboard.notice.error, true);
   assert(dashboard.notice.text.includes('没有返回有效的操作结果'));
   dashboard.notice = null;
-
+  assert(visibleText(dashboard.renderContent(status,plan)).includes('组件更新器 · v0.5.5-r4'));
+  assert(css.includes('.cu-app .cu-notice.is-warning'));
   dashboard.confirmInstall();
   assert(modal && modal.title.includes('NaiveProxy'));
   assert(visibleText(modal.content).includes('先备份当前版本'));
