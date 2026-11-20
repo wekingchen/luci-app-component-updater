@@ -190,6 +190,7 @@ return view.extend({
         var busy = this.isBusy(status);
         var isApk = status.package_manager === 'apk';
         var apkGuard = isApk && status.compatibility !== 'ax6s-apk-native';
+        var current = state.label === '已是最新版本';
         var ready = !apkGuard && (plan.ready === 'true' || plan.ready === true) && !this.isCurrent(status);
         var canRollback = !apkGuard && status.rollback_available === 'true';
         var extraRows = [
@@ -221,9 +222,9 @@ return view.extend({
                     E('strong', {'class': 'cu-version-value'}, this.val(status.official_tag, '尚未检查'))
                 ])
             ]),
-            E('div', {'class': 'cu-actions' + (ready ? ' is-ready' : '')}, [
+            E('div', {'class': 'cu-actions' + (ready ? ' is-ready' : current ? ' is-current' : '')}, [
                 E('button', {'class': 'cu-btn cu-btn-check', type: 'button', disabled: (busy || apkGuard) ? true : null,
-                    click: function() { return self.handleCheck(); }}, '检查官方更新'),
+                    click: function() { return self.handleCheck(); }}, current ? '重新检查更新' : '检查官方更新'),
                 E('button', {'class': 'cu-btn cu-btn-update', type: 'button', disabled: (!ready || busy || apkGuard) ? true : null,
                     click: function() { return self.confirmInstall(); }}, '下载并更新'),
                 E('button', {'class': 'cu-btn cu-btn-rollback', type: 'button', disabled: (busy || !canRollback) ? true : null,
@@ -232,6 +233,7 @@ return view.extend({
             E('p', {'class': 'cu-action-hint', role: 'status'}, apkGuard ? '当前固件未通过兼容性检测，更新与恢复均不可用。' :
                 busy ? '正在执行操作，请勿重复点击。' :
                 ready ? '已找到适配安装包。确认后才会开始更新。' :
+                current ? (canRollback ? '已核对官方最新版本，无需重复安装。如有需要，可恢复已备份的上一版本。' : '已核对官方最新版本，无需重复安装。当前没有可用的旧版备份。') :
                 canRollback ? '请先检查官方更新；已有旧版备份可供恢复。' :
                 '先检查官方更新；没有有效备份时无法恢复上一版本。'),
             E('p', {'class': 'cu-mini-note'}, apkGuard ? '原生 APK 环境尚未开启安装；请先通过设备兼容性验收。' :
@@ -269,7 +271,7 @@ return view.extend({
             content.push(notice);
         content.push(hero, overview, details,
             E('div', {'class': 'cu-footer'}, [
-                E('span', {}, '组件更新器 · v0.5.2 · 原生 IPK / APK 双模式')
+                E('span', {}, '组件更新器 · v0.5.3 · 原生 IPK / APK 双模式')
             ]));
         return content;
     },
@@ -401,7 +403,7 @@ return view.extend({
         this.page = E('div', {}, this.renderContent(this.currentStatus, this.currentPlan));
         poll.add(this.refresh.bind(this), 5);
         return E('div', {'class': 'cu-app'}, [
-            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.2'}),
+            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.3'}),
             E('header', {'class': 'cu-page-head'}, [
                 E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
                 E('div', {'class': 'cu-page-title-row'}, [
