@@ -351,8 +351,13 @@ worker() {
     trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
     if [ "$1" = upgrade ]; then upgrade; else restore; fi
     result=$?
-    /etc/init.d/rpcd restart >/dev/null 2>&1 || true
-    /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+    # NEVER restart rpcd/uhttpd from the worker. We deliberately install
+    # with --no-scripts: the already registered RPC methods execute this
+    # script on each call, and LuCI versioned resources load on page reload.
+    # Restarting the active login/session providers here invalidates ubus
+    # sessions and can strand the user with a misleading login error.
+    # A future package needing a new RPC method must provide a separately
+    # confirmed service-refresh operation after the transaction completes.
     exit "$result"
 }
 case "$1" in
