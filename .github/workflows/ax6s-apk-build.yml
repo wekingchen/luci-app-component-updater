@@ -299,6 +299,7 @@ jobs:
           ROOTFS=/tmp/ax6s-native-rootfs
           sudo chroot "$ROOTFS" /bin/sh -eu -c '
             set -e
+            trap "rc=\$?; if [ \$rc -ne 0 ]; then echo AX6S_NATIVE_FAILURE_DIAGNOSTICS; cat /tmp/component-updater/job.json /tmp/component-updater/check-state.json /tmp/component-updater/job.log 2>/dev/null || :; fi" EXIT
             candidate_version=$(cat /tmp/component-acceptance-fixtures/expected_version)
             test -n "$candidate_version"
             source_root=$(sha256sum /usr/bin/naive | awk "{print \$1}")
@@ -312,6 +313,9 @@ jobs:
             test -s /tmp/component-updater/plan.json
             cp /tmp/component-acceptance-fixtures/candidate.apk /tmp/good-candidate.apk
             printf X >> /tmp/component-acceptance-fixtures/candidate.apk
+            # The check phase caches a verified copy. Remove only that copy
+            # to force run() to fetch the deliberately tampered remote fixture.
+            rm -f /tmp/component-updater/apk-candidate-verified.apk
             if /usr/sbin/component-updaterctl run; then
               echo "BLOCK: tampered package unexpectedly installed"
               exit 1
