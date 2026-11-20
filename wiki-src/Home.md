@@ -23,3 +23,5 @@
 - [AX6S NaiveProxy APKv3 候选：升级包和原固件恢复包](https://github.com/wekingchen/luci-app-component-updater/releases/tag/component-naiveproxy-v154.0.8037.49-5-upx521-r3-ax6s-apk1)
 
 本知识库的页面由主仓库 `wiki-src/` 版本化维护，并经 GitHub Actions 校验后同步。实际技术约束以 [项目开发规则](https://github.com/wekingchen/luci-app-component-updater/blob/main/AGENTS.md)、[项目治理](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/project-governance.md)及可运行的代码/测试为准，Wiki 页面不替代设备验收。
+
+> **候选包版本区分**：V0.5.5-r1 是页头布局修复候选，V0.5.5-r2 增加了更新检查状态/错误诊断的修复。两者均不是实机功能完成验收的稳定版。

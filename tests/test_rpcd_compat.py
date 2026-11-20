@@ -43,7 +43,7 @@ class RpcdCompatibilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable,str(ROOT/'tools/package_ipk.py'),'--out',td],check=True,
                            stdout=subprocess.DEVNULL)
-            p=Path(td)/'luci-app-component-updater_0.5.5-1_all.ipk'
+            p=Path(td)/'luci-app-component-updater_0.5.5-2_all.ipk'
             with tarfile.open(p,mode='r:gz') as outer:
                 self.assertEqual(outer.getnames(),[
                     './debian-binary','./data.tar.gz','./control.tar.gz'])

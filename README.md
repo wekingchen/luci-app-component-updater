@@ -72,3 +72,5 @@ python3 tools/package_ipk.py --out dist
 GitHub Actions 还包含原生 opkg、APKv3、ARM64 和恢复测试。**CI 绿灯不等于设备已通过硬件验收**；只有完成指定机型实际测试，才能提升稳定版并开启 AX6S 后续自动发布。
 
 修改代码时请先阅读 [AGENTS.md](AGENTS.md) 和 [项目治理](docs/project-governance.md)，同步修改事实文档与 [知识库](wiki-src/Home.md)，CI 会检查版本和发布关键规则。
+
+**诊断修复包编号**：V0.5.5-r1 仅为早期页面布局候选；包含 AX6S 检查状态/错误诊断修复的后续包标记为 **V0.5.5-r2**，避免用同一个版本号覆盖不同二进制。尚未完成 AX6S 检查成功的真机验收。

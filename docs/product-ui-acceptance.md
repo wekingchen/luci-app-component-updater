@@ -80,3 +80,5 @@ python3 -m unittest discover -s tests -v
 - AX6S APK 检查此前把下载校验清单失败和 SHA256 不匹配合并返回“APK manifest hash mismatch”，现已拆为传输失败和摘要不匹配两个不同失败条件，均保留原先的严格 SHA256 拒绝策略。新增 APK 检查失败原因中文映射及 Node/Python 回归。
 - 实机定位需只读查看 `/usr/sbin/component-updaterctl status` 和 `/tmp/component-updater/check-state.json`，确认具体失败阶段、下载设置/固件基线与回滚状态；不能把“能上网”直接推导为“官方 GitHub API 和 Release 文件均可达”。
 - 以上修复不改变 NaiveProxy 安装许可、包摘要算法、原厂基线哈希、APK world/恢复策略，亦不放宽对未知设备的写入限制。实机最终检查成功与安装/恢复仍未验收。
+
+- 本轮诊断修复产生与早期 V0.5.5-r1 不同的二进制，因此管理器包发布编号提升到 **V0.5.5-r2**（SDK IPK 0.5.5-2、APKv3 0.5.5-r2）；保持独立候选，不覆盖先前构建文件。
