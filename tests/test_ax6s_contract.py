@@ -68,6 +68,46 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
         self.assertIn("'APK manifest download failed':", UI)
         self.assertIn("'APK manifest hash mismatch':", UI)
 
+    def test_low_overlay_budget_is_measured_not_fixed_16mb(self):
+        import subprocess
+        import tempfile
+        import os
+        import shlex
+        text=NATIVE.split('apk_overlay_budget_ok() {',1)[1].split('\napk_plan_ok() {',1)[0]
+        with tempfile.TemporaryDirectory() as td:
+            binary=Path(td)/'naive'
+            binary.write_bytes(b'x' * (3400*1024))
+            receipt=Path(td)/'receipt.json'
+            active=Path(td)/'active.apk'
+            script=('apk_overlay_budget_ok() {'+text+'\n'
+                    +f'BINARY={shlex.quote(str(binary))}\n'
+                    +f'RECEIPT={shlex.quote(str(receipt))}\n'
+                    +f'APK_ACTIVE={shlex.quote(str(active))}\n'
+                    +'df() { printf "Filesystem 1024-blocks Used Available Capacity Mounted\n"; '
+                    'printf "/overlay 14746 2146 %s 15%% /\n" "$FREE_KIB"; }\n'
+                    +'apk_overlay_budget_ok 3969118 3218562 3210000\n')
+            def test(free_kib,receipt_present=False):
+                if receipt_present:
+                    receipt.write_text('{}')
+                    active.write_text('verified-archive')
+                else:
+                    receipt.unlink(missing_ok=True)
+                    active.unlink(missing_ok=True)
+                return subprocess.run(['/bin/sh','-c',script],
+                                      env={**os.environ,'FREE_KIB':str(free_kib)},
+                                      capture_output=True,text=True).returncode
+            self.assertEqual(test(12600),0,
+                             '12.3 MiB must be tested against exact APK/ELF sizes, not a fixed 16 MiB')
+            self.assertNotEqual(test(9000),0,
+                                'genuinely insufficient flash must still reject update')
+            self.assertEqual(test(9000,True),0,
+                             'a verified hardlink must not be charged as a duplicate APK')
+            self.assertIn("current_elf=$(wc -c",NATIVE)
+            self.assertIn("ln \"$APK_ACTIVE\" \"$bak/previous.apk\"",NATIVE)
+            self.assertIn("ln \"$rd/previous.apk\" \"$APK_ACTIVE.tmp.$$",NATIVE)
+            self.assertNotIn('cp -p "$BINARY" "$bak/naive-old"',NATIVE)
+            self.assertNotIn('cp "$APK_ACTIVE" "$bak/active.apk"',NATIVE)
+
     def test_world_constraints_remain_unchanged_after_native_apk_transactions(self):
         self.assertIn('cp -p /etc/apk/world "$bak/world"',NATIVE)
         self.assertIn('cp -p "$bak/world" /etc/apk/world',NATIVE)
