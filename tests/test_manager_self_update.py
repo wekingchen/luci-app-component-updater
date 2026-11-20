@@ -41,7 +41,7 @@ class SelfUpdateContract(unittest.TestCase):
         self.assertNotIn("backups/naiveproxy",BACKEND)
         self.assertIn('printf \'%s\\n\' next > "$TXN"',BACKEND)
         self.assertIn("sync",BACKEND)
-        self.assertIn('sha_ok "$PREV/previous.apk"',BACKEND)
+        self.assertIn('sha_ok "$root/previous.apk"',BACKEND)
         self.assertIn("mkdir \"$LOCK\"",BACKEND)
         self.assertIn('cp "$SELF" "$TMP/worker.tmp.$$"',BACKEND)
         self.assertIn("nohup /bin/sh",BACKEND)
