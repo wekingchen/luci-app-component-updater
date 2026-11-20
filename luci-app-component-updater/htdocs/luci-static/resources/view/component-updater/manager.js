@@ -27,7 +27,7 @@ var MESSAGES = {
     'Insufficient Overlay for manager backup and upgrade':'Overlay 空间不足，无法同时保存升级包和上一版恢复包。',
     'Unsupported manager APK identity or payload':'上传的文件不是符合限制的管理器 APK，已拒绝安装。',
     'Manager plan invalid':'已核验的安装计划不可用，请重新校验。',
-    'Manager task started':'后台安装任务已启动，页面会自动刷新。',
+    'Manager task started':'后台任务已启动，页面将持续检查实际安装结果。',
     'Manager upgrade completed; one rollback archive retained':'升级成功，已保留一份上一版本恢复包。'
 };
 return view.extend({
@@ -38,6 +38,9 @@ return view.extend({
     planReady:false,
     notice:null,
     lastResult:null,
+    connectionFailures:0,
+    awaitingVersion:null,
+    lastSeenJob:null,
     load:function() { return statusCall(); },
     response:function(result) {
         result = result || {};
@@ -46,7 +49,7 @@ return view.extend({
             ready:'新版已通过检查，可确认安装。',
             requires_previous:'请先上传与你当前安装版本完全相同的 APK 作为恢复包。',
             prepared:'文件校验和包内容检查已通过。',
-            started:'后台任务已启动，连接暂时中断是正常的。',
+            started:'后台任务已启动，页面将持续检查实际安装结果。正常升级不应中断 LuCI 会话。',
             storage_limited:'空间不足，已禁止安装。',
             rolled_back:'已恢复到上一版本。',
             error:'操作未成功，未执行安装。'
@@ -57,11 +60,34 @@ return view.extend({
     refresh:function() {
         var self=this;
         return statusCall().then(function(s) {
-            self.currentStatus=s || {};
+            if (!s || s.status !== 'ok')
+                throw new Error('manager RPC returned no valid status');
+            self.connectionFailures=0;
+            self.currentStatus=s;
+            if (s.job_state !== self.lastSeenJob) {
+                self.lastSeenJob=s.job_state;
+                if (s.job_state === 'completed' || s.job_state === 'rolled_back') {
+                    self.notice=JOB[s.job_state]+' 当前版本：'+(s.installed_version||'请查看安装记录')+'。';
+                    self.lastResult='completed';
+                    self.planReady=false;
+                    self.awaitingVersion=null;
+                }
+                else if (s.job_state === 'failed' || s.job_state === 'recovery_required') {
+                    self.notice=JOB[s.job_state]+' 请先保留恢复包，并通过 SSH 检查后台日志。';
+                    self.lastResult='error';
+                    self.planReady=false;
+                }
+            }
             self.repaint();
         }).catch(function() {
-            // rpcd and uhttpd intentionally restart after a self-upgrade.
-            // Preserve the UI and retry through the existing poll interval.
+            // Never swallow the loss of the authentication RPC. A healthy
+            // manager update does not restart rpcd/uhttpd or log users out.
+            self.connectionFailures++;
+            if (self.connectionFailures >= 2) {
+                self.lastResult='error';
+                self.notice='无法连接 LuCI 后端，当前版本和更新结果尚未确认。请勿重复提交安装或清理恢复文件；使用 SSH 查看任务状态。';
+                self.repaint();
+            }
         });
     },
     upload:function(kind) {
@@ -111,6 +137,8 @@ return view.extend({
         if (this.busy) return Promise.resolve();
         this.busy=true;
         this.planReady=false;
+        this.awaitingVersion=(this.currentStatus||{}).installed_version || null;
+        this.lastSeenJob=null;
         this.repaint();
         return action().then(function(result) {
             self.response(result);
@@ -127,7 +155,7 @@ return view.extend({
         if (!this.planReady || this.busy) return;
         ui.showModal('确认更新管理器',[
             E('p',{},'将安装你主动上传并校验的本地 APK。此包没有独立发布签名；SHA256 只能确认上传前后内容一致，不能证明开发者身份。请仅使用你信任的编译产物。'),
-            E('p',{},'执行期间 LuCI 与 rpcd 会短暂重新启动，NaiveProxy 和 PassWall 不会由此功能主动重启。上一版 APK 将保留供离线恢复。'),
+            E('p',{},'更新器不会主动重启 rpcd 或 uhttpd；页面会轮询确认安装版本和事务结果。NaiveProxy、PassWall 也不会被主动重启。上一版 APK 将保留供离线恢复。'),
             E('div',{'class':'right'},[
                 E('button',{'class':'btn',click:ui.hideModal},'取消'),' ',
                 E('button',{'class':'btn cbi-button-positive',click:function() {
