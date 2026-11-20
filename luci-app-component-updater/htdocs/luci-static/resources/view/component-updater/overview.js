@@ -404,7 +404,7 @@ return view.extend({
         poll.add(this.refresh.bind(this), 5);
         return E('div', {'class': 'cu-app'}, [
             E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.4'}),
-            E('header', {'class': 'cu-page-head'}, [
+            E('div', {'class': 'cu-page-head'}, [
                 E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
                 E('div', {'class': 'cu-page-title-row'}, [
                     E('h2', {}, '组件更新'),
