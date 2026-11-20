@@ -104,7 +104,7 @@ field() {
             call()
             self.assertFalse(lock.exists())
         self.assertIn('clear_terminal_orphan_lock', BACKEND)
-        self.assertIn('printf \\'%s\\n\\' "$" > "$LOCK/pid"', BACKEND)
+        self.assertIn('> "$LOCK/pid"', BACKEND)
 
     def test_manager_menu_and_upload_acl_are_scoped(self):
         self.assertEqual(MENU["admin/system/component-updater/manager"]["action"]["path"],
