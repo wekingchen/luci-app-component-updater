@@ -94,7 +94,8 @@ apk_check() {
         { check_msg error 'APK release identity mismatch'; return 1; }
     msha=$(release_digest "$CACHE/apk-release.json" manifest.json)
     valid_hash "$msha" || { check_msg error 'Missing APK manifest checksum'; return 1; }
-    download "https://github.com/$GITHUB/releases/download/$build/manifest.json" "$CACHE/apk-manifest.tmp" &&
+    download "https://github.com/$GITHUB/releases/download/$build/manifest.json" "$CACHE/apk-manifest.tmp" ||
+        { check_msg error 'APK manifest download failed'; return 1; }
     check_sha "$CACHE/apk-manifest.tmp" "$msha" ||
         { check_msg error 'APK manifest hash mismatch'; return 1; }
     mv -f "$CACHE/apk-manifest.tmp" "$CACHE/apk-manifest.json" || return 1
