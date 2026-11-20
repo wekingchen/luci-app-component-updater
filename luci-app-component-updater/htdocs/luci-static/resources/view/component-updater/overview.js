@@ -309,13 +309,16 @@ return view.extend({
                 E('p', {}, '当前采用文件摘要校验，不包含独立数字签名。启用查询反代时，需要自行信任反代服务提供的校验信息。')
             ])
         ]);
+        // IPK and APKv3 use different package-release suffix conventions.
+        // Always show the installed manager package revision unambiguously.
+        var managerBuild = status.package_manager === 'apk' ? 'v0.5.5-r4' : 'v0.5.5-4';
         var content = [];
         var notice = this.renderNotice();
         if (notice)
             content.push(notice);
         content.push(hero, overview, details,
             E('div', {'class': 'cu-footer'}, [
-                E('span', {}, '组件更新器 · v0.5.5-r4 · 原生 IPK / APK 双模式')
+                E('span', {}, '组件更新器 · ' + managerBuild + ' · 原生 IPK / APK 双模式')
             ]));
         return content;
     },
