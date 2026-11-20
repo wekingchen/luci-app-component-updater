@@ -68,7 +68,7 @@
 <details class="cu-detail"><summary>查看构建与诊断详情</summary>
 <div class="cu-detail-body"><div class="cu-property"><span class="cu-property-label">固件平台</span><strong class="cu-property-value">mediatek/mt7987</strong></div><div class="cu-property"><span class="cu-property-label">运行中进程</span><strong class="cu-property-value">2 个</strong></div></div>
 </details>
-<footer class="cu-footer"><span>组件更新器 · v0.5.5 · 原生 IPK / APK 双模式</span>
+<footer class="cu-footer"><span>组件更新器 · v0.5.5-r4 · 原生 IPK / APK 双模式</span>
 <a href="#">GitHub 下载与反代设置</a></footer>
 </main></div>
 <script>
@@ -82,6 +82,15 @@ if(location.search.indexOf('ready')>=0){
   document.querySelector('.cu-lead').textContent='安装包已完成匹配及完整性校验，可以手动更新。';
   document.querySelectorAll('.cu-version-value')[1].textContent='v154.0.8037.49-5';
   document.querySelector('.cu-action-hint').textContent='已找到适配安装包。确认后才会开始更新。';
+}
+if(location.search.includes('storage')){
+  const header=document.querySelector('.cu-page-head');
+  header.insertAdjacentHTML('afterend','<div class="cu-notice is-warning" role="status"><span class="cu-notice-text">Overlay 持久空间不足，无法安全保存 APK 恢复包；未开始安装。</span><button class="cu-notice-dismiss" aria-label="关闭提示" type="button">×</button></div>');
+  document.querySelector('.cu-status').textContent='空间不足';
+  document.querySelector('.cu-status').classList.remove('is-muted');
+  document.querySelector('.cu-headline').textContent='已查到官方版本，但暂不能安装';
+  document.querySelector('.cu-lead').textContent='至少需要 16 MiB 的空闲 Overlay，当前约 12.3 MiB。为保留完整离线回滚能力，空间不足时不会写入固件。';
+  document.querySelectorAll('.cu-version-value')[1].textContent='v154.0.8037.49-5';
 }
 if(location.search.includes('current')){
   document.querySelector('.cu-actions').classList.add('is-current');
@@ -109,6 +118,15 @@ if(location.search.includes('current')){
  if(ratio(active.color,active.backgroundColor)<4.5)problems.push('active-contrast:'+active.color+'-on-'+active.backgroundColor);
  const disabled=document.querySelector('.cu-btn-update:disabled')||document.querySelector('.cu-btn-rollback:disabled');
  if(disabled){const cs=getComputedStyle(disabled);if(Number(cs.opacity)<.99)problems.push('disabled-opacity');if(ratio(cs.color,cs.backgroundColor)<4.5)problems.push('disabled-contrast')}
+ if(location.search.includes('storage')){
+   const notice=document.querySelector('.cu-notice');
+   const ns=getComputedStyle(notice);
+   if(!notice.classList.contains('is-warning'))problems.push('storage-notice-not-warning');
+   if(ns.backgroundColor!=='rgb(255, 245, 218)')problems.push('storage-notice-not-amber:'+ns.backgroundColor);
+   if(ratio(ns.color,ns.backgroundColor)<4.5)problems.push('storage-notice-low-contrast');
+   if(!document.querySelector('.cu-btn-update').disabled)problems.push('storage-unlocked-update');
+   if(!document.querySelector('.cu-footer').textContent.includes('v0.5.5-r4'))problems.push('wrong-manager-revision');
+ }
  if(document.documentElement.scrollWidth>window.innerWidth+2)problems.push('horizontal-overflow');
  for(const name of ['.cu-hero','.cu-page-head']) {
   const before=getComputedStyle(document.querySelector(name),'::before');
