@@ -56,7 +56,21 @@ var CHECK_TEXT = {
     'Original APK version and configuration restored': '上一版本及原有配置均已恢复。',
     'Native APK package ownership or installed firmware does not match the verified AX6S baseline': '当前软件包文件或设备环境与经过验证的 AX6S 基线不匹配，已禁止安装。',
     'Native APK firmware requires a verified APK package and rollback workflow; no changes made': '已识别 APK 软件包环境；原生 APK 更新与回滚尚未完成验收，未修改任何文件。',
-    'libgcc1 must already be installed': '缺少必要的运行依赖。'
+    'libgcc1 must already be installed': '缺少必要的运行依赖。',
+    'Insufficient space for APK backup': '临时空间或系统可写空间不足，无法为 APK 安全备份。',
+    'Previous APK transaction must be recovered first': '上一次 APK 更新事务尚未完成，请先恢复。',
+    'Unsupported official release version': '官方版本格式不符合当前适配规则，已停止检查。',
+    'APK release identity mismatch': 'APK 发布版本标识不一致，已拒绝继续更新。',
+    'Missing APK manifest checksum': 'APK 发布信息缺少校验清单 SHA256，已拒绝更新。',
+    'APK manifest download failed': '无法下载 APK 校验清单。请检查 GitHub 文件下载连接或中转设置。',
+    'APK manifest hash mismatch': 'APK 校验清单 SHA256 不匹配，已拒绝更新。',
+    'APK manifest platform mismatch': 'APK 校验清单与当前设备或固件平台不匹配。',
+    'APK baseline recovery identity mismatch': 'APK 原厂恢复包身份校验不通过，已拒绝更新。',
+    'Invalid native APK SHA256': 'APK 文件摘要格式异常，已拒绝更新。',
+    'APK asset digest does not match Release API': 'APK 下载包摘要与发布接口不一致，已拒绝更新。',
+    'Cloud APK package is being prepared': '尚未取得对应 APK 发布信息，可能仍在准备或连接异常，请稍后重试。',
+    'Check for verified APK update before installing': '安装前必须先完成 APK 更新检查。',
+    'Update in progress': '已有更新任务执行中，请勿重复操作。'
 };
 var JOB_TEXT = {
     idle: '当前没有正在执行的任务。',
@@ -165,8 +179,11 @@ return view.extend({
                 {tone:'error', label:'暂不支持', title:'当前 APK 环境未适配', description:'已识别 APK 软件包管理器，但设备不属于已知 AX6S 环境。不会执行 IPK 安装。'};
         if (jobState === 'recovery_required' || checkState === 'recovery_required')
             return {tone:'error', label:'需要恢复', title:'上一次更新需要处理', description:status.rollback_available === 'true' ? '检测到未完成的更新事务，请先恢复旧版本。' : '存在未完成的更新事务，但未找到本地恢复包；请查看诊断，不要重复安装。'};
+        if (this.operationBusy && this.operationKind === 'check' && BUSY_STATES.indexOf(jobState) < 0)
+            return {tone:'warn', label:'正在检查', title:'正在检查官方更新', description:'正在核对官方版本、设备环境和安装包校验信息。'};
         if (this.isBusy(status))
-            return {tone:'warn', label:'更新进行中', title:'正在处理更新任务', description:JOB_TEXT[jobState] || '正在与设备通信，请勿重复操作。'};
+            return {tone:'warn', label:'更新进行中', title:'正在处理更新任务', description:BUSY_STATES.indexOf(jobState) >= 0 ?
+                JOB_TEXT[jobState] : '正在提交更新操作，请勿重复点击。'};
         if (jobState === 'failed')
             return {tone:'error', label:'更新失败', title:'本次安装未成功', description:JOB_TEXT.failed};
         if (checkState === 'error' || checkState === 'unsupported')
@@ -231,7 +248,8 @@ return view.extend({
                     click: function() { return self.confirmRollback(); }}, '恢复上一个版本')
             ]),
             E('p', {'class': 'cu-action-hint', role: 'status'}, apkGuard ? '当前固件未通过兼容性检测，更新与恢复均不可用。' :
-                busy ? '正在执行操作，请勿重复点击。' :
+                busy ? (this.operationKind === 'check' && BUSY_STATES.indexOf(status.job_state) < 0 ?
+                    '正在检查官方更新，请勿重复点击。' : '正在执行操作，请勿重复点击。') :
                 ready ? '已找到适配安装包。确认后才会开始更新。' :
                 current ? (canRollback ? '已核对官方最新版本，无需重复安装。如有需要，可恢复已备份的上一版本。' : '已核对官方最新版本，无需重复安装。当前没有可用的旧版备份。') :
                 canRollback ? '请先检查官方更新；已有旧版备份可供恢复。' :
@@ -326,6 +344,7 @@ return view.extend({
         if (self.isBusy(self.currentStatus || {}))
             return Promise.resolve();
         self.operationBusy = true;
+        self.operationKind = 'check';
         self.repaint();
         self.lastPendingCheck = Date.now();
         return check().then(function(result) {
@@ -334,6 +353,7 @@ return view.extend({
             self.notify({status:'error', message:String(err)});
         }).then(function() {
             self.operationBusy = false;
+            self.operationKind = null;
             self.repaint();
             return self.refresh();
         });
@@ -344,6 +364,7 @@ return view.extend({
         if (self.isBusy(self.currentStatus || {}))
             return Promise.resolve();
         self.operationBusy = true;
+        self.operationKind = 'install';
         self.repaint();
         return method().then(function(result) {
             self.notify(result);
@@ -351,6 +372,7 @@ return view.extend({
             self.notify({status:'error', message:String(err)});
         }).then(function() {
             self.operationBusy = false;
+            self.operationKind = null;
             self.repaint();
             return self.refresh();
         });
