@@ -155,6 +155,15 @@ async function main() {
   assert(!visibleText(nodes).includes('请先检查官方更新'));
   assert.strictEqual(disabledInRealDom(button(nodes,'重新检查更新')),false);
   assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
+  nodes = dashboard.renderContent({...status,check_state:'storage_limited',
+    package_manager:'apk',compatibility:'ax6s-apk-native',
+    overlay_required_kib:'16140',overlay_available_kib:'12595',
+    official_tag:'v154.0.8037.49-5',job_state:'idle'}, {ready:'false'});
+  assert(visibleText(nodes).includes('已查到官方版本，但暂不能安装'));
+  assert(visibleText(nodes).includes('至少需要 16 MiB'));
+  assert(visibleText(nodes).includes('12.3 MiB'));
+  assert.strictEqual(disabledInRealDom(button(nodes,'检查官方更新')),false);
+  assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
   nodes = dashboard.renderContent({...status,job_state:'idle',check_state:'pending'}, {ready:'false'});
   assert(visibleText(nodes).includes('云端准备中'));
   assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
