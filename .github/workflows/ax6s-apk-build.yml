@@ -237,6 +237,32 @@ jobs:
             test -r /www/luci-static/resources/component-updater/design.css
             echo "PASS: Native AX6S manager APK 0.4 -> 0.5 and UCI configuration preservation"
           '
+      - name: AX6S native manager upload and package-inspection contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=/tmp/ax6s-native-rootfs
+          sudo mkdir -p "$ROOTFS/tmp/sysinfo"
+          printf 'xiaomi,redmi-router-ax6s\n' | sudo tee "$ROOTFS/tmp/sysinfo/board_name" >/dev/null
+          sudo cp dist/luci-app-component-updater-0.5.6-r1.apk "$ROOTFS/tmp/component-updater-manager-current.apk"
+          size=$(wc -c < dist/luci-app-component-updater-0.5.6-r1.apk | tr -d ' ')
+          sha=$(sha256sum dist/luci-app-component-updater-0.5.6-r1.apk | awk '{print $1}')
+          printf '{"kind":"previous","size":%s,"sha256":"%s"}\n' "$size" "$sha" |
+            sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh upload > /tmp/ax6s-manager-prepare.json
+          cat /tmp/ax6s-manager-prepare.json
+          grep -q '"status": "prepared"' /tmp/ax6s-manager-prepare.json
+          sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh status > /tmp/ax6s-manager-status.json
+          cat /tmp/ax6s-manager-status.json
+          grep -q '"current_archive": "true"' /tmp/ax6s-manager-status.json
+          sudo cp dist/luci-app-component-updater-0.5.6-r1.apk "$ROOTFS/tmp/component-updater-manager-new.apk"
+          if printf '{"kind":"candidate","size":%s,"sha256":"%s"}\n' "$size" "$sha" |
+               sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh upload > /tmp/ax6s-manager-same-version.json; then
+            echo 'ERROR: same-version manager update incorrectly accepted'
+            exit 1
+          fi
+          grep -q 'Candidate version already installed' /tmp/ax6s-manager-same-version.json
+          echo 'PASS: Native APK manager import and same-version rejection'
+
       - name: Verify AX6S rpcd plugin registration and status through native ubus
         shell: bash
         run: |
@@ -273,6 +299,10 @@ jobs:
           cat /tmp/ax6s-ubusd.log || true
           test -s /tmp/ax6s-rpc-methods.json || exit 1
           grep -q rollback /tmp/ax6s-rpc-methods.json
+          grep -q manager_upload /tmp/ax6s-rpc-methods.json
+          grep -q manager_check /tmp/ax6s-rpc-methods.json
+          grep -q manager_start /tmp/ax6s-rpc-methods.json
+          grep -q manager_rollback /tmp/ax6s-rpc-methods.json
           if ! sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-test-ubus.sock call component-updater status > /tmp/ax6s-rpc-status.json 2>/tmp/ax6s-rpc-error.log; then
             cat /tmp/ax6s-rpc-status.json /tmp/ax6s-rpc-error.log /tmp/ax6s-rpcd.log
             exit 1
