@@ -3,6 +3,7 @@
 'require rpc';
 'require ui';
 'require poll';
+'require dom';
 
 var statusCall = rpc.declare({object:'component-updater',method:'manager_status'});
 var uploadCall = rpc.declare({object:'component-updater',method:'manager_upload',
