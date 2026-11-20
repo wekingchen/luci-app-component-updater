@@ -260,7 +260,8 @@ async function main() {
   assert.strictEqual(dashboard.notice.error, true);
   assert(dashboard.notice.text.includes('没有返回有效的操作结果'));
   dashboard.notice = null;
-  assert(visibleText(dashboard.renderContent(status,plan)).includes('组件更新器 · v0.5.5-r4'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'apk'},plan)).includes('组件更新器 · v0.5.5-r4'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'opkg'},plan)).includes('组件更新器 · v0.5.5-4'));
   assert(css.includes('.cu-app .cu-notice.is-warning'));
   dashboard.confirmInstall();
   assert(modal && modal.title.includes('NaiveProxy'));
