@@ -57,7 +57,8 @@ var CHECK_TEXT = {
     'Native APK package ownership or installed firmware does not match the verified AX6S baseline': '当前软件包文件或设备环境与经过验证的 AX6S 基线不匹配，已禁止安装。',
     'Native APK firmware requires a verified APK package and rollback workflow; no changes made': '已识别 APK 软件包环境；原生 APK 更新与回滚尚未完成验收，未修改任何文件。',
     'libgcc1 must already be installed': '缺少必要的运行依赖。',
-    'Insufficient space for APK backup': '临时空间或系统可写空间不足，无法为 APK 安全备份。',
+    'Insufficient space for APK backup': 'Overlay 持久空间不足，无法安全保存 APK 恢复包；未开始安装。',
+    'Cannot determine safe APK storage budget': '无法可靠计算 APK 更新所需空间，已禁止安装。',
     'Previous APK transaction must be recovered first': '上一次 APK 更新事务尚未完成，请先恢复。',
     'Unsupported official release version': '官方版本格式不符合当前适配规则，已停止检查。',
     'APK release identity mismatch': 'APK 发布版本标识不一致，已拒绝继续更新。',
@@ -145,6 +146,7 @@ return view.extend({
             failure ? '操作没有成功，请查看检查原因或系统日志。' :
             status === 'up_to_date' ? '当前已是最新版本，无需重新安装。' :
             status === 'pending' ? '当前云端版本暂不可确认，可稍后重新检查。' :
+            status === 'storage_limited' ? '已查到官方版本，但 Overlay 空间不足，无法安全安装。' :
             status === 'rolled_back' ? '上一版本已恢复。' :
             status === 'busy' ? '已有任务正在运行，请勿重复操作。' :
             '操作已提交，页面会自动更新进度。';
@@ -200,6 +202,15 @@ return view.extend({
             return {tone:'error', label:'更新失败', title:'本次安装未成功', description:JOB_TEXT.failed};
         if (checkState === 'error' || checkState === 'unsupported')
             return {tone:'error', label:'检查未通过', title:'暂时无法更新', description:this.messageText(status.check_message, '检查失败，请确认设备环境及网络配置。')};
+        if (checkState === 'storage_limited') {
+            var required = Number(status.overlay_required_kib);
+            var available = Number(status.overlay_available_kib);
+            var detail = isFinite(required) && isFinite(available) && required > 0 && available >= 0 ?
+                '至少需要 ' + Math.ceil(required / 1024) + ' MiB 的空闲 Overlay，当前约 ' +
+                (available / 1024).toFixed(1) + ' MiB。' : '';
+            return {tone:'warn', label:'空间不足', title:'已查到官方版本，但暂不能安装',
+                description:detail + '为保留完整离线回滚能力，更新器不会在空间不足时写入固件。'};
+        }
         if (this.isCurrent(status))
             return {tone:'ok', label:'已是最新版本', title:'组件已保持最新', description:'当前安装版本与已检查的官方版本一致，无需重复安装。'};
         if (checkState === 'pending')
