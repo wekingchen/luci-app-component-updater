@@ -119,7 +119,7 @@ jobs:
               ninja -C /tmp/apk-build
               APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
               /tmp/apk-build/src/apk adbdump --format json \
-                dist/luci-app-component-updater-0.5.5-r4.apk > /tmp/manager-apk-adb.json
+                dist/luci-app-component-updater-0.5.6-r1.apk > /tmp/manager-apk-adb.json
               grep -q luci-app-component-updater /tmp/manager-apk-adb.json
               set -- source/naiveproxy_*_aarch64_cortex-a53.ipk
               test "$#" -eq 1
@@ -221,13 +221,13 @@ jobs:
             -o /tmp/manager-old.apk
           echo 'd6a28e3dffec8b3dc294a62a016b476c9f9effa38a693d27f759bd18c07d603c  /tmp/manager-old.apk' | sha256sum -c
           sudo cp /tmp/manager-old.apk "$ROOTFS/tmp/manager-old.apk"
-          sudo cp dist/luci-app-component-updater-0.5.5-r4.apk "$ROOTFS/tmp/manager-new.apk"
+          sudo cp dist/luci-app-component-updater-0.5.6-r1.apk "$ROOTFS/tmp/manager-new.apk"
           sudo chroot "$ROOTFS" /bin/sh -e -c '
             apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-old.apk
             grep -q "config updater" /etc/config/component-updater
             echo "    option github_proxy_mode '\''assets'\''" >> /etc/config/component-updater
             apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-new.apk
-            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.5-r4"
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r1"
             grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
             test -x /usr/sbin/component-updaterctl
             test -r /usr/libexec/component-updater/ax6s-apkctl.sh

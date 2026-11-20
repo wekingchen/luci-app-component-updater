@@ -44,9 +44,9 @@ class VisualContrastContract(unittest.TestCase):
     def test_overlay_storage_notice_is_amber_and_version_is_exact(self):
         self.assertIn("warning: status === 'storage_limited'", OVERVIEW)
         self.assertIn("this.notice.warning ? ' is-warning'", OVERVIEW)
-        self.assertIn("status.package_manager === 'apk' ? 'v0.5.5-r4' : 'v0.5.5-4'", OVERVIEW)
+        self.assertIn("status.package_manager === 'apk' ? 'v0.5.6-r1' : 'v0.5.6-1'", OVERVIEW)
         self.assertIn("'组件更新器 · ' + managerBuild", OVERVIEW)
-        self.assertIn("组件更新器 · v0.5.5-r4 · 原生 IPK / APK 双模式", FIXTURE)
+        self.assertIn("组件更新器 · v0.5.6-r1 · 原生 IPK / APK 双模式", FIXTURE)
         self.assertIn(".cu-app .cu-notice.is-warning", CSS)
         warn = re.search(r"\.cu-app \.cu-notice\.is-warning\s*\{([^}]+)\}", CSS, re.S)
         self.assertIsNotNone(warn)
