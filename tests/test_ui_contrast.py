@@ -40,13 +40,13 @@ class VisualContrastContract(unittest.TestCase):
     def test_desktop_navigation_remains_outside_component_stacking_context(self):
         # The host drawer is owned by LuCI, not by the updater. A page-level
         # high z-index could cover it on desktop layouts.
-        root = re.search(r"\\.cu-app\\s*\\{([^}]+)\\}", CSS, re.S)
+        root = re.search(r"\.cu-app\s*\{([^}]+)\}", CSS, re.S)
         self.assertIsNotNone(root)
         for property in ("position: relative", "isolation: isolate",
                          "z-index: 0", "box-sizing: border-box"):
             self.assertIn(property, root.group(1))
-        self.assertNotRegex(CSS, r"(?m)^\\s*(?:#mainmenu|#maincontent|body|header|aside)\\s*\\{")
-        self.assertNotRegex(CSS, r"z-index:\\s*[1-9]\\d*")
+        self.assertNotRegex(CSS, r"(?m)^\s*(?:#mainmenu|#maincontent|body|header|aside)\s*\{")
+        self.assertNotRegex(CSS, r"z-index:\s*[1-9]\d*")
 
     def test_luci_heading_background_is_explicitly_reset(self):
         # Production GL.iNet theme may set H2/H3 to white background and text.
