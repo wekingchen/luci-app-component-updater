@@ -1,4 +1,4 @@
-/* Component Updater · V0.5.1 visual system
+/* Component Updater · V0.5.2 GL.iNet host theme compatibility
  * A locally scoped light UI with explicit contrast and LuCI theme isolation.
  * No third-party fonts, icons or frameworks. 320px to desktop, touch-first.
  */
@@ -349,4 +349,134 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .cu-app .cu-btn { transition: none; }
+}
+
+/* GL.iNet's LuCI theme can paint an accent strip on section/header/map
+ * pseudo-elements. Keep scope inside this app: NEVER touch global LuCI chrome.
+ * Do not reset status-dot or details-summary pseudo-elements. */
+.cu-app .cu-page-head::before,
+.cu-app .cu-page-head::after,
+.cu-app .cu-settings-heading::before,
+.cu-app .cu-settings-heading::after,
+.cu-app .cu-hero::before,
+.cu-app .cu-hero::after,
+.cu-app .cu-panel::before,
+.cu-app .cu-panel::after,
+.cu-app .cu-settings-form::before,
+.cu-app .cu-settings-form::after,
+.cu-app .cu-settings-form .cbi-map::before,
+.cu-app .cu-settings-form .cbi-map::after,
+.cu-app .cu-settings-form .cbi-section::before,
+.cu-app .cu-settings-form .cbi-section::after {
+  content: none !important;
+  display: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.cu-app :is(.cu-page-head,.cu-settings-heading,.cu-hero,.cu-panel,.cu-settings-form) {
+  background-image: none !important;
+}
+.cu-app .cu-page-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  min-width: 0;
+}
+.cu-app a.cu-page-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  flex-shrink: 0;
+  padding: 8px 13px;
+  border: 1px solid #b3d7d2 !important;
+  border-radius: 100px;
+  background: #e5f3f0 !important;
+  color: #07594f !important;
+  font-weight: 720;
+  font-size: 13px;
+  line-height: 1.25;
+  text-decoration: none;
+  box-shadow: none !important;
+  white-space: nowrap;
+}
+.cu-app a.cu-page-settings:hover {
+  border-color: #70aca2 !important;
+  background: #d5ebe6 !important;
+}
+.cu-app .cu-setup-hint {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0 0 12px;
+  padding: 12px 15px;
+  border: 1px solid #d6e3e5;
+  border-radius: 12px;
+  background: #ecf4f5;
+  color: #355360;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.cu-app .cu-setup-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  height: 21px;
+  width: 21px;
+  border-radius: 50%;
+  background: #cde9e3;
+  color: #07594f;
+  font-weight: 750;
+  font-size: 11px;
+}
+.cu-app .cu-setup-separator { color: #637782; }
+.cu-app .cu-settings-form .cbi-map,
+.cu-app .cu-settings-form .cbi-section,
+.cu-app .cu-settings-form .cbi-section-node,
+.cu-app .cu-settings-form .cbi-value-field {
+  background-image: none !important;
+  box-shadow: none !important;
+}
+.cu-app .cu-settings-form .cbi-value-description,
+.cu-app .cu-settings-form .cbi-value-description *,
+.cu-app .cu-settings-form .cbi-value-field > small {
+  color: #4d626e !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  line-height: 1.65;
+}
+.cu-app .cu-settings-form .cbi-value-label,
+.cu-app .cu-settings-form .cbi-value-title {
+  color: #152c38 !important;
+  opacity: 1 !important;
+}
+.cu-app .cu-settings-form .cbi-value-field input[type="checkbox"] {
+  min-width: 19px;
+  min-height: 19px;
+  accent-color: #086b64;
+}
+.cu-app .cu-settings-form .cbi-page-actions {
+  border: 0 !important;
+  border-top: 1px solid #d6e2e5 !important;
+  margin: 15px 0 0;
+  padding: 16px 0 0;
+  background: #ffffff !important;
+}
+.cu-app .cu-settings-form .cbi-page-actions button {
+  min-height: 44px;
+}
+@media (max-width: 600px) {
+  .cu-app .cu-page-title-row { align-items: center; }
+  .cu-app .cu-page-title-row h2 { min-width: 0; }
+  .cu-app a.cu-page-settings { min-height: 42px; font-size: 12px; padding: 8px 11px; }
+  .cu-app .cu-setup-hint { gap: 6px; padding: 11px 12px; }
+}
+@media (max-width: 360px) {
+  .cu-app .cu-page-title-row h2 { font-size: 24px; }
+  .cu-app a.cu-page-settings { padding: 8px 9px; }
+  .cu-app .cu-setup-separator { display: none; }
 }
