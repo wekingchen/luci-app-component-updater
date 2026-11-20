@@ -17,6 +17,10 @@ body { margin:0;background:#eef2f5;font:15px -apple-system,BlinkMacSystemFont,"S
   content:'' !important;display:block !important;position:absolute;
   top:0;left:0;right:0;height:34px;background:#5b73de !important;
 }
+/* A broad host selector must not convert the component settings heading
+   into a sticky horizontal flex row. */
+.legacy-theme header { display:flex!important; position:sticky!important; top:0!important;
+  z-index:500!important; gap:18px!important; padding:15px!important; }
 .legacy-theme .cbi-value-description { color:#b8c3c8;opacity:.5 }
 </style>
 <link rel="stylesheet" href="../luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css?v=0.5.2">
@@ -24,11 +28,11 @@ body { margin:0;background:#eef2f5;font:15px -apple-system,BlinkMacSystemFont,"S
 <body class="legacy-theme">
 <div class="host-topbar">GL MT3600BE / 系统 / 组件更新</div>
 <div class="host-shell"><main class="cu-app cu-settings">
-<header class="cu-settings-heading">
+<div class="cu-settings-heading">
   <a class="cu-back" href="#overview">‹ 返回组件更新</a>
   <h2>GitHub 下载设置</h2>
   <p>根据当前网络选择官方直连或可信的下载中转服务。设置保存在设备本地，不改变官方来源，也不会自动安装更新。</p>
-</header>
+</div>
 <div class="cu-setup-hint">先选择连接方式，再选择下载节点，最后保存并应用。</div>
 <div class="cu-settings-form"><div class="cbi-map"><div class="cbi-section">
 <h3>网络连接</h3>
@@ -86,6 +90,11 @@ body { margin:0;background:#eef2f5;font:15px -apple-system,BlinkMacSystemFont,"S
    if(p1.content!=='none' && p1.display!=='none')fail.push('blue-before:'+selector);
    if(p2.content!=='none' && p2.display!=='none')fail.push('blue-after:'+selector);
  }
+ const heading=document.querySelector('.cu-settings-heading');
+ if(heading.tagName==='HEADER')fail.push('host-header-selector');
+ if(getComputedStyle(heading).position!=='static')fail.push('sticky-settings-heading');
+ if(getComputedStyle(heading).display!=='block')fail.push('settings-heading-not-block');
+ if(document.querySelector('.cu-setup-hint').getBoundingClientRect().top<heading.getBoundingClientRect().bottom-1)fail.push('settings-head-overlap');
  const title=css('.cu-settings-heading h2');
  if(title.color==='rgb(255, 255, 255)' || title.backgroundColor!=='rgba(0, 0, 0, 0)')fail.push('title-unreadable');
  const siteRow=document.querySelector('#proxy-site-row');
