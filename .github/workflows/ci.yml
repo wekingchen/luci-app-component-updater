@@ -127,4 +127,4 @@ jobs:
           fi
           gh release create "$tag" dist/luci-app-component-updater_0.5.6-3_all.ipk dist/luci-app-component-updater-0.5.6-r3.apk dist/SHA256SUMS.txt \
             --title "Component Updater V0.5.6 RC3" --latest=false --prerelease \
-            --notes "Native APKv3 updater candidate: extracted AX6S firmware tests verify SHA256-gated install, previous-package backup, configuration retention, full native APK rollback. Existing opkg behavior unchanged. Physical AX6S device and live PassWall traffic validation remain outstanding."
+            --notes "Manager V0.5.6-r3 prerelease: AX6S physical-router web manager upgrade r3 -> test-only r4 -> r3 rollback passed on 2026-11-21; backend task returned busy=false and UCI settings survived. r4 is test-only, not a user release. NaiveProxy component update/rollback, live PassWall traffic and power-loss recovery remain unverified on physical hardware. IPK and APK packages share this manager revision. Not a stable release."
