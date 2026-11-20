@@ -82,7 +82,7 @@ inspect() {
         [ -f "$temp/root/www/luci-static/resources/view/component-updater/manager.js" ] ||
             { rm -rf "$temp"; return 1; }
     fi
-    bad=$(find "$temp/root" ! -type d ! -type f -print -quit)
+    bad=$(find "$temp/root" ! -type d ! -type f -print | head -n 1)
     [ -z "$bad" ] || { rm -rf "$temp"; return 1; }
     valid=true
     find "$temp/root" -type f | while IFS= read -r member; do
@@ -121,7 +121,10 @@ old_pkg() {
 capacity_ok() {
     a=$1; b=$2
     [ "$a" -ge 1024 ] && [ "$b" -ge 1024 ] || return 1
-    existing=$(wc -c < "$PREV/previous.apk" 2>/dev/null | tr -d ' ')
+    existing=0
+    if [ -f "$PREV/previous.apk" ]; then
+        existing=$(wc -c < "$PREV/previous.apk" | tr -d ' ')
+    fi
     case "$existing" in ''|*[!0-9]*) existing=0;; esac
     free=$(df -Pk /etc 2>/dev/null | awk 'NR==2 {print $4}')
     case "$free" in ''|*[!0-9]*) return 1;; esac
@@ -215,8 +218,7 @@ plan_ok() {
     valid_sha "$newsha" && valid_sha "$oldsha" || return 1
     sha_ok "$STAGE/candidate.apk" "$newsha" || return 1
     old=$(old_pkg) && sha_ok "$old" "$oldsha" || return 1
-    [ "$(inspect "$STAGE/candidate.apk" "$(field "$PLAN" '@.new_version')")" =
-        "$(field "$PLAN" '@.new_version')" ] || return 1
+    [ "$(inspect "$STAGE/candidate.apk" "$(field "$PLAN" '@.new_version')")" = "$(field "$PLAN" '@.new_version')" ] || return 1
     [ "$(inspect "$old" "$(pkgver)")" = "$(pkgver)" ] || return 1
     capacity_ok "$(field "$PLAN" '@.candidate_bytes')" "$(field "$PLAN" '@.previous_bytes')"
 }
