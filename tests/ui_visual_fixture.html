@@ -13,6 +13,11 @@
     border:3px solid white!important;box-shadow:0 0 0 1px white!important; }
   .legacy-theme button:disabled{opacity:.25!important}
   .legacy-theme .cu-section-hint{white-space:normal}
+  /* Model the horizontal accent seen on real MT3600BE screenshots. */
+  .legacy-theme .cu-hero::before,.legacy-theme .cu-page-head::after {
+    content:'' !important; display:block !important; position:absolute;
+    top:0;left:0;right:0;height:32px;background:#5b73de !important;
+  }
 </style>
 <link rel="stylesheet" href="../luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css?v=0.5.2">
 </head>
@@ -21,7 +26,7 @@
 <div class="host-shell"><main class="cu-app">
 <header class="cu-page-head">
 <span class="cu-overline">组件管理 · 安全更新</span>
-<h2>组件更新</h2>
+<div class="cu-page-title-row"><h2>组件更新</h2><a class="cu-page-settings" href="#settings">下载设置</a></div>
 <p>先检查可用更新，再决定安装；需要时可恢复已备份的版本。</p>
 </header>
 <section class="cu-hero" aria-label="组件更新状态">
@@ -89,6 +94,14 @@ if(location.search.indexOf('ready')>=0){
  const disabled=document.querySelector('.cu-btn-update:disabled')||document.querySelector('.cu-btn-rollback:disabled');
  if(disabled){const cs=get('.cu-btn-rollback:disabled');if(Number(cs.opacity)<.99)problems.push('disabled-opacity');if(ratio(cs.color,cs.backgroundColor)<4.5)problems.push('disabled-contrast')}
  if(document.documentElement.scrollWidth>window.innerWidth+2)problems.push('horizontal-overflow');
+ for(const name of ['.cu-hero','.cu-page-head']) {
+  const before=getComputedStyle(document.querySelector(name),'::before');
+  const after=getComputedStyle(document.querySelector(name),'::after');
+  if(before.content!=='none' && before.display!=='none')problems.push('accent-before:'+name);
+  if(after.content!=='none' && after.display!=='none')problems.push('accent-after:'+name);
+ }
+ const settingsShortcut=document.querySelector('.cu-page-settings');
+ if(!settingsShortcut || settingsShortcut.getBoundingClientRect().width<58)problems.push('settings-shortcut');
  const badge=document.querySelector('.cu-section-hint'); if(badge.scrollHeight>30)problems.push('section-hint-wrap');
  document.documentElement.dataset.uiAudit=problems.length?'fail':'pass';
  document.documentElement.dataset.uiProblems=problems.join(',');
