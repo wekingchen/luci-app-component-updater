@@ -19,8 +19,9 @@ class RpcdCompatibilityTests(unittest.TestCase):
     def test_rpcd_executable_list_protocol(self):
         out=subprocess.check_output(['/bin/sh',str(PLUGIN),'list'],text=True)
         methods=json.loads(out)
-        self.assertEqual(set(methods),{'status','check','plan','start','rollback'})
-        self.assertTrue(all(v=={} for v in methods.values()))
+        self.assertEqual(set(methods),{'status','check','plan','start','rollback', 'manager_status','manager_upload','manager_check','manager_start','manager_rollback'})
+        self.assertTrue(all(v=={} for k,v in methods.items() if k != 'manager_upload'))
+        self.assertEqual(set(methods['manager_upload']),{'kind','sha256','size'})
 
     def test_rpcd_rejects_unregistered_method(self):
         p=subprocess.run(['/bin/sh',str(PLUGIN),'call','arbitrary-shell-command'],
@@ -31,11 +32,12 @@ class RpcdCompatibilityTests(unittest.TestCase):
     def test_acl_write_separated_from_read(self):
         acl=json.loads((APP/'root/usr/share/rpcd/acl.d/luci-app-component-updater.json').read_text())
         rule=acl['luci-app-component-updater']
-        self.assertEqual(set(rule['read']['ubus']['component-updater']),{'status','check','plan'})
-        self.assertEqual(set(rule['write']['ubus']['component-updater']),{'start','rollback'})
+        self.assertEqual(set(rule['read']['ubus']['component-updater']),{'status','check','plan','manager_status'})
+        self.assertEqual(set(rule['write']['ubus']['component-updater']),{'start','rollback','manager_upload','manager_check','manager_start','manager_rollback'})
         self.assertEqual(rule['read']['uci'],['component-updater'])
         self.assertEqual(rule['write']['uci'],['component-updater'])
-        self.assertNotIn('file',str(rule))
+        self.assertEqual(set(rule['write']['file']),{'/tmp/component-updater-manager-new.apk','/tmp/component-updater-manager-current.apk'})
+        self.assertNotIn('file',rule['read'])
         menu=json.loads((APP/'root/usr/share/luci/menu.d/luci-app-component-updater.json').read_text())
         self.assertIn('admin/system/component-updater/settings',menu)
 
