@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "tools/manager_postinstall.sh"
 APK_BUILDER = ROOT / "tools/package_manager_apk.sh"
 IPK_BUILDER = ROOT / "tools/package_ipk.py"
+SDK_MAKEFILE = ROOT / "luci-app-component-updater/Makefile"
 
 
 class MenuActivationTests(unittest.TestCase):
@@ -77,6 +78,18 @@ class MenuActivationTests(unittest.TestCase):
             self.assertEqual(log.read_text().splitlines(),
                              ["rpcd:restart", "uhttpd:restart",
                               "rpcd:restart", "uhttpd:restart"])
+
+    def test_sdk_makefile_also_activates_luci_after_live_install(self):
+        content = SDK_MAKEFILE.read_text()
+        self.assertIn("define Package/luci-app-component-updater/postinst", content)
+        self.assertIn('${IPKG_INSTROOT:-}', content, 'SDK hook must survive GNU Make expansion')
+        hook = content.split("define Package/luci-app-component-updater/postinst", 1)[1].split("endef", 1)[0]
+        for token in ('IPKG_INSTROOT', '/tmp/luci-indexcache',
+                      '/tmp/luci-modulecache', '/etc/init.d/rpcd',
+                      '/etc/init.d/uhttpd', 'restart'):
+            self.assertIn(token, hook)
+        self.assertNotIn('/etc/init.d/passwall', hook)
+        self.assertNotIn('reboot', hook)
 
     def test_both_package_formats_ship_identical_postinstall(self):
         apk_source = APK_BUILDER.read_text()

@@ -14,6 +14,13 @@
   --cu-warning: #885200;
   --cu-danger: #a12d3a;
   color-scheme: light;
+  /* Keep this entire page in one local stacking context. A host LuCI
+   * navigation drawer must remain above the component, never vice versa.
+   * Do not target #mainmenu, header or the sidebar globally. */
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
+  box-sizing: border-box;
   width: 100%;
   max-width: 980px;
   margin: 0 auto;
