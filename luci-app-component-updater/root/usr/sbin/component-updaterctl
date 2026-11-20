@@ -44,7 +44,13 @@ prune_backup_chain() {
         keep2=$(jsonval "$BACKUPS/$keep1/receipt.json" '@.previous_backup')
         if [ -n "$keep2" ]; then
             case "$keep2" in *[!0-9-]*|'') return 1;; esac
-            [ -d "$BACKUPS/$keep2" ] && [ ! -L "$BACKUPS/$keep2" ] || return 1
+            # An older ancestor can already have been pruned by a previous
+            # successful update. Do not let a legitimate one-step rollback
+            # cause permanent orphan accumulation. The *current* keep1
+            # archive is still mandatory and checked strictly above.
+            if [ ! -d "$BACKUPS/$keep2" ] || [ -L "$BACKUPS/$keep2" ]; then
+                keep2=''
+            fi
         fi
     fi
 
