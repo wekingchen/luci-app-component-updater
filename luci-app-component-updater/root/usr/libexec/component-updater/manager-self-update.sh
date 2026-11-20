@@ -297,7 +297,18 @@ restore() {
     [ -d "$LOCK" ] || mkdir "$LOCK" 2>/dev/null || return 1
     trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
     dir=$PREV
-    [ ! -f "$TXN" ] || dir=$ROOT/next
+    if [ -f "$TXN" ]; then
+        # Crash-safe commit boundary: after next/ -> previous/ succeeds but
+        # before TXN removal, the backup is no longer in next/.
+        if [ -f "$ROOT/next/previous.apk" ]; then
+            dir=$ROOT/next
+        elif [ -f "$PREV/previous.apk" ]; then
+            dir=$PREV
+        else
+            state recovery_required 'Manager transaction lacks rollback archive'
+            return 1
+        fi
+    fi
     state restoring 'Restoring previous manager APK'
     if restore_pkg "$dir"; then
         rm -f "$TXN" "$PLAN" "$ROOT/rescue.sh"
@@ -330,6 +341,9 @@ launch() {
 }
 worker() {
     compatible && init_dirs || return 1
+    # launch() acquires the lock *before* spawning this worker. Keep the
+    # cleanup trap even if upgrade() fails its early plan validation.
+    trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
     if [ "$1" = upgrade ]; then upgrade; else restore; fi
     result=$?
     /etc/init.d/rpcd restart >/dev/null 2>&1 || true
