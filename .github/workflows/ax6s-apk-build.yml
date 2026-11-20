@@ -440,7 +440,16 @@ jobs:
             test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r2"
             test ! -f /etc/component-updater/manager/transaction.json
             test -s /etc/component-updater/manager/previous/previous.apk
+            test ! -f /etc/component-updater/manager/rescue.sh
             test "$(sha256sum /etc/config/component-updater | awk "{print \$1}")" != ""
+            cp /etc/component-updater/manager/previous/previous.apk /tmp/manager-old-safe.apk
+            printf X >> /etc/component-updater/manager/previous/previous.apk
+            if /bin/sh /tmp/manager-worker-test.sh restore; then
+              echo "ERROR: modified manager recovery unexpectedly restored"
+              exit 1
+            fi
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r2"
+            mv /tmp/manager-old-safe.apk /etc/component-updater/manager/previous/previous.apk
             /bin/sh /tmp/manager-worker-test.sh restore
             test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r1"
             test ! -f /etc/component-updater/manager/transaction.json
