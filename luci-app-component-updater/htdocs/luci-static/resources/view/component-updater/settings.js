@@ -47,7 +47,7 @@ return view.extend({
 
         return Promise.resolve(m.render()).then(function(formNode) {
             return E('div', {'class': 'cu-app cu-settings'}, [
-                E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css')}),
+                E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.1'}),
                 E('header', {'class': 'cu-settings-heading'}, [
                     E('a', {'class': 'cu-back', href: L.url('admin/system/component-updater')}, '‹ 返回组件更新'),
                     E('h2', {}, 'GitHub 下载设置'),

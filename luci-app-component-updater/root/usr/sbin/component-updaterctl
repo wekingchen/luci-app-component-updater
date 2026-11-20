@@ -264,6 +264,23 @@ status() {
     json_add_string github_proxy_mode "$(config_get github_proxy_mode off)"
     json_add_string github_proxy_site "$(config_get github_proxy_site custom)"
     json_add_string source_integrity 'GitHub Release API asset digest (no independent signing)'
+    # Read-only UI affordance: a local rollback archive exists for the current
+    # receipt/unfinished transaction. Actual rollback rechecks package integrity.
+    if [ -r "$TXN" ]; then rollback_id=$(jsonval "$TXN" '@.backup_id')
+    else rollback_id=$(jsonval "$RECEIPT" '@.previous_backup'); fi
+    case "$rollback_id" in ''|*[!0-9-]*) rollback_id=;; esac
+    rollback_file=
+    if [ -n "$rollback_id" ]; then
+        case "$manager" in
+            opkg) rollback_file="$BACKUPS/$rollback_id/previous.ipk";;
+            apk) rollback_file="$BACKUPS/$rollback_id/previous.apk";;
+        esac
+    fi
+    if [ -n "$rollback_file" ] && [ -s "$rollback_file" ]; then
+        json_add_string rollback_available true
+    else
+        json_add_string rollback_available false
+    fi
     json_add_string runtime_processes "$(pidof naive 2>/dev/null | wc -w | tr -d ' ')"
     json_add_string job_state "${j:-idle}"
     json_add_string job_message "$m"

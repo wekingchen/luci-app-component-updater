@@ -164,7 +164,7 @@ return view.extend({
                 {tone:'warn', label:'适配预检', title:'已识别红米 AX6S', description:'当前固件采用原生 APK 软件包。管理界面与只读诊断可用；完整安装、备份和回滚尚未通过验证，更新操作暂时锁定。'} :
                 {tone:'error', label:'暂不支持', title:'当前 APK 环境未适配', description:'已识别 APK 软件包管理器，但设备不属于已知 AX6S 环境。不会执行 IPK 安装。'};
         if (jobState === 'recovery_required' || checkState === 'recovery_required')
-            return {tone:'error', label:'需要恢复', title:'上一次更新需要处理', description:'检测到未完成的更新事务。请优先恢复旧版本，避免重复安装。'};
+            return {tone:'error', label:'需要恢复', title:'上一次更新需要处理', description:status.rollback_available === 'true' ? '检测到未完成的更新事务，请先恢复旧版本。' : '存在未完成的更新事务，但未找到本地恢复包；请查看诊断，不要重复安装。'};
         if (this.isBusy(status))
             return {tone:'warn', label:'更新进行中', title:'正在处理更新任务', description:JOB_TEXT[jobState] || '正在与设备通信，请勿重复操作。'};
         if (jobState === 'failed')
@@ -179,7 +179,7 @@ return view.extend({
             return {tone:'ok', label:'可以更新', title:'新版本已准备就绪', description:'安装包已完成匹配及完整性校验，可以手动更新。'};
         if (jobState === 'rolled_back')
             return {tone:'muted', label:'已恢复旧版', title:'旧版本已恢复', description:'建议检查现有服务是否运行正常，再决定是否重新检查更新。'};
-        return {tone:'muted', label:'等待检查', title:'检查组件是否有更新', description:'连接官方发布源，核对设备架构后查找可安装的版本。'};
+        return {tone:'muted', label:'等待检查', title:'尚未检查更新', description:'先检查官方版本与设备架构，确认有可安装的软件包后再更新。'};
     },
 
     renderContent: function(status, plan) {
@@ -191,13 +191,11 @@ return view.extend({
         var isApk = status.package_manager === 'apk';
         var apkGuard = isApk && status.compatibility !== 'ax6s-apk-native';
         var ready = !apkGuard && (plan.ready === 'true' || plan.ready === true) && !this.isCurrent(status);
+        var canRollback = !apkGuard && status.rollback_available === 'true';
         var extraRows = [
             this.row('已安装软件包', status.package_version),
             this.row('设备架构', status.architecture),
             this.row('软件包管理器', isApk ? '原生 APK' : 'opkg'),
-            this.row('固件平台', status.firmware_target || '尚未识别'),
-            this.row('安装方式', isApk ? (apkGuard ? 'APK（只读）' : '系统原生 APKv3') : '系统原生 IPK · opkg'),
-            this.row('运行中进程', status.runtime_processes === '' || status.runtime_processes === undefined ? '未检测' : status.runtime_processes + ' 个'),
             this.row('下载连接', this.proxyLabel(status))
         ];
         var hero = E('section', {'class': 'cu-hero', 'aria-label': '组件更新状态'}, [
@@ -223,14 +221,19 @@ return view.extend({
                     E('strong', {'class': 'cu-version-value'}, this.val(status.official_tag, '尚未检查'))
                 ])
             ]),
-            E('div', {'class': 'cu-actions'}, [
-                E('button', {'class': 'cu-btn', type: 'button', disabled: (busy || apkGuard) ? true : null,
+            E('div', {'class': 'cu-actions' + (ready ? ' is-ready' : '')}, [
+                E('button', {'class': 'cu-btn cu-btn-check', type: 'button', disabled: (busy || apkGuard) ? true : null,
                     click: function() { return self.handleCheck(); }}, '检查官方更新'),
-                E('button', {'class': 'cu-btn cu-btn-primary', type: 'button', disabled: (!ready || busy || apkGuard) ? true : null,
+                E('button', {'class': 'cu-btn cu-btn-update', type: 'button', disabled: (!ready || busy || apkGuard) ? true : null,
                     click: function() { return self.confirmInstall(); }}, '下载并更新'),
-                E('button', {'class': 'cu-btn cu-btn-subtle', type: 'button', disabled: (busy || apkGuard) ? true : null,
+                E('button', {'class': 'cu-btn cu-btn-rollback', type: 'button', disabled: (busy || !canRollback) ? true : null,
                     click: function() { return self.confirmRollback(); }}, '恢复上一个版本')
             ]),
+            E('p', {'class': 'cu-action-hint', role: 'status'}, apkGuard ? '当前固件未通过兼容性检测，更新与恢复均不可用。' :
+                busy ? '正在执行操作，请勿重复点击。' :
+                ready ? '已找到适配安装包。确认后才会开始更新。' :
+                canRollback ? '请先检查官方更新；已有旧版备份可供恢复。' :
+                '先检查官方更新；没有有效备份时无法恢复上一版本。'),
             E('p', {'class': 'cu-mini-note'}, apkGuard ? '原生 APK 环境尚未开启安装；请先通过设备兼容性验收。' :
                 (isApk ? 'APK 安装前先保存完整恢复包及原配置 · 不主动重启 PassWall' :
                     '安装前自动准备恢复包 · 不主动重启 PassWall · 已运行连接可能继续使用旧进程'))
@@ -238,13 +241,17 @@ return view.extend({
         var overview = E('section', {'class': 'cu-panel', 'aria-label': '设备与安装信息'}, [
             E('div', {'class': 'cu-section-head'}, [
                 E('h3', {}, '设备与安装信息'),
-                E('span', {'class': 'cu-section-hint'}, '自动识别')
+                E('span', {'class': 'cu-section-hint'}, '系统检测')
             ]),
             E('div', {'class': 'cu-property-list'}, extraRows)
         ]);
         var details = E('details', {'class': 'cu-detail'}, [
             E('summary', {}, '查看构建与诊断详情'),
             E('div', {'class': 'cu-detail-body'}, [
+                this.row('固件平台', status.firmware_target || '尚未识别'),
+                this.row('安装方式', isApk ? (apkGuard ? 'APK（只读）' : '系统原生 APKv3') : '系统原生 IPK · opkg'),
+                this.row('运行中进程', status.runtime_processes === '' || status.runtime_processes === undefined ? '未检测' : status.runtime_processes + ' 个'),
+                this.row('恢复备份', canRollback ? '已找到本地恢复包' : '未找到有效备份'),
                 this.row('最近检查结果', this.messageText(status.check_message, '尚无检查记录。')),
                 this.row('当前任务', JOB_TEXT[status.job_state] || '尚无任务记录。'),
                 this.row('安装来源版本', status.installed_upstream_tag || '未记录'),
@@ -262,7 +269,7 @@ return view.extend({
             content.push(notice);
         content.push(hero, overview, details,
             E('div', {'class': 'cu-footer'}, [
-                E('span', {}, '组件更新器 · v0.5.0 · 原生 IPK / APK 双模式'),
+                E('span', {}, '组件更新器 · v0.5.1 · 原生 IPK / APK 双模式'),
                 E('a', {href: L.url('admin/system/component-updater/settings')}, 'GitHub 下载与反代设置')
             ]));
         return content;
@@ -372,7 +379,8 @@ return view.extend({
     confirmRollback: function() {
         var self = this;
         if (((self.currentStatus || {}).package_manager === 'apk' &&
-             (self.currentStatus || {}).compatibility !== 'ax6s-apk-native') || self.isBusy(self.currentStatus || {}))
+             (self.currentStatus || {}).compatibility !== 'ax6s-apk-native') || self.isBusy(self.currentStatus || {}) ||
+             (self.currentStatus || {}).rollback_available !== 'true')
             return;
         ui.showModal('恢复上一个版本', [
             E('p', {}, '将尝试通过先前生成的恢复包还原软件包与程序文件。仅在存在有效备份时才能恢复；更新器不会主动重启 PassWall。'),
@@ -394,11 +402,11 @@ return view.extend({
         this.page = E('div', {}, this.renderContent(this.currentStatus, this.currentPlan));
         poll.add(this.refresh.bind(this), 5);
         return E('div', {'class': 'cu-app'}, [
-            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css')}),
+            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.1'}),
             E('header', {'class': 'cu-page-head'}, [
-                E('span', {'class': 'cu-overline'}, '安全更新 · 可靠恢复'),
+                E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
                 E('h2', {}, '组件更新'),
-                E('p', {}, '安全检查、便捷安装、随时恢复。轻松管理路由器中的核心组件。')
+                E('p', {}, '先检查可用更新，再决定安装；需要时可恢复已备份的版本。')
             ]),
             this.page
         ]);

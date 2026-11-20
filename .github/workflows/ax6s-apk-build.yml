@@ -1,9 +1,14 @@
 name: Component Builder / AX6S native APK install and rollback
 on:
   push:
-    branches: [main, feat/v0.5.0-ax6s-apk-update-rollback]
+    branches: [main, 'fix/**', 'feat/**']
     paths:
       - .github/workflows/ax6s-apk-build.yml
+      - 'luci-app-component-updater/htdocs/**'
+      - 'luci-app-component-updater/Makefile'
+      - 'luci-app-component-updater/root/usr/sbin/component-updaterctl'
+      - 'tests/luci_ui_smoke.js'
+      - 'tests/test_ui_contrast.py'
       - tools/build_ax6s_apk_assets.py
       - tools/package_component_ipk.py
       - tests/test_ax6s_contract.py
@@ -11,6 +16,11 @@ on:
   pull_request:
     paths:
       - .github/workflows/ax6s-apk-build.yml
+      - 'luci-app-component-updater/htdocs/**'
+      - 'luci-app-component-updater/Makefile'
+      - 'luci-app-component-updater/root/usr/sbin/component-updaterctl'
+      - 'tests/luci_ui_smoke.js'
+      - 'tests/test_ui_contrast.py'
       - tools/build_ax6s_apk_assets.py
       - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
   workflow_dispatch:
@@ -43,7 +53,9 @@ jobs:
           source="component-naiveproxy-$upstream-upx521-r3"
           candidate="$source-ax6s-apk1"
           if [ "${{ github.ref }}" = refs/heads/main ]; then
-            if gh release view "$candidate" >/dev/null 2>&1; then
+            # An existing component release skips only scheduled upstream relay.
+            # On explicit code changes, still run manager/firmware regression.
+            if [ "$GITHUB_EVENT_NAME" = workflow_run ] && gh release view "$candidate" >/dev/null 2>&1; then
               echo "::notice::Native AX6S APK already prebuilt: $candidate"
               echo "build=false" >> "$GITHUB_OUTPUT"
               exit 0
@@ -107,7 +119,7 @@ jobs:
               ninja -C /tmp/apk-build
               APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
               /tmp/apk-build/src/apk adbdump --format json \
-                dist/luci-app-component-updater-0.5.0-r1.apk > /tmp/manager-apk-adb.json
+                dist/luci-app-component-updater-0.5.1-r1.apk > /tmp/manager-apk-adb.json
               grep -q luci-app-component-updater /tmp/manager-apk-adb.json
               set -- source/naiveproxy_*_aarch64_cortex-a53.ipk
               test "$#" -eq 1
@@ -209,13 +221,13 @@ jobs:
             -o /tmp/manager-old.apk
           echo 'd6a28e3dffec8b3dc294a62a016b476c9f9effa38a693d27f759bd18c07d603c  /tmp/manager-old.apk' | sha256sum -c
           sudo cp /tmp/manager-old.apk "$ROOTFS/tmp/manager-old.apk"
-          sudo cp dist/luci-app-component-updater-0.5.0-r1.apk "$ROOTFS/tmp/manager-new.apk"
+          sudo cp dist/luci-app-component-updater-0.5.1-r1.apk "$ROOTFS/tmp/manager-new.apk"
           sudo chroot "$ROOTFS" /bin/sh -e -c '
             apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-old.apk
             grep -q "config updater" /etc/config/component-updater
             echo "    option github_proxy_mode '\''assets'\''" >> /etc/config/component-updater
             apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-new.apk
-            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.0-r1"
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.1-r1"
             grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
             test -x /usr/sbin/component-updaterctl
             test -r /usr/libexec/component-updater/ax6s-apkctl.sh
@@ -360,8 +372,8 @@ jobs:
   publish-native-apk-candidate:
     name: Publish immutable AX6S native APK preview after native CI gates
     needs: [package-and-rollback, native-arm64-controller]
-    # V0.5.0 RC explicitly authorized one-time on merge; recurring automatic
-    # release requires AX6S hardware acceptance. PR never publishes.
+    # Cloud CI may build candidates; production publication remains blocked
+    # until AX6S hardware acceptance enables the repo release variable.
     if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (vars.AX6S_APK_AUTO_PUBLISH == 'true') }}
     runs-on: ubuntu-24.04
     permissions:

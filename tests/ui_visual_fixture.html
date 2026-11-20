@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LuCI Component Updater · UI Fixture</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#eef2f5;font:15px -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;}
+  .host-topbar{background:#5872dc;color:white;padding:10px max(12px,calc((100vw - 980px)/2));font-size:13px}
+  .host-shell{max-width:1030px;padding:12px;margin:auto}
+  /* Deliberately hostile historical LuCI styles. UI must override them. */
+  .legacy-theme h2,.legacy-theme h3 { background:white!important;color:white!important;padding:14px!important;
+    border:3px solid white!important;box-shadow:0 0 0 1px white!important; }
+  .legacy-theme button:disabled{opacity:.25!important}
+  .legacy-theme .cu-section-hint{white-space:normal}
+</style>
+<link rel="stylesheet" href="../luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css?v=0.5.1">
+</head>
+<body class="legacy-theme">
+<div class="host-topbar">OpenWrt / 系统 / 组件更新</div>
+<div class="host-shell"><main class="cu-app">
+<header class="cu-page-head">
+<span class="cu-overline">组件管理 · 安全更新</span>
+<h2>组件更新</h2>
+<p>先检查可用更新，再决定安装；需要时可恢复已备份的版本。</p>
+</header>
+<section class="cu-hero" aria-label="组件更新状态">
+  <div class="cu-heading-row">
+    <div class="cu-identity">
+      <div class="cu-symbol">N</div>
+      <div><div class="cu-name">NaiveProxy</div><div class="cu-subname">官方项目 · klzgrad/naiveproxy</div></div>
+    </div>
+    <span class="cu-status is-muted">等待检查</span>
+  </div>
+  <h3 class="cu-headline">尚未检查更新</h3>
+  <p class="cu-lead">先检查官方版本与设备架构，确认有可安装的软件包后再更新。</p>
+  <div class="cu-versions">
+    <div class="cu-version-block"><span class="cu-version-label">当前程序版本</span><strong class="cu-version-value">154.0.8037.49</strong></div>
+    <div class="cu-version-block"><span class="cu-version-label">官方最新版本</span><strong class="cu-version-value">尚未检查</strong></div>
+  </div>
+  <div class="cu-actions">
+    <button class="cu-btn cu-btn-check">检查官方更新</button>
+    <button class="cu-btn cu-btn-update" disabled>下载并更新</button>
+    <button class="cu-btn cu-btn-rollback" disabled>恢复上一个版本</button>
+  </div>
+  <p class="cu-action-hint">先检查官方更新；没有有效备份时无法恢复上一版本。</p>
+  <p class="cu-mini-note">安装前自动准备恢复包 · 不主动重启 PassWall · 已运行连接可能继续使用旧进程</p>
+</section>
+<section class="cu-panel" aria-label="设备与安装信息">
+  <div class="cu-section-head"><h3>设备与安装信息</h3><span class="cu-section-hint">系统检测</span></div>
+  <div class="cu-property-list">
+    <div class="cu-property"><span class="cu-property-label">已安装软件包</span><strong class="cu-property-value">154.0.8037.49.5-r3</strong></div>
+    <div class="cu-property"><span class="cu-property-label">设备架构</span><strong class="cu-property-value">aarch64_cortex-a53</strong></div>
+    <div class="cu-property"><span class="cu-property-label">软件包管理器</span><strong class="cu-property-value">opkg</strong></div>
+    <div class="cu-property"><span class="cu-property-label">下载连接</span><strong class="cu-property-value">官方直连</strong></div>
+  </div>
+</section>
+<details class="cu-detail"><summary>查看构建与诊断详情</summary>
+<div class="cu-detail-body"><div class="cu-property"><span class="cu-property-label">固件平台</span><strong class="cu-property-value">mediatek/mt7987</strong></div><div class="cu-property"><span class="cu-property-label">运行中进程</span><strong class="cu-property-value">2 个</strong></div></div>
+</details>
+<footer class="cu-footer"><span>组件更新器 · v0.5.1 · 原生 IPK / APK 双模式</span>
+<a href="#">GitHub 下载与反代设置</a></footer>
+</main></div>
+<script>
+if(location.search.indexOf('ready')>=0){
+  document.querySelector('.cu-actions').classList.add('is-ready');
+  document.querySelector('.cu-btn-update').disabled = false;
+  document.querySelector('.cu-btn-rollback').disabled = false;
+  document.querySelector('.cu-status').textContent='可以更新';
+  document.querySelector('.cu-status').classList.remove('is-muted');
+  document.querySelector('.cu-headline').textContent='新版本已准备就绪';
+  document.querySelector('.cu-lead').textContent='安装包已完成匹配及完整性校验，可以手动更新。';
+  document.querySelectorAll('.cu-version-value')[1].textContent='v154.0.8037.49-5';
+  document.querySelector('.cu-action-hint').textContent='已找到适配安装包。确认后才会开始更新。';
+}
+(function(){
+ const problems=[];
+ const get=(selector)=>getComputedStyle(document.querySelector(selector));
+ function rgb(s){let m=s.match(/\d+/g);return m && m.slice(0,3).map(Number)}
+ function lum(s){let a=rgb(s);if(!a)return 1;let v=a.map(x=>x/255).map(x=>x<=.04045?x/12.92:Math.pow((x+.055)/1.055,2.4));return .2126*v[0]+.7152*v[1]+.0722*v[2]}
+ function ratio(a,b){let x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
+ for(const name of ['.cu-page-head h2','.cu-headline','.cu-section-head h3']){
+   const cs=get(name);
+   if(cs.backgroundColor!=='rgba(0, 0, 0, 0)'&&cs.backgroundColor!=='transparent')problems.push('heading-background:'+name+':'+cs.backgroundColor);
+   if(cs.color==='rgb(255, 255, 255)')problems.push('white-title:'+name);
+ }
+ const active=get(location.search.includes('ready')?'.cu-btn-update':'.cu-btn-check');
+ if(ratio(active.color,active.backgroundColor)<4.5)problems.push('active-contrast:'+active.color+'-on-'+active.backgroundColor);
+ const disabled=document.querySelector('.cu-btn-update:disabled')||document.querySelector('.cu-btn-rollback:disabled');
+ if(disabled){const cs=get('.cu-btn-rollback:disabled');if(Number(cs.opacity)<.99)problems.push('disabled-opacity');if(ratio(cs.color,cs.backgroundColor)<4.5)problems.push('disabled-contrast')}
+ if(document.documentElement.scrollWidth>window.innerWidth+2)problems.push('horizontal-overflow');
+ const badge=document.querySelector('.cu-section-hint'); if(badge.scrollHeight>30)problems.push('section-hint-wrap');
+ document.documentElement.dataset.uiAudit=problems.length?'fail':'pass';
+ document.documentElement.dataset.uiProblems=problems.join(',');
+})();
+</script>
+</body></html>
