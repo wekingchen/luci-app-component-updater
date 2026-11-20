@@ -19,7 +19,7 @@
     top:0;left:0;right:0;height:32px;background:#5b73de !important;
   }
 </style>
-<link rel="stylesheet" href="../luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css?v=0.5.2">
+<link rel="stylesheet" href="../luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css?v=0.5.3">
 </head>
 <body class="legacy-theme">
 <div class="host-topbar">OpenWrt / 系统 / 组件更新</div>
@@ -63,7 +63,7 @@
 <details class="cu-detail"><summary>查看构建与诊断详情</summary>
 <div class="cu-detail-body"><div class="cu-property"><span class="cu-property-label">固件平台</span><strong class="cu-property-value">mediatek/mt7987</strong></div><div class="cu-property"><span class="cu-property-label">运行中进程</span><strong class="cu-property-value">2 个</strong></div></div>
 </details>
-<footer class="cu-footer"><span>组件更新器 · v0.5.2 · 原生 IPK / APK 双模式</span>
+<footer class="cu-footer"><span>组件更新器 · v0.5.3 · 原生 IPK / APK 双模式</span>
 <a href="#">GitHub 下载与反代设置</a></footer>
 </main></div>
 <script>
@@ -77,6 +77,17 @@ if(location.search.indexOf('ready')>=0){
   document.querySelector('.cu-lead').textContent='安装包已完成匹配及完整性校验，可以手动更新。';
   document.querySelectorAll('.cu-version-value')[1].textContent='v154.0.8037.49-5';
   document.querySelector('.cu-action-hint').textContent='已找到适配安装包。确认后才会开始更新。';
+}
+if(location.search.includes('current')){
+  document.querySelector('.cu-actions').classList.add('is-current');
+  document.querySelector('.cu-btn-check').textContent='重新检查更新';
+  document.querySelector('.cu-btn-rollback').disabled=false;
+  document.querySelector('.cu-status').textContent='已是最新版本';
+  document.querySelector('.cu-status').classList.remove('is-muted');
+  document.querySelector('.cu-headline').textContent='组件已保持最新';
+  document.querySelector('.cu-lead').textContent='当前安装版本与已检查的官方版本一致，无需重复安装。';
+  document.querySelectorAll('.cu-version-value')[1].textContent='v154.0.8037.49-5';
+  document.querySelector('.cu-action-hint').textContent='已核对官方最新版本，无需重复安装。如有需要，可恢复已备份的上一版本。';
 }
 (function(){
  const problems=[];
@@ -92,7 +103,7 @@ if(location.search.indexOf('ready')>=0){
  const active=get(location.search.includes('ready')?'.cu-btn-update':'.cu-btn-check');
  if(ratio(active.color,active.backgroundColor)<4.5)problems.push('active-contrast:'+active.color+'-on-'+active.backgroundColor);
  const disabled=document.querySelector('.cu-btn-update:disabled')||document.querySelector('.cu-btn-rollback:disabled');
- if(disabled){const cs=get('.cu-btn-rollback:disabled');if(Number(cs.opacity)<.99)problems.push('disabled-opacity');if(ratio(cs.color,cs.backgroundColor)<4.5)problems.push('disabled-contrast')}
+ if(disabled){const cs=getComputedStyle(disabled);if(Number(cs.opacity)<.99)problems.push('disabled-opacity');if(ratio(cs.color,cs.backgroundColor)<4.5)problems.push('disabled-contrast')}
  if(document.documentElement.scrollWidth>window.innerWidth+2)problems.push('horizontal-overflow');
  for(const name of ['.cu-hero','.cu-page-head']) {
   const before=getComputedStyle(document.querySelector(name),'::before');
