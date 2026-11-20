@@ -354,6 +354,8 @@
 /* GL.iNet's LuCI theme can paint an accent strip on section/header/map
  * pseudo-elements. Keep scope inside this app: NEVER touch global LuCI chrome.
  * Do not reset status-dot or details-summary pseudo-elements. */
+.cu-app :is(h2,h3)::before,
+.cu-app :is(h2,h3)::after,
 .cu-app .cu-page-head::before,
 .cu-app .cu-page-head::after,
 .cu-app .cu-settings-heading::before,
@@ -479,4 +481,21 @@
   .cu-app .cu-page-title-row h2 { font-size: 24px; }
   .cu-app a.cu-page-settings { padding: 8px 9px; }
   .cu-app .cu-setup-separator { display: none; }
+}
+
+/* LuCI form dependencies may toggle the HTML hidden attribute. Our mobile
+ * display:block override must never expose a field which LuCI hides. */
+.cu-app .cu-settings-form [hidden] { display: none !important; }
+.cu-app .cu-settings-form :is(select,input[type="text"],input[type="url"]) {
+  font-size: 16px !important;
+  line-height: 1.4;
+}
+.cu-app .cu-settings-form .cbi-page-actions :is(.cbi-button-save,.cbi-button-apply,.cbi-button-positive) {
+  min-height: 44px;
+  border: 1px solid #086b64 !important;
+  border-radius: 10px !important;
+  background: #086b64 !important;
+  color: #ffffff !important;
+  font-weight: 750;
+  opacity: 1 !important;
 }
