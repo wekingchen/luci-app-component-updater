@@ -66,8 +66,8 @@ return view.extend({
     },
     upload:function(kind) {
         var self=this;
-        if (this.busy || this.currentStatus.busy === 'true' ||
-            this.currentStatus.recovery_required === 'true')
+        if (this.busy || (this.currentStatus || {}).busy === 'true' ||
+            (this.currentStatus || {}).recovery_required === 'true')
             return Promise.resolve();
         var path=kind==='previous' ?
             '/tmp/component-updater-manager-current.apk' :
