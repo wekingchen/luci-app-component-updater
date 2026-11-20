@@ -219,8 +219,18 @@ apk_check() {
         { rm -f "$CACHE/apk-candidate-verified.apk"; check_msg error 'APK candidate size mismatch'; return 1; }
     binary_bytes=$(apk_candidate_binary_bytes "$CACHE/apk-candidate-verified.apk" "$binary") ||
         { check_msg error 'APK candidate extraction or binary verification failed'; return 1; }
-    apk_overlay_budget_ok "$baseline_bytes" "$candidate_bytes" "$binary_bytes" ||
-        { check_msg unsupported 'Insufficient space for APK backup'; return 1; }
+    required_kib=''
+    free_kib=''
+    if ! apk_overlay_budget_ok "$baseline_bytes" "$candidate_bytes" "$binary_bytes"; then
+        if [ -n "$required_kib" ] && [ -n "$free_kib" ]; then
+            # Official version and verified assets are known; don't mislabel
+            # insufficient flash as a failed network/version check.
+            check_msg storage_limited 'Insufficient space for APK backup' "$required_kib" "$free_kib"
+            return 0
+        fi
+        check_msg unsupported 'Cannot determine safe APK storage budget'
+        return 1
+    fi
     json_init
     json_add_string manager apk
     json_add_string ready true
