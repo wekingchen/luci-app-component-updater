@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LuCI 下载设置 · GL.iNet 模拟主题</title>
+<style>
+* { box-sizing:border-box; }
+body { margin:0;background:#eef2f5;font:15px -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans CJK SC",sans-serif; }
+.host-topbar{background:#5872dc;color:white;padding:11px 16px;font-size:13px}
+.host-shell{max-width:1030px;padding:12px;margin:auto}
+/* Simulate GL.iNet's legacy title and cbi-map accent rules. */
+.legacy-theme h2,.legacy-theme h3 {background:white !important;color:white !important;padding:14px !important;
+  border:2px solid white !important;box-shadow:0 0 0 1px white !important}
+.legacy-theme .cu-settings-heading::after,
+.legacy-theme .cu-settings-form::before,
+.legacy-theme .cbi-map::before,
+.legacy-theme .cbi-section::after {
+  content:'' !important;display:block !important;position:absolute;
+  top:0;left:0;right:0;height:34px;background:#5b73de !important;
+}
+.legacy-theme .cbi-value-description { color:#b8c3c8;opacity:.5 }
+</style>
+<link rel="stylesheet" href="../luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css?v=0.5.2">
+</head>
+<body class="legacy-theme">
+<div class="host-topbar">GL MT3600BE / 系统 / 组件更新</div>
+<div class="host-shell"><main class="cu-app cu-settings">
+<header class="cu-settings-heading">
+  <a class="cu-back" href="#overview">‹ 返回组件更新</a>
+  <h2>GitHub 下载设置</h2>
+  <p>根据当前网络选择官方直连或可信的下载中转服务。设置保存在设备本地，不改变官方来源，也不会自动安装更新。</p>
+</header>
+<div class="cu-setup-hint">
+<span class="cu-setup-mark" aria-hidden="true">1</span><span>选择连接方式</span>
+<span class="cu-setup-separator" aria-hidden="true">·</span>
+<span class="cu-setup-mark" aria-hidden="true">2</span><span>选择下载节点</span>
+<span class="cu-setup-separator" aria-hidden="true">·</span>
+<span class="cu-setup-mark" aria-hidden="true">3</span><span>保存并应用</span>
+</div>
+<div class="cu-settings-form"><div class="cbi-map"><div class="cbi-section">
+<h3>网络连接</h3>
+<div class="cbi-value">
+  <label class="cbi-value-title" for="proxy-mode">连接方式</label>
+  <div class="cbi-value-field"><select id="proxy-mode">
+    <option value="off">官方直连（默认）</option>
+    <option value="assets">仅下载文件使用中转（推荐）</option>
+    <option value="all">版本查询与文件下载均使用中转</option>
+  </select><div class="cbi-value-description">优先使用官方直连。仅在下载文件不稳定时，建议启用“仅下载文件使用中转”。</div></div>
+</div>
+<div class="cbi-value" id="proxy-site-row">
+  <label class="cbi-value-title" for="proxy-site">下载节点</label>
+  <div class="cbi-value-field"><select id="proxy-site">
+    <option value="gh-proxy.org">gh-proxy.org</option>
+    <option value="ghproxy.cc">ghproxy.cc（备用）</option>
+    <option value="ghproxy.com">ghproxy.com（备用）</option>
+    <option value="ghfast.top">ghfast.top</option>
+    <option value="custom">自定义安全地址</option>
+  </select><div class="cbi-value-description">当前使用官方直连时，本项不会生效。切换到中转模式后使用所选节点；预设地址不保证实时可用。</div></div>
+</div>
+<div class="cbi-value" id="custom-row">
+  <label class="cbi-value-title" for="custom-url">自定义中转地址</label>
+  <div class="cbi-value-field"><input type="text" id="custom-url" value="" placeholder="https://mirror.example/"><div class="cbi-value-description">仅在选用自定义节点时填写。必须使用加密连接，并以 / 结尾。</div></div>
+</div>
+<div class="cbi-value" id="fallback-row">
+  <label class="cbi-value-title" for="proxy-fallback">中转失败时尝试官方直连</label>
+  <div class="cbi-value-field"><input type="checkbox" id="proxy-fallback" checked><div class="cbi-value-description">中转节点暂时不可用时自动尝试官方地址。如果当前网络无法直连，可关闭此选项。</div></div>
+</div>
+<div class="cbi-page-actions"><button type="button">保存并应用</button></div>
+</div></div></div>
+<div class="cu-settings-note"><strong>关于校验与可信度</strong>
+<p>安装前会依据 GitHub Release API 提供的 SHA256 摘要核对安装包，但它不是独立数字签名。若将版本查询也交给中转节点，校验信息同样经过该节点，请仅使用可信服务。</p></div>
+</main></div>
+<script>
+(function(){
+ const params=new URLSearchParams(location.search);
+ const mode=document.querySelector('#proxy-mode'),site=document.querySelector('#proxy-site');
+ const fallback=document.querySelector('#fallback-row'),custom=document.querySelector('#custom-row');
+ mode.value=params.get('mode')||'off';
+ site.value=params.get('site')||'gh-proxy.org';
+ function updateVisibility(){
+   const proxy=mode.value!=='off';
+   fallback.hidden=!proxy;
+   custom.hidden=!(proxy&&site.value==='custom');
+ }
+ mode.addEventListener('change',updateVisibility);
+ site.addEventListener('change',updateVisibility);
+ updateVisibility();
+ const fail=[];
+ const css=(selector)=>getComputedStyle(document.querySelector(selector));
+ for(const selector of ['.cu-settings-heading','.cu-settings-form','.cbi-map','.cbi-section']){
+   const n=document.querySelector(selector);
+   const p1=getComputedStyle(n,'::before'),p2=getComputedStyle(n,'::after');
+   if(p1.content!=='none' && p1.display!=='none')fail.push('blue-before:'+selector);
+   if(p2.content!=='none' && p2.display!=='none')fail.push('blue-after:'+selector);
+ }
+ const title=css('.cu-settings-heading h2');
+ if(title.color==='rgb(255, 255, 255)' || title.backgroundColor!=='rgba(0, 0, 0, 0)')fail.push('title-unreadable');
+ const siteRow=document.querySelector('#proxy-site-row');
+ if(siteRow.hidden||!siteRow.getBoundingClientRect().height)fail.push('preset-hidden');
+ if(site.options.length!==5)fail.push('preset-count');
+ if(mode.value==='off' && (!fallback.hidden||!custom.hidden))fail.push('direct-dependency');
+ if(mode.value!=='off' && fallback.hidden)fail.push('relay-fallback-hidden');
+ if(mode.value!=='off' && site.value==='custom' && custom.hidden)fail.push('custom-hidden');
+ if(document.documentElement.scrollWidth>window.innerWidth+2)fail.push('horizontal-overflow');
+ if(css('.cbi-value-description').color==='rgb(184, 195, 200)')fail.push('description-low-contrast');
+ document.documentElement.dataset.uiAudit=fail.length?'fail':'pass';
+ document.documentElement.dataset.uiProblems=fail.join(',');
+})();
+</script>
+</body></html>
