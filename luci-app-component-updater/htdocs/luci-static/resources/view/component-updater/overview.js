@@ -269,8 +269,7 @@ return view.extend({
             content.push(notice);
         content.push(hero, overview, details,
             E('div', {'class': 'cu-footer'}, [
-                E('span', {}, '组件更新器 · v0.5.1 · 原生 IPK / APK 双模式'),
-                E('a', {href: L.url('admin/system/component-updater/settings')}, 'GitHub 下载与反代设置')
+                E('span', {}, '组件更新器 · v0.5.2 · 原生 IPK / APK 双模式')
             ]));
         return content;
     },
@@ -402,10 +401,13 @@ return view.extend({
         this.page = E('div', {}, this.renderContent(this.currentStatus, this.currentPlan));
         poll.add(this.refresh.bind(this), 5);
         return E('div', {'class': 'cu-app'}, [
-            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.1'}),
+            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.2'}),
             E('header', {'class': 'cu-page-head'}, [
                 E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
-                E('h2', {}, '组件更新'),
+                E('div', {'class': 'cu-page-title-row'}, [
+                    E('h2', {}, '组件更新'),
+                    E('a', {'class': 'cu-page-settings', href: L.url('admin/system/component-updater/settings')}, '下载设置')
+                ]),
                 E('p', {}, '先检查可用更新，再决定安装；需要时可恢复已备份的版本。')
             ]),
             this.page

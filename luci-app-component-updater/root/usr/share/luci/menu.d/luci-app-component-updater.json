@@ -13,7 +13,6 @@
     }
   },
   "admin/system/component-updater/settings": {
-    "title": "GitHub 下载设置",
     "order": 2,
     "action": {
       "type": "view",
@@ -23,6 +22,7 @@
       "acl": [
         "luci-app-component-updater"
       ]
-    }
+    },
+    "firstchild_ineligible": true
   }
 }
