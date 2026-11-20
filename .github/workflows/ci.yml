@@ -40,6 +40,13 @@ jobs:
             JS_FILE="$path" node -e "const fs=require('fs');new Function(fs.readFileSync(process.env.JS_FILE,'utf8'));console.log(process.env.JS_FILE,'LuCI JS parse OK')"
           done
           node tests/luci_ui_smoke.js
+      - name: Install CJK fonts for Chinese browser screenshot acceptance
+        run: |
+          if ! fc-list :lang=zh | grep -q .; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq fonts-noto-cjk
+            fc-cache -f
+          fi
       - name: Render mobile / desktop preview and audit computed LuCI styles
         run: sh scripts/render_ui_previews.sh
       - uses: actions/upload-artifact@v4
