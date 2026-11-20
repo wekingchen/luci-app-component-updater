@@ -85,7 +85,7 @@ async function main() {
   const plan = {ready:'true',filename:'naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.ipk'};
   const rendered = dashboard.render([status,plan]);
   assert(rendered.tag === 'div');
-  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r2$/.test(n.attributes.href)));
+  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r3$/.test(n.attributes.href)));
 
   const settingsShortcut = flatten(rendered).find(n => n.tag === 'a' &&
     n.children === '下载设置');
@@ -264,8 +264,8 @@ async function main() {
   assert.strictEqual(dashboard.notice.error, true);
   assert(dashboard.notice.text.includes('没有返回有效的操作结果'));
   dashboard.notice = null;
-  assert(visibleText(dashboard.renderContent({...status,package_manager:'apk'},plan)).includes('组件更新器 · v0.5.6-r2'));
-  assert(visibleText(dashboard.renderContent({...status,package_manager:'opkg'},plan)).includes('组件更新器 · v0.5.6-2'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'apk'},plan)).includes('组件更新器 · v0.5.6-r3'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'opkg'},plan)).includes('组件更新器 · v0.5.6-3'));
   assert(css.includes('.cu-app .cu-notice.is-warning'));
   dashboard.confirmInstall();
   assert(modal && modal.title.includes('NaiveProxy'));
@@ -291,7 +291,7 @@ async function main() {
   const settingsPage = await settings.render();
   assert(settingsPage.tag === 'div');
   assert(visibleText(settingsPage).includes('GitHub 下载设置'));
-  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r2$/.test(n.attributes.href)));
+  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r3$/.test(n.attributes.href)));
   assert.strictEqual(formMap.sections.length,1);
   const fields = formMap.sections[0].fields;
   assert.deepStrictEqual(Array.from(fields.map(x => x.name)),
@@ -319,7 +319,7 @@ async function main() {
   }
   const managerPage = load('manager.js');
   const readyManager = {status:'ok',busy:'false',recovery_available:'false',
-    recovery_required:'false',current_archive:'false',installed_version:'0.5.6-r2'};
+    recovery_required:'false',current_archive:'false',installed_version:'0.5.6-r3'};
   const managerNodes = managerPage.render(readyManager);
   assert(visibleText(managerNodes).includes('管理器更新'));
   assert(visibleText(managerNodes).includes('上传新版 APK'));
@@ -339,9 +339,9 @@ async function main() {
   managerPage.confirmRollback();
   assert(modal && modal.title.includes('确认恢复管理器'));
   modal=null;
-  managerStatusOverride={...readyManager,job_state:'completed',installed_version:'0.5.6-r3'};
+  managerStatusOverride={...readyManager,job_state:'completed',installed_version:'0.5.6-r4'};
   await managerPage.refresh();
-  assert(visibleText(managerPage.renderBody()).includes('0.5.6-r3'));
+  assert(visibleText(managerPage.renderBody()).includes('0.5.6-r4'));
   assert(managerPage.notice.includes('管理器升级已完成'));
   managerStatusOverride=new Error('rpcd authentication failure');
   await managerPage.refresh();

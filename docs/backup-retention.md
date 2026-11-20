@@ -71,3 +71,7 @@ cat /etc/component-updater/manager/previous/version 2>/dev/null
 sha256sum /etc/component-updater/manager/previous/previous.apk 2>/dev/null
 cat /etc/component-updater/manager/previous/previous.sha256 2>/dev/null
 ```
+
+## V0.5.6-r3 修复候选及升级过渡限制
+
+PR #19 提供保持 LuCI 服务会话、后台状态轮询、终态残留锁安全清理及活跃任务标记。AX6S 当前 r2 → r3 **由旧 r2 的 worker 执行安装**，故并不能证明此过程会自动刷新，也仍可能受 r2 的 rpcd/uhttpd 重启及旧锁问题影响。安装后的 r3 页面状态查询会尝试在无持久事务、无运行 worker、且锁内无活动标记的安全终态下清理旧式空锁。后续 r3 → r4 才是新 worker 的完整无感升级验收。
