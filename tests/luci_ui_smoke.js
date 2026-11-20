@@ -81,7 +81,7 @@ async function main() {
   const plan = {ready:'true',filename:'naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.ipk'};
   const rendered = dashboard.render([status,plan]);
   assert(rendered.tag === 'div');
-  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r1$/.test(n.attributes.href)));
+  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r2$/.test(n.attributes.href)));
 
   const settingsShortcut = flatten(rendered).find(n => n.tag === 'a' &&
     n.children === '下载设置');
@@ -287,7 +287,7 @@ async function main() {
   const settingsPage = await settings.render();
   assert(settingsPage.tag === 'div');
   assert(visibleText(settingsPage).includes('GitHub 下载设置'));
-  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r1$/.test(n.attributes.href)));
+  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r2$/.test(n.attributes.href)));
   assert.strictEqual(formMap.sections.length,1);
   const fields = formMap.sections[0].fields;
   assert.deepStrictEqual(Array.from(fields.map(x => x.name)),
