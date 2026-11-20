@@ -452,6 +452,20 @@ jobs:
             test ! -f /etc/component-updater/manager/transaction.json
             test -s /etc/component-updater/manager/previous/previous.apk
             test ! -f /etc/component-updater/manager/rescue.sh
+            # Verified installed/version-completed state must not strand all
+            # controls behind a stale root-only temp directory.
+            test ! -d /tmp/component-updater-manager/operation.lock
+            mkdir /tmp/component-updater-manager/operation.lock
+            /bin/sh /usr/libexec/component-updater/manager-self-update.sh status >/tmp/manager-post-upgrade-status.json
+            grep -q "\\\"busy\\\": \\\"false\\\"" /tmp/manager-post-upgrade-status.json
+            test ! -d /tmp/component-updater-manager/operation.lock
+            mkdir /tmp/component-updater-manager/operation.lock
+            : > /tmp/component-updater-manager/operation.lock/active
+            /bin/sh /usr/libexec/component-updater/manager-self-update.sh status >/tmp/manager-active-marker-status.json
+            grep -q "\\\"busy\\\": \\\"true\\\"" /tmp/manager-active-marker-status.json
+            test -e /tmp/component-updater-manager/operation.lock/active
+            rm -f /tmp/component-updater-manager/operation.lock/active
+            rmdir /tmp/component-updater-manager/operation.lock
             test "$(sha256sum /etc/config/component-updater | awk "{print \$1}")" != ""
             cp /etc/component-updater/manager/previous/previous.apk /tmp/manager-old-safe.apk
             printf X >> /etc/component-updater/manager/previous/previous.apk
