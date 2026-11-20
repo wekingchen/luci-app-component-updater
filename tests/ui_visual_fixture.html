@@ -11,6 +11,11 @@
   /* Deliberately hostile historical LuCI styles. UI must override them. */
   .legacy-theme h2,.legacy-theme h3 { background:white!important;color:white!important;padding:14px!important;
     border:3px solid white!important;box-shadow:0 0 0 1px white!important; }
+  /* Reproduce actual AX6S theme collision: generic header becomes a
+   * sticky flex container, squeezing the title to one Chinese character. */
+  .legacy-theme header { display:flex!important; position:sticky!important;
+    top:0!important; z-index:500!important; gap:18px!important;
+    padding:15px!important; background:#f2f5f6!important; }
   .legacy-theme button:disabled{opacity:.25!important}
   .legacy-theme .cu-section-hint{white-space:normal}
   /* Model the horizontal accent seen on real MT3600BE screenshots. */
@@ -24,11 +29,11 @@
 <body class="legacy-theme">
 <div class="host-topbar">OpenWrt / 系统 / 组件更新</div>
 <div class="host-shell"><main class="cu-app">
-<header class="cu-page-head">
+<div class="cu-page-head">
 <span class="cu-overline">组件管理 · 安全更新</span>
 <div class="cu-page-title-row"><h2>组件更新</h2><a class="cu-page-settings" href="#settings">下载设置</a></div>
 <p>先检查可用更新，再决定安装；需要时可恢复已备份的版本。</p>
-</header>
+</div>
 <section class="cu-hero" aria-label="组件更新状态">
   <div class="cu-heading-row">
     <div class="cu-identity">
@@ -111,6 +116,21 @@ if(location.search.includes('current')){
   if(before.content!=='none' && before.display!=='none')problems.push('accent-before:'+name);
   if(after.content!=='none' && after.display!=='none')problems.push('accent-after:'+name);
  }
+ const heading=document.querySelector('.cu-page-head');
+ const title=document.querySelector('.cu-page-title-row h2');
+ const info=document.querySelector('.cu-page-head p');
+ const hero=document.querySelector('.cu-hero');
+ const hRect=heading.getBoundingClientRect();
+ const tRect=title.getBoundingClientRect();
+ const rowRect=document.querySelector('.cu-page-title-row').getBoundingClientRect();
+ const iRect=info.getBoundingClientRect();
+ const heroRect=hero.getBoundingClientRect();
+ if(heading.tagName==='HEADER')problems.push('host-header-selector');
+ if(getComputedStyle(heading).position!=='static')problems.push('sticky-page-head');
+ if(getComputedStyle(heading).display!=='block')problems.push('page-head-not-block');
+ if(tRect.height>60 || tRect.width<85)problems.push('vertical-title');
+ if(iRect.top<rowRect.bottom-1)problems.push('header-description-overlap');
+ if(heroRect.top<hRect.bottom-1)problems.push('header-overlaps-content');
  const settingsShortcut=document.querySelector('.cu-page-settings');
  if(!settingsShortcut || settingsShortcut.getBoundingClientRect().width<58)problems.push('settings-shortcut');
  const badge=document.querySelector('.cu-section-hint'); if(badge.scrollHeight>30)problems.push('section-hint-wrap');
