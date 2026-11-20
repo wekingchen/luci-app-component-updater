@@ -459,7 +459,10 @@ return view.extend({
                 E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
                 E('div', {'class': 'cu-page-title-row'}, [
                     E('h2', {}, '组件更新'),
-                    E('a', {'class': 'cu-page-settings', href: L.url('admin/system/component-updater/settings')}, '下载设置')
+                    E('div', {'class':'cu-page-tool-links'}, [
+                        E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/manager')}, '管理器更新'),
+                        E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/settings')}, '下载设置')
+                    ])
                 ]),
                 E('p', {}, '先检查可用更新，再决定安装；需要时可恢复已备份的版本。')
             ]),
