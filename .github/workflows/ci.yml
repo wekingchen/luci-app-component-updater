@@ -127,4 +127,4 @@ jobs:
           fi
           gh release create "$tag" dist/luci-app-component-updater_0.5.6-2_all.ipk dist/luci-app-component-updater-0.5.6-r2.apk dist/SHA256SUMS.txt \
             --title "Component Updater V0.5.6 RC2" --latest=false --prerelease \
-            --notes "Native APKv3 updater candidate: extracted AX6S firmware tests verify SHA256-gated install, previous-package backup, configuration retention, full native APK rollback. Existing opkg behavior unchanged. AX6S installed-page acceptance passed for r1; r2 web upload and physical flash rollback remain to be tested."
+            --notes "Native APKv3 updater candidate: extracted AX6S firmware tests verify SHA256-gated install, previous-package backup, configuration retention, full native APK rollback. Existing opkg behavior unchanged. Physical AX6S device and live PassWall traffic validation remain outstanding."
