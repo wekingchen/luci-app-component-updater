@@ -160,6 +160,35 @@ async function main() {
   assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
   nodes = dashboard.renderContent({...status,check_state:'error',check_message:'Official GitHub API unavailable'}, {ready:'false'});
   assert(visibleText(nodes).includes('无法连接官方发布接口'));
+  // A pending RPC check is NOT an APK installation task. Do not show a stale
+  // "updating" badge with "no task running" detail on AX6S Safari.
+  dashboard.operationBusy = true;
+  dashboard.operationKind = 'check';
+  const checking = dashboard.renderContent({...status,job_state:'idle'}, {ready:'false'});
+  assert(visibleText(checking).includes('正在检查官方更新'));
+  assert(visibleText(checking).includes('正在检查官方更新，请勿重复点击'));
+  assert(!visibleText(checking).includes('更新进行中'));
+  assert(!visibleText(checking).includes('正在处理更新任务'));
+  assert.strictEqual(disabledInRealDom(button(checking,'检查官方更新')),true);
+  dashboard.operationBusy = false;
+  dashboard.operationKind = null;
+  const installing = dashboard.renderContent({...status,job_state:'downloading'}, {ready:'false'});
+  assert(visibleText(installing).includes('更新进行中'));
+  // Each actual APK check failure must be actionable in Chinese, rather
+  // than always displaying the generic device/network fallback.
+  for (const [reason, phrase] of [
+    ['APK manifest download failed', '无法下载 APK 校验清单'],
+    ['APK manifest hash mismatch', 'SHA256 不匹配'],
+    ['Insufficient space for APK backup', '空间不足'],
+    ['APK asset digest does not match Release API', '摘要与发布接口不一致'],
+    ['Native APK package ownership or installed firmware does not match the verified AX6S baseline', '设备环境'],
+  ]) {
+    const rendered = dashboard.renderContent(
+      {...status,check_state:'error',check_message:reason,job_state:'idle'},
+      {ready:'false'});
+    assert(visibleText(rendered).includes(phrase), reason);
+    assert(!visibleText(rendered).includes('检查失败，请确认设备环境及网络配置'), reason);
+  }
   nodes = dashboard.renderContent({...status,job_state:'recovery_required'}, {ready:'false'});
   assert(visibleText(nodes).includes('需要恢复'));
 
