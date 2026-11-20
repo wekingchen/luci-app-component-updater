@@ -1,10 +1,12 @@
 # LuCI 组件更新器
 
-**V0.5.3 状态提示修复候选（尚未公开发布）· OpenWrt 双包管理器中文组件更新平台**
+**V0.5.4 AX6S LuCI 菜单激活修复候选（尚未公开发布）· OpenWrt 双包管理器中文组件更新平台**
 
 > 已公开的管理器仍为 **V0.5.0 RC1**。2026-11-20 的 MT3600BE 手机截图确认旧版存在白底浅字、操作优先级不合理、设备信息过长的问题。V0.5.1 已经在 MT3600BE 手机上验证标题可读与主要操作。最新 V0.5.2 候选继续移除多余二级导航、处理 GL.iNet 主题蓝色条带、直接展示预设反代节点，并重新验收所有手机布局；尚不等于真机完成验收。
 
 **MT3600BE 真机验收更新（2026-11-20）**：用户的 iPhone Safari 截图确认 V0.5.2 首页和下载设置页可读、顶部多余菜单与蓝色条带消失、预设反代节点可选择，配置保存后重新进入仍保留。用户进一步报告在「版本查询与文件下载均使用中转」模式下，官方版本查询成功。**这只证明该查询在当前设置和环境下成功，不代表下载文件、SHA256 验证、升级或回滚已经在真机完成。** V0.5.3 只修复“已是最新”但仍提示首次检查的文案及按钮强调问题，未更改代理和更新引擎。
+
+**AX6S 真机进度（2026-11-20）**：用户已使用 `apk --no-network --allow-untrusted add /tmp/upload.apk` 安装 V0.5.3-r1（包数据库确认），但刷新 LuCI 未见菜单。这暴露出此前云端测试未覆盖的**安装后菜单/ACL 激活**缺口。V0.5.4 统一 APK/IPK post-install 为清理 LuCI 缓存、重启 rpcd 和 uhttpd；这只是修复候选，尚无 AX6S 真机复测成功证据。V0.5.3 仍应保留作为问题复现版本。
 
 **设置入口**：在「系统 → 组件更新」主页标题右侧点击「下载设置」即可进入；下载节点不再因为当前选择官方直连而被隐藏。设置仅更改本地 UCI 下载参数，不会自动执行安装。
 
@@ -17,7 +19,7 @@
 - [中文知识库源目录](wiki-src/Home.md) · [GitHub Wiki](https://github.com/wekingchen/luci-app-component-updater/wiki)
 - [AI / 人类开发规则](AGENTS.md) · [文档治理与事实等级](docs/project-governance.md) · [Wiki 首次同步和授权](docs/wiki-initialization.md)
 - [兼容与真实固件证据](docs/ax6s-apk-compatibility.md) · [AX6S 真机验收待办](docs/ax6s-hardware-acceptance-checklist.md)
-- [质量验收门禁](docs/acceptance-gates.md) · [V0.5.3 手机/桌面可读性与操作验收](docs/product-ui-acceptance.md)
+- [质量验收门禁](docs/acceptance-gates.md) · [V0.5.4 手机/桌面可读性与操作验收](docs/product-ui-acceptance.md)
 - [安全反代与回滚说明](docs/signing-proxy-device-acceptance.md) · [历史实施记录](docs/implementation-notes.md)
 
 **主仓库的 `wiki-src/` 是知识库的版本化唯一源**，Wiki 页面通过 GitHub Actions 同步。Wiki 尚未初始化或同步认证失败时，直接阅读主仓库页面；不得声称 Wiki 已同步。

@@ -11,7 +11,15 @@
 
 **模拟环境不包括真实 AX6S 的 Flash、overlay、PassWall 实时流量以及意外断电。**
 
-## 实机验收清单（暂不执行）
+## 2026-11-20 AX6S 真机新增证据：首次 APK 安装成功，LuCI 菜单缺失
+
+- 用户通过 `apk --no-network --allow-untrusted --simulate add /tmp/upload.apk` 预演安装，得到 `luci-app-component-updater 0.5.3-r1`，并看到 `OK: 286.8 MiB in 305 packages`。
+- 用户实际执行 `apk --no-network --allow-untrusted add /tmp/upload.apk` 成功，post-install 被执行，随后 `apk --no-network list --installed --manifest luci-app-component-updater` 返回 `luci-app-component-updater 0.5.3-r1`。
+- **故障**：刷新 LuCI 页面仍没有出现「组件更新」菜单；未知菜单文件存在性、rpcd ACL 重新加载结果和直接访问路由结果，均需要进一步收集，不能归因为单一原因。
+- **修复候选**：V0.5.4 将 APK 与 IPK 使用同一套 post-install 缓存清理和控制面重启脚本，补此前未覆盖的真实脚本效果单测；仍需真机实测验证，不宣称完成 AX6S G2 及 G3。
+- **安全**：跳过签名只能对已经独立核对可信 SHA256 的特定本地包使用 `--allow-untrusted`，不可全局关闭签名校验；安装本地包可使用 `--no-network`。
+
+## 实机验收清单（进行中）
 
 - [ ] 确认实际 AX6S 固件身份、架构、板型、APK 包管理器、NaiveProxy 版本、文件归属，并保存当前完整恢复基线。
 - [ ] 预检 overlay/Flash 空间与安装风险，安装同 Release 下经过 SHA256SUMS 验证的 V0.5.0 管理器 APK。
