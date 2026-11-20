@@ -60,7 +60,7 @@ class VisualContrastContract(unittest.TestCase):
         self.assertIn("E('div', {'class': 'cu-settings-heading'}", SETTINGS)
         self.assertIn('<div class="cu-page-head">', FIXTURE)
         self.assertIn('.legacy-theme header { display:flex!important; position:sticky!important;', FIXTURE)
-        block = re.search(r"\\.cu-app :is\\(\\.cu-page-head, \\.cu-settings-heading\\)\\s*\\{([^}]+)\\}", CSS, re.S)
+        block = re.search(r"\.cu-app :is\(\.cu-page-head, \.cu-settings-heading\)\s*\{([^}]+)\}", CSS, re.S)
         self.assertIsNotNone(block)
         for token in ("display: block !important", "position: static !important",
                       "z-index: auto !important", "overflow: visible !important"):
