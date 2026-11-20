@@ -457,12 +457,12 @@ jobs:
             test ! -d /tmp/component-updater-manager/operation.lock
             mkdir /tmp/component-updater-manager/operation.lock
             /bin/sh /usr/libexec/component-updater/manager-self-update.sh status >/tmp/manager-post-upgrade-status.json
-            grep -q "\\\"busy\\\": \\\"false\\\"" /tmp/manager-post-upgrade-status.json
+            test "$(jsonfilter -i /tmp/manager-post-upgrade-status.json -e "@.busy")" = false
             test ! -d /tmp/component-updater-manager/operation.lock
             mkdir /tmp/component-updater-manager/operation.lock
             : > /tmp/component-updater-manager/operation.lock/active
             /bin/sh /usr/libexec/component-updater/manager-self-update.sh status >/tmp/manager-active-marker-status.json
-            grep -q "\\\"busy\\\": \\\"true\\\"" /tmp/manager-active-marker-status.json
+            test "$(jsonfilter -i /tmp/manager-active-marker-status.json -e "@.busy")" = true
             test -e /tmp/component-updater-manager/operation.lock/active
             rm -f /tmp/component-updater-manager/operation.lock/active
             rmdir /tmp/component-updater-manager/operation.lock
