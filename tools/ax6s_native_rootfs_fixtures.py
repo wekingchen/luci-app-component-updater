@@ -32,9 +32,9 @@ shutil.copyfile(candidate,fixture/"candidate.apk")
 release={
  "tag_name":m["release_tag"],
  "assets":[
-    {"name":"manifest.json","digest":"sha256:"+hashlib.sha256(manifest_path.read_bytes()).hexdigest()},
-    {"name":original.name,"digest":"sha256:"+m["original"]["sha256"]},
-    {"name":candidate.name,"digest":"sha256:"+m["candidate"]["sha256"]}
+    {"name":"manifest.json","digest":"sha256:"+hashlib.sha256(manifest_path.read_bytes()).hexdigest(),"size":manifest_path.stat().st_size},
+    {"name":original.name,"digest":"sha256:"+m["original"]["sha256"],"size":original.stat().st_size},
+    {"name":candidate.name,"digest":"sha256:"+m["candidate"]["sha256"],"size":candidate.stat().st_size}
  ]}
 (fixture/"release.json").write_text(json.dumps(release))
 source=Path("luci-app-component-updater/root/usr/sbin/component-updaterctl").read_text()
