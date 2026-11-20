@@ -66,6 +66,23 @@
   font-weight: 700;
   margin-bottom: 5px;
 }
+/* Some ImmortalWrt LuCI themes assign flex/grid + sticky/fixed positioning
+ * to all semantic <header> nodes. This app intentionally uses plain DIV
+ * wrappers for its page headings; keep the positioning contract explicit.
+ * Never override the host navigation/header outside .cu-app. */
+.cu-app :is(.cu-page-head, .cu-settings-heading) {
+  display: block !important;
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+  float: none !important;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
 .cu-app .cu-page-head { margin: 0 0 18px; padding: 0 2px; background: transparent; }
 .cu-app .cu-page-head h2 { font-size: clamp(25px, 3.2vw, 32px); font-weight: 780; }
 .cu-app .cu-page-head p { margin-top: 5px; font-size: 13px; color: var(--cu-muted); }
@@ -390,10 +407,19 @@
 }
 .cu-app .cu-page-title-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px 16px;
   min-width: 0;
+}
+.cu-app .cu-page-title-row > h2 {
+  flex: 0 1 auto;
+  min-width: max-content;
+  max-width: 100%;
+  white-space: nowrap;
+  word-break: keep-all;
+  writing-mode: horizontal-tb;
 }
 .cu-app a.cu-page-settings {
   display: inline-flex;
