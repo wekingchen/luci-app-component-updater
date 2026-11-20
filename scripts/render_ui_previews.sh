@@ -11,13 +11,13 @@ for binary in google-chrome chromium chromium-browser; do
 done
 [ -n "$browser" ] || { echo "ERROR: No Chrome/Chromium browser available for UI acceptance"; exit 1; }
 mkdir -p ui-review
-url="file://$(pwd)/tests/ui_visual_fixture.html"
 render() {
     name=$1
     width=$2
     height=$3
     query=$4
-    target="$url?$query"
+    fixture=${5:-ui_visual_fixture.html}
+    target="file://$(pwd)/tests/$fixture?$query"
     html=$("$browser" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
         --hide-scrollbars --force-device-scale-factor=1 --window-size="$width,$height" \
         --virtual-time-budget=1800 --dump-dom "$target" 2>/dev/null) || return 1
@@ -36,3 +36,11 @@ render mobile-320-waiting 320 920 waiting
 render mobile-390-waiting 390 920 waiting
 render mobile-390-update-ready 390 920 ready
 render desktop-1280-waiting 1280 920 waiting
+
+# Real-browser rendering of the settings form across proxy modes. This does
+# not claim to execute LuCI form dependencies on a physical router.
+render mobile-320-settings-direct 320 1040 'mode=off' ui_settings_fixture.html
+render mobile-390-settings-direct 390 1040 'mode=off' ui_settings_fixture.html
+render mobile-390-settings-relay 390 1200 'mode=assets' ui_settings_fixture.html
+render mobile-390-settings-custom 390 1200 'mode=assets&site=custom' ui_settings_fixture.html
+render desktop-1280-settings 1280 920 'mode=assets' ui_settings_fixture.html
