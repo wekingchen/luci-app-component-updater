@@ -294,7 +294,7 @@ upgrade() {
     state completed 'Manager upgrade completed; one rollback archive retained'
 }
 restore() {
-    mkdir "$LOCK" 2>/dev/null || return 1
+    [ -d "$LOCK" ] || mkdir "$LOCK" 2>/dev/null || return 1
     trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
     dir=$PREV
     [ ! -f "$TXN" ] || dir=$ROOT/next
