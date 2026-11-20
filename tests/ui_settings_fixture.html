@@ -64,7 +64,7 @@ body { margin:0;background:#eef2f5;font:15px -apple-system,BlinkMacSystemFont,"S
   <label class="cbi-value-title" for="proxy-fallback">中转失败时尝试官方直连</label>
   <div class="cbi-value-field"><input type="checkbox" id="proxy-fallback" checked><div class="cbi-value-description">中转节点暂时不可用时自动尝试官方地址。如果当前网络无法直连，可关闭此选项。</div></div>
 </div>
-<div class="cbi-page-actions"><button type="button">保存并应用</button></div>
+<div class="cbi-page-actions"><button type="button" class="cbi-button-save">保存并应用</button></div>
 </div></div></div>
 <div class="cu-settings-note"><strong>关于校验与可信度</strong>
 <p>安装前会依据 GitHub Release API 提供的 SHA256 摘要核对安装包，但它不是独立数字签名。若将版本查询也交给中转节点，校验信息同样经过该节点，请仅使用可信服务。</p></div>
@@ -102,6 +102,9 @@ body { margin:0;background:#eef2f5;font:15px -apple-system,BlinkMacSystemFont,"S
  if(mode.value!=='off' && site.value==='custom' && custom.hidden)fail.push('custom-hidden');
  if(document.documentElement.scrollWidth>window.innerWidth+2)fail.push('horizontal-overflow');
  if(css('.cbi-value-description').color==='rgb(184, 195, 200)')fail.push('description-low-contrast');
+ const save=css('.cbi-button-save');
+ if(save.color!=='rgb(255, 255, 255)' || save.backgroundColor!=='rgb(8, 107, 100)')fail.push('save-button-theme');
+ if(document.querySelector('.cbi-button-save').getBoundingClientRect().height<44)fail.push('save-button-too-small');
  document.documentElement.dataset.uiAudit=fail.length?'fail':'pass';
  document.documentElement.dataset.uiProblems=fail.join(',');
 })();
