@@ -2,7 +2,7 @@
 
 **面向 OpenWrt 的中文组件更新平台**。在路由器 LuCI 中检查组件官方稳定版、下载预先构建并校验的软件包、执行本机原生软件包更新，以及在失败时恢复旧版本。
 
-> **已公开版本 V0.5.0 RC1（预发布）**，管理器 IPK/APK 均已发布。**V0.5.1 为正在验收的移动端 UI 修复候选，尚未公开发布**，修正 V0.5.0 在部分 LuCI 主题上的白底浅字和禁用按钮层级问题。AX6S APK 路线通过真实固件镜像/ARM64 隔离环境测试，**尚未完成实体 AX6S 验收**。
+> **已公开版本 V0.5.0 RC1（预发布）**，管理器 IPK/APK 均已发布。**V0.5.2 是尚未公开发布的 GL.iNet 真机 UI 打磨候选**，基于 V0.5.1 的手机实测补齐顶部冗余菜单、蓝色主题装饰条和反代节点可发现性。AX6S APK 路线通过真实固件镜像/ARM64 隔离环境测试，**尚未完成实体 AX6S 验收**。
 
 ## 从哪里开始？
 
@@ -13,7 +13,7 @@
 - [版本发布与验收门禁](Release-and-Verification.md)：为什么 RC 不等于稳定版。
 - [开发人员与 AI 协作](Developer-Guide.md)：如何遵守项目规范和维持文档更新。
 
-当前 UI 验收基准见 [V0.5.1 视觉与功能验收清单](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/product-ui-acceptance.md)。
+当前 UI 验收基准见 [V0.5.2 视觉与功能验收清单](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/product-ui-acceptance.md)。
 
 ## 最新产物
 
