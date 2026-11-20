@@ -460,7 +460,9 @@ return view.extend({
                 E('div', {'class': 'cu-page-title-row'}, [
                     E('h2', {}, '组件更新'),
                     E('div', {'class':'cu-page-tool-links'}, [
-                        E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/manager')}, '管理器更新'),
+                        (data[0] && data[0].package_manager === 'apk' &&
+                         data[0].compatibility === 'ax6s-apk-native') ?
+                            E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/manager')}, '管理器更新') : null,
                         E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/settings')}, '下载设置')
                     ])
                 ]),
