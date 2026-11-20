@@ -535,3 +535,12 @@
   font-weight: 750;
   opacity: 1 !important;
 }
+
+/* Manager updater: scoped controls, same mobile and desktop tokens. */
+.cu-app .cu-page-tool-links { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.cu-app .cu-manager-intro { color:var(--cu-muted); line-height:1.65; margin:10px 0 16px; }
+.cu-app .cu-manager-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin-top:17px; }
+.cu-app .cu-manager-actions button { white-space:normal; min-height:46px; padding:10px 11px; }
+.cu-app .cu-manager .cu-status { margin-left:auto; }
+@media (max-width:600px) { .cu-app .cu-manager-actions { grid-template-columns:1fr 1fr; } }
+@media (max-width:360px) { .cu-app .cu-manager-actions { grid-template-columns:1fr; } }

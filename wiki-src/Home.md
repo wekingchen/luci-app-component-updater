@@ -25,3 +25,5 @@
 本知识库的页面由主仓库 `wiki-src/` 版本化维护，并经 GitHub Actions 校验后同步。实际技术约束以 [项目开发规则](https://github.com/wekingchen/luci-app-component-updater/blob/main/AGENTS.md)、[项目治理](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/project-governance.md)及可运行的代码/测试为准，Wiki 页面不替代设备验收。
 
 > **候选包版本区分**：V0.5.5-r1 是页头布局修复候选，V0.5.5-r2 增加了更新检查状态/错误诊断的修复。r3 已完成移动端和空间保护的实机验证；r4 修复警告颜色与精确管理器版本，仍是待验收候选。
+
+> **V0.5.6（正在开发验证）**：引入原生 APK 管理器网页上传、自升级、独立恢复及有界备份清理。此版本没有通过 AX6S 的实际自我升级与回滚验收，PR 尚未合并；现网 r3/r4 保持不变。

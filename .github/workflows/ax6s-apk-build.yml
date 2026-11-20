@@ -13,6 +13,10 @@ on:
       - tools/package_component_ipk.py
       - tests/test_ax6s_contract.py
       - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+      - luci-app-component-updater/root/usr/libexec/component-updater/manager-self-update.sh
+      - luci-app-component-updater/root/usr/libexec/rpcd/component-updater
+      - luci-app-component-updater/root/usr/share/rpcd/acl.d/luci-app-component-updater.json
+      - tests/test_manager_self_update.py
   pull_request:
     paths:
       - .github/workflows/ax6s-apk-build.yml
@@ -23,6 +27,10 @@ on:
       - 'tests/test_ui_contrast.py'
       - tools/build_ax6s_apk_assets.py
       - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+      - luci-app-component-updater/root/usr/libexec/component-updater/manager-self-update.sh
+      - luci-app-component-updater/root/usr/libexec/rpcd/component-updater
+      - luci-app-component-updater/root/usr/share/rpcd/acl.d/luci-app-component-updater.json
+      - tests/test_manager_self_update.py
   workflow_dispatch:
   workflow_run:
     workflows: [Component Builder / Official Releases & UPX]
@@ -30,7 +38,10 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ax6s-apk-release
+  # Do not let a busy main release run cancel a PR's read-only hardware
+  # fixture regression before any job can start. Main publication remains
+  # serialized; independent PR/push validations use their unique run IDs.
+  group: ${{ github.ref == 'refs/heads/main' && 'ax6s-apk-release-main' || format('ax6s-apk-validate-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   discover:
@@ -119,8 +130,17 @@ jobs:
               ninja -C /tmp/apk-build
               APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
               /tmp/apk-build/src/apk adbdump --format json \
-                dist/luci-app-component-updater-0.5.5-r4.apk > /tmp/manager-apk-adb.json
+                dist/luci-app-component-updater-0.5.6-r1.apk > /tmp/manager-apk-adb.json
               grep -q luci-app-component-updater /tmp/manager-apk-adb.json
+              # Build an isolated second manager revision to exercise an
+              # actual self-upgrade + rollback in the pinned native firmware.
+              cp luci-app-component-updater/Makefile /tmp/manager-makefile
+              trap "cp /tmp/manager-makefile luci-app-component-updater/Makefile" EXIT
+              sed -i "s/^PKG_RELEASE:=1$/PKG_RELEASE:=2/" luci-app-component-updater/Makefile
+              APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
+              test -s dist/luci-app-component-updater-0.5.6-r2.apk
+              cp /tmp/manager-makefile luci-app-component-updater/Makefile
+              trap - EXIT
               set -- source/naiveproxy_*_aarch64_cortex-a53.ipk
               test "$#" -eq 1
               python3 tools/build_ax6s_apk_assets.py \
@@ -221,13 +241,13 @@ jobs:
             -o /tmp/manager-old.apk
           echo 'd6a28e3dffec8b3dc294a62a016b476c9f9effa38a693d27f759bd18c07d603c  /tmp/manager-old.apk' | sha256sum -c
           sudo cp /tmp/manager-old.apk "$ROOTFS/tmp/manager-old.apk"
-          sudo cp dist/luci-app-component-updater-0.5.5-r4.apk "$ROOTFS/tmp/manager-new.apk"
+          sudo cp dist/luci-app-component-updater-0.5.6-r1.apk "$ROOTFS/tmp/manager-new.apk"
           sudo chroot "$ROOTFS" /bin/sh -e -c '
             apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-old.apk
             grep -q "config updater" /etc/config/component-updater
             echo "    option github_proxy_mode '\''assets'\''" >> /etc/config/component-updater
             apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-new.apk
-            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.5-r4"
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r1"
             grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
             test -x /usr/sbin/component-updaterctl
             test -r /usr/libexec/component-updater/ax6s-apkctl.sh
@@ -237,6 +257,32 @@ jobs:
             test -r /www/luci-static/resources/component-updater/design.css
             echo "PASS: Native AX6S manager APK 0.4 -> 0.5 and UCI configuration preservation"
           '
+      - name: AX6S native manager upload and package-inspection contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=/tmp/ax6s-native-rootfs
+          sudo mkdir -p "$ROOTFS/tmp/sysinfo"
+          printf 'xiaomi,redmi-router-ax6s\n' | sudo tee "$ROOTFS/tmp/sysinfo/board_name" >/dev/null
+          sudo cp dist/luci-app-component-updater-0.5.6-r1.apk "$ROOTFS/tmp/component-updater-manager-current.apk"
+          size=$(wc -c < dist/luci-app-component-updater-0.5.6-r1.apk | tr -d ' ')
+          sha=$(sha256sum dist/luci-app-component-updater-0.5.6-r1.apk | awk '{print $1}')
+          printf '{"kind":"previous","size":%s,"sha256":"%s"}\n' "$size" "$sha" |
+            sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh upload > /tmp/ax6s-manager-prepare.json
+          cat /tmp/ax6s-manager-prepare.json
+          grep -q '"status": "prepared"' /tmp/ax6s-manager-prepare.json
+          sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh status > /tmp/ax6s-manager-status.json
+          cat /tmp/ax6s-manager-status.json
+          grep -q '"current_archive": "true"' /tmp/ax6s-manager-status.json
+          sudo cp dist/luci-app-component-updater-0.5.6-r1.apk "$ROOTFS/tmp/component-updater-manager-new.apk"
+          if printf '{"kind":"candidate","size":%s,"sha256":"%s"}\n' "$size" "$sha" |
+               sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh upload > /tmp/ax6s-manager-same-version.json; then
+            echo 'ERROR: same-version manager update incorrectly accepted'
+            exit 1
+          fi
+          grep -q 'Candidate version already installed' /tmp/ax6s-manager-same-version.json
+          echo 'PASS: Native APK manager import and same-version rejection'
+
       - name: Verify AX6S rpcd plugin registration and status through native ubus
         shell: bash
         run: |
@@ -273,6 +319,10 @@ jobs:
           cat /tmp/ax6s-ubusd.log || true
           test -s /tmp/ax6s-rpc-methods.json || exit 1
           grep -q rollback /tmp/ax6s-rpc-methods.json
+          grep -q manager_upload /tmp/ax6s-rpc-methods.json
+          grep -q manager_check /tmp/ax6s-rpc-methods.json
+          grep -q manager_start /tmp/ax6s-rpc-methods.json
+          grep -q manager_rollback /tmp/ax6s-rpc-methods.json
           if ! sudo chroot "$ROOTFS" /bin/ubus -s /tmp/component-test-ubus.sock call component-updater status > /tmp/ax6s-rpc-status.json 2>/tmp/ax6s-rpc-error.log; then
             cat /tmp/ax6s-rpc-status.json /tmp/ax6s-rpc-error.log /tmp/ax6s-rpcd.log
             exit 1
@@ -374,6 +424,54 @@ jobs:
             echo "PASS: crash-recovery marker, tampered rollback protection and manual recovery"
 
           '
+
+      - name: AX6S manager self-upgrade, single backup and offline rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=/tmp/ax6s-native-rootfs
+          sudo cp dist/luci-app-component-updater-0.5.6-r1.apk "$ROOTFS/tmp/component-updater-manager-current.apk"
+          sudo cp dist/luci-app-component-updater-0.5.6-r2.apk "$ROOTFS/tmp/component-updater-manager-new.apk"
+          old_sha=$(sha256sum dist/luci-app-component-updater-0.5.6-r1.apk | awk '{print $1}')
+          old_size=$(wc -c < dist/luci-app-component-updater-0.5.6-r1.apk | tr -d ' ')
+          new_sha=$(sha256sum dist/luci-app-component-updater-0.5.6-r2.apk | awk '{print $1}')
+          new_size=$(wc -c < dist/luci-app-component-updater-0.5.6-r2.apk | tr -d ' ')
+          printf '{"kind":"previous","size":%s,"sha256":"%s"}\n' "$old_size" "$old_sha" |
+            sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh upload > /tmp/manager-old-accepted.json
+          grep -q '"status": "prepared"' /tmp/manager-old-accepted.json
+          printf '{"kind":"candidate","size":%s,"sha256":"%s"}\n' "$new_size" "$new_sha" |
+            sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh upload > /tmp/manager-new-accepted.json
+          grep -q '"status": "prepared"' /tmp/manager-new-accepted.json
+          sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh check > /tmp/manager-check.json
+          cat /tmp/manager-check.json
+          grep -q '"status": "ready"' /tmp/manager-check.json
+          sudo chroot "$ROOTFS" /bin/sh -ec '
+            cp /usr/libexec/component-updater/manager-self-update.sh /tmp/manager-worker-test.sh
+            /bin/sh /tmp/manager-worker-test.sh upgrade
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r2"
+            test ! -f /etc/component-updater/manager/transaction.json
+            test -s /etc/component-updater/manager/previous/previous.apk
+            test ! -f /etc/component-updater/manager/rescue.sh
+            test "$(sha256sum /etc/config/component-updater | awk "{print \$1}")" != ""
+            cp /etc/component-updater/manager/previous/previous.apk /tmp/manager-old-safe.apk
+            printf X >> /etc/component-updater/manager/previous/previous.apk
+            if /bin/sh /tmp/manager-worker-test.sh restore; then
+              echo "ERROR: modified manager recovery unexpectedly restored"
+              exit 1
+            fi
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r2"
+            mv /tmp/manager-old-safe.apk /etc/component-updater/manager/previous/previous.apk
+            # Simulate crash after next/ was committed as previous/ but
+            # before TXN unlink; a healthy rollback still must be possible.
+            printf next > /etc/component-updater/manager/transaction.json
+            /bin/sh /tmp/manager-worker-test.sh restore
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r1"
+            test ! -f /etc/component-updater/manager/transaction.json
+            test ! -d /etc/component-updater/manager/previous
+            test -s /etc/component-updater/manager/active.apk
+            echo "PASS: AX6S manager full APK self-upgrade, preserved UCI/world and rollback"
+          '
+          sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh status
 
   publish-native-apk-candidate:
     name: Publish immutable AX6S native APK preview after native CI gates

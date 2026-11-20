@@ -6,7 +6,8 @@
         "component-updater": [
           "status",
           "check",
-          "plan"
+          "plan",
+          "manager_status"
         ]
       },
       "uci": [
@@ -17,12 +18,27 @@
       "ubus": {
         "component-updater": [
           "start",
-          "rollback"
+          "rollback",
+          "manager_upload",
+          "manager_check",
+          "manager_start",
+          "manager_rollback"
         ]
       },
       "uci": [
         "component-updater"
-      ]
+      ],
+      "cgi-io": [
+        "upload"
+      ],
+      "file": {
+        "/tmp/component-updater-manager-new.apk": [
+          "write"
+        ],
+        "/tmp/component-updater-manager-current.apk": [
+          "write"
+        ]
+      }
     }
   }
 }

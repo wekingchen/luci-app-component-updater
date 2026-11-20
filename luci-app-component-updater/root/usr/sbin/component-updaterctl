@@ -20,6 +20,50 @@ APK_BACKEND=/usr/libexec/component-updater/ax6s-apkctl.sh
 . /usr/share/libubox/jshn.sh
 
 jsonval() { jsonfilter -i "$1" -e "$2" 2>/dev/null | head -n 1; }
+# Retain a bounded, *referenced* rollback chain, not simply the two newest
+# directory names. Interrupted pre-transaction attempts can leave newer
+# orphan directories; these must never displace a valid recovery archive.
+# Called only after a successful installation, a verified rollback, or from
+# the run() exit trap when no persisted transaction remains.
+prune_backup_chain() {
+    [ ! -r "$TXN" ] || return 0
+    [ -d "$BACKUPS" ] && [ ! -L "$BACKUPS" ] || return 1
+
+    keep1=$(jsonval "$RECEIPT" '@.previous_backup')
+    if [ -z "$keep1" ]; then
+        # An existing receipt with a missing reference is an inconsistent
+        # state: leave all backup files intact for manual diagnosis.
+        [ ! -s "$RECEIPT" ] || return 1
+    else
+        case "$keep1" in *[!0-9-]*|'') return 1;; esac
+        [ -d "$BACKUPS/$keep1" ] && [ ! -L "$BACKUPS/$keep1" ] || return 1
+    fi
+
+    keep2=''
+    if [ -n "$keep1" ]; then
+        keep2=$(jsonval "$BACKUPS/$keep1/receipt.json" '@.previous_backup')
+        if [ -n "$keep2" ]; then
+            case "$keep2" in *[!0-9-]*|'') return 1;; esac
+            # An older ancestor can already have been pruned by a previous
+            # successful update. Do not let a legitimate one-step rollback
+            # cause permanent orphan accumulation. The *current* keep1
+            # archive is still mandatory and checked strictly above.
+            if [ ! -d "$BACKUPS/$keep2" ] || [ -L "$BACKUPS/$keep2" ]; then
+                keep2=''
+            fi
+        fi
+    fi
+
+    # Only the updater's numeric timestamp-PID archive directories can be
+    # removed. Never follow symlinks or operate outside the fixed backup root.
+    for entry in "$BACKUPS"/*; do
+        [ -d "$entry" ] && [ ! -L "$entry" ] || continue
+        name=${entry##*/}
+        case "$name" in ''|*[!0-9-]*) continue;; esac
+        [ "$name" = "$keep1" ] || [ "$name" = "$keep2" ] ||
+            rm -rf -- "$entry" || return 1
+    done
+}
 config_get() {
     got=$(uci -q get "component-updater.main.$1" 2>/dev/null || true)
     [ -n "$got" ] && printf '%s\n' "$got" || printf '%s\n' "$2"
@@ -525,10 +569,7 @@ perform_install() {
     }
     rm -f "$TXN" "$PLAN"
     job_record completed 'Native IPK installed; existing PassWall processes not restarted'
-    ls -1 "$BACKUPS" 2>/dev/null | sort -r | awk 'NR>2' | while IFS= read -r obsolete; do
-        case "$obsolete" in ''|*[!0-9-]*) continue;; esac
-        rm -rf "${BACKUPS:?}/$obsolete"
-    done
+    prune_backup_chain || true
 }
 run() {
     manager=$(package_manager)
@@ -538,7 +579,7 @@ run() {
     lock=$CACHE/update.lock
     mkdir "$lock" 2>/dev/null || { json_msg busy 'Update in progress'; return 1; }
     work=''
-    trap 'if [ -n "$work" ]; then rm -rf "$work"; fi; rmdir "$lock" 2>/dev/null || true' EXIT
+    trap 'if [ -n "$work" ]; then rm -rf "$work"; fi; if [ ! -r "$TXN" ]; then prune_backup_chain >/dev/null 2>&1 || true; fi; rmdir "$lock" 2>/dev/null || true' EXIT
     trap 'exit 1' HUP INT TERM
     if [ "$manager" = apk ]; then apk_perform
     else perform_install; fi
@@ -577,6 +618,7 @@ rollback() {
     if [ -r "$TXN" ]; then id=$(jsonval "$TXN" '@.backup_id')
     else id=$(jsonval "$RECEIPT" '@.previous_backup'); fi
     if restore_previous "$id"; then
+        prune_backup_chain || true
         job_record rolled_back 'Previous opkg package and file content restored'
         json_msg rolled_back 'Previous native package restored; PassWall not restarted'
     else

@@ -411,11 +411,7 @@ apk_perform() {
     fi
     rm -f "$TXN" "$PLAN"
     job_record completed 'Native APK installed; PassWall not restarted'
-    ls -1 "$BACKUPS" 2>/dev/null | LC_ALL=C sort -r | awk 'NR>2' |
-        while IFS= read -r stale; do
-            case "$stale" in ''|*[!0-9-]*) continue;; esac
-            rm -rf "$BACKUPS/$stale"
-        done
+    prune_backup_chain || true
 }
 apk_rollback() {
     create_dirs || return 1
@@ -431,6 +427,7 @@ apk_rollback() {
         id=$(jsonval "$RECEIPT" '@.previous_backup')
     fi
     if apk_restore "$id"; then
+        prune_backup_chain || true
         job_record rolled_back 'Original APK version and configuration restored'
         json_msg rolled_back 'Previous native APK restored without restarting PassWall'
     else

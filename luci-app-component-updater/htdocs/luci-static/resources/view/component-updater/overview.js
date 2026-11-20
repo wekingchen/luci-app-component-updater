@@ -311,7 +311,7 @@ return view.extend({
         ]);
         // IPK and APKv3 use different package-release suffix conventions.
         // Always show the installed manager package revision unambiguously.
-        var managerBuild = status.package_manager === 'apk' ? 'v0.5.5-r4' : 'v0.5.5-4';
+        var managerBuild = status.package_manager === 'apk' ? 'v0.5.6-r1' : 'v0.5.6-1';
         var content = [];
         var notice = this.renderNotice();
         if (notice)
@@ -454,12 +454,17 @@ return view.extend({
         this.page = E('div', {}, this.renderContent(this.currentStatus, this.currentPlan));
         poll.add(this.refresh.bind(this), 5);
         return E('div', {'class': 'cu-app'}, [
-            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.5-r4'}),
+            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.6-r1'}),
             E('div', {'class': 'cu-page-head'}, [
                 E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
                 E('div', {'class': 'cu-page-title-row'}, [
                     E('h2', {}, '组件更新'),
-                    E('a', {'class': 'cu-page-settings', href: L.url('admin/system/component-updater/settings')}, '下载设置')
+                    E('div', {'class':'cu-page-tool-links'}, [
+                        (data[0] && data[0].package_manager === 'apk' &&
+                         data[0].compatibility === 'ax6s-apk-native') ?
+                            E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/manager')}, '管理器更新') : null,
+                        E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/settings')}, '下载设置')
+                    ])
                 ]),
                 E('p', {}, '先检查可用更新，再决定安装；需要时可恢复已备份的版本。')
             ]),

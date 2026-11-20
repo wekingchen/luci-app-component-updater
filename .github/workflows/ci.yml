@@ -35,6 +35,7 @@ jobs:
           sh -n luci-app-component-updater/root/usr/sbin/component-updaterctl
           sh -n luci-app-component-updater/root/usr/libexec/rpcd/component-updater
           sh -n luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+          sh -n luci-app-component-updater/root/usr/libexec/component-updater/manager-self-update.sh
           sh -n scripts/device-readonly-acceptance.sh scripts/device-live-acceptance.sh
           shellcheck -S warning luci-app-component-updater/root/usr/sbin/component-updaterctl luci-app-component-updater/root/usr/libexec/rpcd/component-updater
           for path in luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/*.js; do
@@ -75,7 +76,7 @@ jobs:
             ninja -C /tmp/apk-build
             APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
             /tmp/apk-build/src/apk adbdump --format json \
-              dist/luci-app-component-updater-0.5.5-r4.apk > dist/manager-apk-adbdump.json
+              dist/luci-app-component-updater-0.5.6-r1.apk > dist/manager-apk-adbdump.json
             grep -q "luci-app-component-updater" dist/manager-apk-adbdump.json
           '
       - uses: actions/upload-artifact@v4
@@ -106,10 +107,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag=luci-app-component-updater-v0.5.5-rc4
-          test -s dist/luci-app-component-updater_0.5.5-4_all.ipk
-          pkg=luci-app-component-updater_0.5.5-4_all.ipk
-          manager_apk=luci-app-component-updater-0.5.5-r4.apk
+          tag=luci-app-component-updater-v0.5.6-rc1
+          test -s dist/luci-app-component-updater_0.5.6-1_all.ipk
+          pkg=luci-app-component-updater_0.5.6-1_all.ipk
+          manager_apk=luci-app-component-updater-0.5.6-r1.apk
           test -s "dist/$manager_apk"
           (cd dist && sha256sum "$pkg" "$manager_apk" > SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
@@ -124,6 +125,6 @@ jobs:
             echo "::notice::Published release has identical package contents; skip republishing."
             exit 0
           fi
-          gh release create "$tag" dist/luci-app-component-updater_0.5.5-4_all.ipk dist/luci-app-component-updater-0.5.5-r4.apk dist/SHA256SUMS.txt \
-            --title "Component Updater V0.5.5 RC4" --latest=false --prerelease \
+          gh release create "$tag" dist/luci-app-component-updater_0.5.6-1_all.ipk dist/luci-app-component-updater-0.5.6-r1.apk dist/SHA256SUMS.txt \
+            --title "Component Updater V0.5.6 RC1" --latest=false --prerelease \
             --notes "Native APKv3 updater candidate: extracted AX6S firmware tests verify SHA256-gated install, previous-package backup, configuration retention, full native APK rollback. Existing opkg behavior unchanged. Physical AX6S device and live PassWall traffic validation remain outstanding."

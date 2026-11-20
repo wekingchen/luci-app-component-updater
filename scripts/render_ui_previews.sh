@@ -47,3 +47,8 @@ render mobile-390-settings-direct 390 1040 'mode=off' ui_settings_fixture.html
 render mobile-390-settings-relay 390 1200 'mode=assets' ui_settings_fixture.html
 render mobile-390-settings-custom 390 1200 'mode=assets&site=custom' ui_settings_fixture.html
 render desktop-1280-settings 1280 920 'mode=assets' ui_settings_fixture.html
+
+# New restricted manager upload and recovery UI: narrow phone and desktop.
+render mobile-320-manager 320 1120 manager ui_manager_fixture.html
+render mobile-390-manager 390 1080 manager ui_manager_fixture.html
+render desktop-1280-manager 1280 920 manager ui_manager_fixture.html
