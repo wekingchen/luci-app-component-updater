@@ -32,7 +32,7 @@ class SelfUpdateContract(unittest.TestCase):
         self.assertIn("apk adbdump --format json",BACKEND)
         self.assertIn('sha_ok "$src" "$expected"',BACKEND)
         self.assertIn("Unsupported manager APK identity or payload",BACKEND)
-        self.assertIn("No caller",BACKEND)
+        self.assertIn("never accepts a remote path or command",BACKEND)
         self.assertNotRegex(BACKEND,r"eval\s|sh\s+-c\s+\"\$|/etc/init\.d/passwall")
         self.assertIn("--no-network --allow-untrusted --no-scripts --no-commit-hooks",BACKEND)
 
