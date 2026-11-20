@@ -48,6 +48,33 @@ class VisualContrastContract(unittest.TestCase):
                          "box-shadow: none !important"):
             self.assertIn(required, block.group(1))
 
+    def test_theme_accent_bars_are_scoped_out_without_hiding_functional_pseudo_elements(self):
+        # GL.iNet adds decorative bars to headers, panels and LuCI form maps.
+        # Only the updater's wrappers should be reset; do not touch global nav.
+        for token in (
+            ".cu-page-head::after", ".cu-settings-heading::before",
+            ".cu-hero::before", ".cu-panel::after",
+            ".cu-settings-form .cbi-map::before",
+            ".cu-settings-form .cbi-section::after",
+        ):
+            self.assertIn(token, CSS)
+        self.assertIn("content: none !important", CSS)
+        self.assertIn(".cu-app .cu-status::before", CSS,
+                      "The intentional status dot must remain visible")
+        self.assertIn(".cu-app .cu-detail > summary::after", CSS,
+                      "The expand/collapse indicator must remain visible")
+        self.assertNotIn("body > header::after", CSS,
+                         "Never alter the router's global navigation")
+
+    def test_prominent_settings_shortcut_and_select_appearance(self):
+        for token in (
+            ".cu-page-title-row", ".cu-page-settings",
+            ".cu-settings-form .cbi-value-description",
+            ".cu-settings-form .cbi-page-actions",
+            ".cu-setup-hint", "min-height: 44px",
+        ):
+            self.assertIn(token, CSS)
+
     def test_disabled_button_preserves_full_opacity_and_readable_text(self):
         block = re.search(r"\.cu-app button\.cu-btn:disabled\s*\{([^}]+)\}", CSS, re.S)
         self.assertIsNotNone(block)
