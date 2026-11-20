@@ -81,7 +81,7 @@ async function main() {
   const plan = {ready:'true',filename:'naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.ipk'};
   const rendered = dashboard.render([status,plan]);
   assert(rendered.tag === 'div');
-  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.2$/.test(n.attributes.href)));
+  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.3$/.test(n.attributes.href)));
 
   const settingsShortcut = flatten(rendered).find(n => n.tag === 'a' &&
     n.children === '下载设置');
@@ -133,8 +133,27 @@ async function main() {
   }
   nodes = dashboard.renderContent({...status,check_state:'up_to_date'},plan);
   assert(visibleText(nodes).includes('组件已保持最新'));
+  assert(visibleText(nodes).includes('无需重复安装'));
+  assert(visibleText(nodes).includes('可恢复已备份的上一版本'));
+  assert(!visibleText(nodes).includes('请先检查官方更新'), 'already-current state must not demand an initial check');
+  assert.strictEqual(disabledInRealDom(button(nodes,'重新检查更新')),false);
   assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
+  assert.strictEqual(disabledInRealDom(button(nodes,'恢复上一个版本')),false);
+  const currentPanel = flatten(nodes).find(n => n.attributes && /cu-actions/.test(n.attributes.class || ''));
+  assert(currentPanel && currentPanel.attributes.class.includes('is-current'));
+  assert(!currentPanel.attributes.class.includes('is-ready'));
+  assert(css.includes('.cu-actions:not(.is-ready):not(.is-current) .cu-btn-check:not(:disabled)'),
+    'already-current state must not highlight the optional recheck button');
+  const currentNoBackup = dashboard.renderContent({...status,check_state:'up_to_date',rollback_available:'false'},plan);
+  assert(visibleText(currentNoBackup).includes('当前没有可用的旧版备份'));
+  assert(!visibleText(currentNoBackup).includes('请先检查官方更新'));
+  assert.strictEqual(disabledInRealDom(button(currentNoBackup,'重新检查更新')),false);
+  assert.strictEqual(disabledInRealDom(button(currentNoBackup,'下载并更新')),true);
+  assert.strictEqual(disabledInRealDom(button(currentNoBackup,'恢复上一个版本')),true);
   nodes = dashboard.renderContent({...status, installed_upstream_tag:status.official_tag},plan);
+  assert(visibleText(nodes).includes('组件已保持最新'));
+  assert(!visibleText(nodes).includes('请先检查官方更新'));
+  assert.strictEqual(disabledInRealDom(button(nodes,'重新检查更新')),false);
   assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
   nodes = dashboard.renderContent({...status,job_state:'idle',check_state:'pending'}, {ready:'false'});
   assert(visibleText(nodes).includes('云端准备中'));
@@ -214,7 +233,7 @@ async function main() {
   const settingsPage = await settings.render();
   assert(settingsPage.tag === 'div');
   assert(visibleText(settingsPage).includes('GitHub 下载设置'));
-  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.2$/.test(n.attributes.href)));
+  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.3$/.test(n.attributes.href)));
   assert.strictEqual(formMap.sections.length,1);
   const fields = formMap.sections[0].fields;
   assert.deepStrictEqual(Array.from(fields.map(x => x.name)),
