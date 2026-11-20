@@ -4,7 +4,7 @@
 
 > **已公开版本 V0.5.0 RC1（预发布）**，管理器 IPK/APK 均已发布。**V0.5.3 是尚未公开发布的状态提示修复候选**：V0.5.2 的 MT3600BE 真机 Safari 首页与设置界面已完成可读性检查，预设反代节点及保存可用；在用户选择 API 与文件均使用中转的模式下，官方更新检查成功。V0.5.3 修复“已是最新”时仍提示首次检查、继续突出检查按钮的不一致。AX6S APK 路线通过真实固件镜像/ARM64 隔离环境测试，**尚未完成实体 AX6S 验收**。
 
-> **V0.5.4 是正在 CI 验证的 AX6S 安装后 LuCI 菜单修复候选，未公开发布。** AX6S 真机上 V0.5.3-r1 已通过离线 APK 安装并出现在本机软件包数据库，但用户反馈 LuCI 菜单缺失。用户已确认手动清理缓存并重启 rpcd/uhttpd 后菜单出现。新候选补齐独立 IPK/APK 与 SDK Makefile 安装后激活和桌面端局部层级隔离；自动安装钩子及桌面抽屉兼容性仍需真机复测。
+> **V0.5.5 是正在 CI 验证的 AX6S 手机页头布局修复候选，未公开发布。** AX6S 真机上 V0.5.3-r1 已通过离线 APK 安装并出现在本机软件包数据库，但用户反馈 LuCI 菜单缺失。用户已确认手动清理缓存并重启 rpcd/uhttpd 后菜单出现。新候选补齐独立 IPK/APK 与 SDK Makefile 安装后激活和桌面端局部层级隔离；V0.5.4 已在 AX6S 实机展示主页面，但出现页头竖排与滚动遮挡。V0.5.5 修复组件页头与固件全局 `header` 样式冲突并新增浏览器模拟验收；仍须实机复测。
 
 ## 从哪里开始？
 
@@ -15,7 +15,7 @@
 - [版本发布与验收门禁](Release-and-Verification.md)：为什么 RC 不等于稳定版。
 - [开发人员与 AI 协作](Developer-Guide.md)：如何遵守项目规范和维持文档更新。
 
-当前 UI 验收基准见 [V0.5.4 视觉与功能验收清单](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/product-ui-acceptance.md)。
+当前 UI 验收基准见 [V0.5.5 视觉与功能验收清单](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/product-ui-acceptance.md)。
 
 ## 最新产物
 
