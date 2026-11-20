@@ -136,8 +136,13 @@ status() {
     init_dirs || return 1
     cache=false; old_pkg >/dev/null 2>&1 && cache=true
     backup=false
-    [ -f "$PREV/previous.apk" ] &&
-        sha_ok "$PREV/previous.apk" "$(cat "$PREV/previous.sha256" 2>/dev/null)" && backup=true
+    # For a crash in an uncommitted manager transaction, the recovery file
+    # may still be under next/. After directory commit it is under previous/.
+    for root in "$PREV" "$ROOT/next"; do
+        [ -f "$root/previous.apk" ] &&
+            sha_ok "$root/previous.apk" "$(cat "$root/previous.sha256" 2>/dev/null)" &&
+            backup=true
+    done
     busy=false; [ -d "$LOCK" ] && busy=true
     required=false; [ -f "$TXN" ] && required=true
     json_init
