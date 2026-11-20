@@ -271,7 +271,7 @@ return view.extend({
             content.push(notice);
         content.push(hero, overview, details,
             E('div', {'class': 'cu-footer'}, [
-                E('span', {}, '组件更新器 · v0.5.4 · 原生 IPK / APK 双模式')
+                E('span', {}, '组件更新器 · v0.5.5 · 原生 IPK / APK 双模式')
             ]));
         return content;
     },
@@ -403,7 +403,7 @@ return view.extend({
         this.page = E('div', {}, this.renderContent(this.currentStatus, this.currentPlan));
         poll.add(this.refresh.bind(this), 5);
         return E('div', {'class': 'cu-app'}, [
-            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.4'}),
+            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.5'}),
             E('div', {'class': 'cu-page-head'}, [
                 E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
                 E('div', {'class': 'cu-page-title-row'}, [
