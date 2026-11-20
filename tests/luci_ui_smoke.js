@@ -75,7 +75,8 @@ async function main() {
     runtime_processes:'2',
     check_state:'ready',
     check_message:'Verified native IPK is available for manual installation',
-    job_state:'idle'
+    job_state:'idle',
+    rollback_available:'true'
   };
   const plan = {ready:'true',filename:'naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.ipk'};
   const rendered = dashboard.render([status,plan]);
@@ -96,6 +97,22 @@ async function main() {
   assert.strictEqual(disabledInRealDom(button(noPlan,'检查官方更新')),false);
   assert.strictEqual(disabledInRealDom(button(noPlan,'下载并更新')),true);
   assert.strictEqual(disabledInRealDom(button(noPlan,'恢复上一个版本')),false);
+  const noBackup = dashboard.renderContent({...status,rollback_available:'false'}, {ready:'false'});
+  assert.strictEqual(disabledInRealDom(button(noBackup,'检查官方更新')),false);
+  assert.strictEqual(disabledInRealDom(button(noBackup,'下载并更新')),true);
+  assert.strictEqual(disabledInRealDom(button(noBackup,'恢复上一个版本')),true);
+  assert(visibleText(noBackup).includes('没有有效备份'));
+  const actionPanel = flatten(noBackup).find(n => n.attributes && /cu-actions/.test(n.attributes.class || ''));
+  assert(actionPanel && !actionPanel.attributes.class.includes('is-ready'));
+  const readyPanel = flatten(nodes).find(n => n.attributes && /cu-actions/.test(n.attributes.class || ''));
+  assert(readyPanel && readyPanel.attributes.class.includes('is-ready'));
+  dashboard.currentStatus = {...status,rollback_available:'false'};
+  dashboard.currentPlan = plan;
+  modal = null;
+  dashboard.confirmRollback();
+  assert.strictEqual(modal,null,'no backup must not offer rollback modal');
+  dashboard.currentStatus = status;
+
   for (const jobState of ['queued','downloading','verifying','backing_up','installing']) {
     nodes = dashboard.renderContent({...status,job_state:jobState},plan);
     assert(visibleText(nodes).includes('更新进行中'));
@@ -197,9 +214,9 @@ async function main() {
     assert.notStrictEqual(fields[2].validate('main',invalid),true,invalid);
   }
   // Core mobile, keyboard and reduced-motion affordances are part of the UI contract.
-  for (const selector of ['.cu-actions','@media (max-width: 600px)',':focus-visible','prefers-reduced-motion','.cu-notice','.cu-detail']) {
+  for (const selector of ['.cu-actions','@media (max-width: 600px)','@media (max-width: 360px)',':focus-visible','prefers-reduced-motion','.cu-notice','.cu-detail','.cu-app :is(h2, h3)','.cu-btn:disabled']) {
     assert(css.includes(selector), 'missing design token or accessibility contract: '+selector);
   }
-  console.log('LuCI 产品界面：状态中文化、按钮可用性、安装确认、滚动刷新、移动端与下载设置 PASS');
+  console.log('LuCI 产品界面：高对比度标题、状态优先级、回滚可用性、移动端与下载设置 PASS');
 }
 main().catch(err => {console.error(err); process.exitCode=1;});
