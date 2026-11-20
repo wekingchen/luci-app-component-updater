@@ -56,8 +56,70 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
                          'Packaging must not silently install anything on the device')
         self.assertIn('apk adbdump --format json',CI)
         self.assertIn('dist/*.apk',CI)
-        self.assertIn('luci-app-component-updater-v0.5.4-rc1',CI)
+        self.assertIn('luci-app-component-updater-v0.5.5-rc4',CI)
         self.assertIn('Physical AX6S device and live PassWall traffic validation remain outstanding',CI)
+
+    def test_apk_manifest_transport_and_digest_are_separate_fail_closed_paths(self):
+        self.assertIn("check_msg error 'APK manifest download failed'", NATIVE)
+        self.assertIn("check_msg error 'APK manifest hash mismatch'", NATIVE)
+        self.assertRegex(
+            NATIVE,
+            r'(?s)download "https://github[.]com/\$GITHUB/releases/download/\$build/manifest[.]json".*?APK manifest download failed.*?check_sha.*?APK manifest hash mismatch')
+        self.assertIn("'APK manifest download failed':", UI)
+        self.assertIn("'APK manifest hash mismatch':", UI)
+
+    def test_low_overlay_budget_is_measured_not_fixed_16mb(self):
+        import subprocess
+        import tempfile
+        import os
+        import shlex
+        text=NATIVE.split('apk_overlay_budget_ok() {',1)[1].split('\napk_plan_ok() {',1)[0]
+        with tempfile.TemporaryDirectory() as td:
+            binary=Path(td)/'naive'
+            binary.write_bytes(b'x' * (3400*1024))
+            receipt=Path(td)/'receipt.json'
+            active=Path(td)/'active.apk'
+            script=('apk_overlay_budget_ok() {'+text+'\n'
+                    +f'BINARY={shlex.quote(str(binary))}\n'
+                    +f'RECEIPT={shlex.quote(str(receipt))}\n'
+                    +f'APK_ACTIVE={shlex.quote(str(active))}\n'
+                    +'df() { printf "Filesystem 1024-blocks Used Available Capacity Mounted\n"; '
+                    'printf "/overlay 14746 2146 %s 15%% /\n" "$FREE_KIB"; }\n'
+                    +'binary_bytes=3210000\n'
+                    +'apk_overlay_budget_ok 3969118 3218562 "$binary_bytes"\n'
+                    +'rc=$?\n'
+                    +'[ "$binary_bytes" = 3210000 ] || exit 77\n'
+                    +'exit "$rc"\n')
+            def test(free_kib,receipt_present=False):
+                if receipt_present:
+                    receipt.write_text('{}')
+                    active.write_text('verified-archive')
+                else:
+                    receipt.unlink(missing_ok=True)
+                    active.unlink(missing_ok=True)
+                return subprocess.run(['/bin/sh','-c',script],
+                                      env={**os.environ,'FREE_KIB':str(free_kib)},
+                                      capture_output=True,text=True).returncode
+            self.assertEqual(test(12600),0,
+                             '12.3 MiB must be tested against exact APK/ELF sizes, not a fixed 16 MiB')
+            self.assertNotEqual(test(9000),0,
+                                'genuinely insufficient flash must still reject update')
+            self.assertEqual(test(9000,True),0,
+                             'a verified hardlink must not be charged as a duplicate APK')
+            # Measured from the original SHA256-pinned AX6S firmware rootfs.
+            # An exact budget must *reject* 12.3 MiB when restoring the real
+            # uncompressed 7,771,744-byte original ELF could exhaust flash.
+            binary.write_bytes(b'x' * 7771744)
+            self.assertNotEqual(test(12600),0,
+                                '12.3 MiB cannot guarantee original AX6S APK+ELF rollback')
+            self.assertEqual(test(18000),0,
+                             'sufficient persistent overlay should enable normal update')
+            self.assertIn("check_msg storage_limited 'Insufficient space for APK backup'",NATIVE)
+            self.assertIn("current_elf=$(wc -c",NATIVE)
+            self.assertIn("ln \"$APK_ACTIVE\" \"$bak/previous.apk\"",NATIVE)
+            self.assertIn("ln \"$rd/previous.apk\" \"$APK_ACTIVE.tmp.$$",NATIVE)
+            self.assertNotIn('cp -p "$BINARY" "$bak/naive-old"',NATIVE)
+            self.assertNotIn('cp "$APK_ACTIVE" "$bak/active.apk"',NATIVE)
 
     def test_world_constraints_remain_unchanged_after_native_apk_transactions(self):
         self.assertIn('cp -p /etc/apk/world "$bak/world"',NATIVE)

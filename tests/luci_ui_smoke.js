@@ -81,7 +81,7 @@ async function main() {
   const plan = {ready:'true',filename:'naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.ipk'};
   const rendered = dashboard.render([status,plan]);
   assert(rendered.tag === 'div');
-  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.4$/.test(n.attributes.href)));
+  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.5-r4$/.test(n.attributes.href)));
 
   const settingsShortcut = flatten(rendered).find(n => n.tag === 'a' &&
     n.children === '下载设置');
@@ -155,11 +155,49 @@ async function main() {
   assert(!visibleText(nodes).includes('请先检查官方更新'));
   assert.strictEqual(disabledInRealDom(button(nodes,'重新检查更新')),false);
   assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
+  nodes = dashboard.renderContent({...status,check_state:'storage_limited',
+    package_manager:'apk',compatibility:'ax6s-apk-native',
+    overlay_required_kib:'16140',overlay_available_kib:'12595',
+    official_tag:'v154.0.8037.49-5',job_state:'idle'}, {ready:'false'});
+  assert(visibleText(nodes).includes('已查到官方版本，但暂不能安装'));
+  assert(visibleText(nodes).includes('至少需要 16 MiB'));
+  assert(visibleText(nodes).includes('12.3 MiB'));
+  assert.strictEqual(disabledInRealDom(button(nodes,'检查官方更新')),false);
+  assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
   nodes = dashboard.renderContent({...status,job_state:'idle',check_state:'pending'}, {ready:'false'});
   assert(visibleText(nodes).includes('云端准备中'));
   assert.strictEqual(disabledInRealDom(button(nodes,'下载并更新')),true);
   nodes = dashboard.renderContent({...status,check_state:'error',check_message:'Official GitHub API unavailable'}, {ready:'false'});
   assert(visibleText(nodes).includes('无法连接官方发布接口'));
+  // A pending RPC check is NOT an APK installation task. Do not show a stale
+  // "updating" badge with "no task running" detail on AX6S Safari.
+  dashboard.operationBusy = true;
+  dashboard.operationKind = 'check';
+  const checking = dashboard.renderContent({...status,job_state:'idle'}, {ready:'false'});
+  assert(visibleText(checking).includes('正在检查官方更新'));
+  assert(visibleText(checking).includes('正在检查官方更新，请勿重复点击'));
+  assert(!visibleText(checking).includes('更新进行中'));
+  assert(!visibleText(checking).includes('正在处理更新任务'));
+  assert.strictEqual(disabledInRealDom(button(checking,'检查官方更新')),true);
+  dashboard.operationBusy = false;
+  dashboard.operationKind = null;
+  const installing = dashboard.renderContent({...status,job_state:'downloading'}, {ready:'false'});
+  assert(visibleText(installing).includes('更新进行中'));
+  // Each actual APK check failure must be actionable in Chinese, rather
+  // than always displaying the generic device/network fallback.
+  for (const [reason, phrase] of [
+    ['APK manifest download failed', '无法下载 APK 校验清单'],
+    ['APK manifest hash mismatch', 'SHA256 不匹配'],
+    ['Insufficient space for APK backup', '空间不足'],
+    ['APK asset digest does not match Release API', '摘要与发布接口不一致'],
+    ['Native APK package ownership or installed firmware does not match the verified AX6S baseline', '设备环境'],
+  ]) {
+    const rendered = dashboard.renderContent(
+      {...status,check_state:'error',check_message:reason,job_state:'idle'},
+      {ready:'false'});
+    assert(visibleText(rendered).includes(phrase), reason);
+    assert(!visibleText(rendered).includes('检查失败，请确认设备环境及网络配置'), reason);
+  }
   nodes = dashboard.renderContent({...status,job_state:'recovery_required'}, {ready:'false'});
   assert(visibleText(nodes).includes('需要恢复'));
 
@@ -207,8 +245,24 @@ async function main() {
   const notificationText = visibleText(dashboard.renderContent(status,plan));
   assert(notificationText.includes('操作没有成功'));
   assert(!notificationText.includes('Unexpected unlocalized'));
+  dashboard.notify({status:'storage_limited',message:'Insufficient space for APK backup'});
+  assert.strictEqual(dashboard.notice.error, false);
+  assert.strictEqual(dashboard.notice.warning, true);
+  let warningNode = dashboard.renderNotice();
+  assert(warningNode.attributes.class.includes('is-warning'));
+  assert(!warningNode.attributes.class.includes('is-error'));
+  assert.strictEqual(warningNode.attributes.role, 'status');
+  assert(visibleText(warningNode).includes('Overlay'));
+  dashboard.notify({status:'unsupported',message:'Insufficient space for APK backup'});
+  assert.strictEqual(dashboard.notice.error, true);
+  assert(dashboard.notice.text.includes('空间不足'));
+  dashboard.notify({});
+  assert.strictEqual(dashboard.notice.error, true);
+  assert(dashboard.notice.text.includes('没有返回有效的操作结果'));
   dashboard.notice = null;
-
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'apk'},plan)).includes('组件更新器 · v0.5.5-r4'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'opkg'},plan)).includes('组件更新器 · v0.5.5-4'));
+  assert(css.includes('.cu-app .cu-notice.is-warning'));
   dashboard.confirmInstall();
   assert(modal && modal.title.includes('NaiveProxy'));
   assert(visibleText(modal.content).includes('先备份当前版本'));
@@ -233,7 +287,7 @@ async function main() {
   const settingsPage = await settings.render();
   assert(settingsPage.tag === 'div');
   assert(visibleText(settingsPage).includes('GitHub 下载设置'));
-  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.4$/.test(n.attributes.href)));
+  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.5-r4$/.test(n.attributes.href)));
   assert.strictEqual(formMap.sections.length,1);
   const fields = formMap.sections[0].fields;
   assert.deepStrictEqual(Array.from(fields.map(x => x.name)),

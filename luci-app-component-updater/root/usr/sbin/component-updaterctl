@@ -40,6 +40,8 @@ check_msg() {
     json_init
     json_add_string status "$1"
     json_add_string message "$2"
+    [ -z "${3:-}" ] || json_add_string overlay_required_kib "$3"
+    [ -z "${4:-}" ] || json_add_string overlay_available_kib "$4"
     json_add_string checked_at "$(date +%s)"
     json_dump > "$CACHE/check-state.$$"
     mv -f "$CACHE/check-state.$$" "$CACHE/check-state.json"
@@ -286,6 +288,8 @@ status() {
     json_add_string job_message "$m"
     json_add_string check_state "$(jsonval "$CACHE/check-state.json" '@.status')"
     json_add_string check_message "$(jsonval "$CACHE/check-state.json" '@.message')"
+    json_add_string overlay_required_kib "$(jsonval "$CACHE/check-state.json" '@.overlay_required_kib')"
+    json_add_string overlay_available_kib "$(jsonval "$CACHE/check-state.json" '@.overlay_available_kib')"
     json_add_string ready "${r:-false}"
     json_dump; echo
 }

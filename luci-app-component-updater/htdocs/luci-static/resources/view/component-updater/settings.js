@@ -49,8 +49,8 @@ return view.extend({
 
         return Promise.resolve(m.render()).then(function(formNode) {
             return E('div', {'class': 'cu-app cu-settings'}, [
-                E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.4'}),
-                E('header', {'class': 'cu-settings-heading'}, [
+                E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.5-r4'}),
+                E('div', {'class': 'cu-settings-heading'}, [
                     E('a', {'class': 'cu-back', href: L.url('admin/system/component-updater')}, '‹ 返回组件更新'),
                     E('h2', {}, 'GitHub 下载设置'),
                     E('p', {}, '根据当前网络选择官方直连或可信的下载中转服务。设置保存在设备本地，不改变官方来源，也不会自动安装更新。')

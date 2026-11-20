@@ -1,12 +1,16 @@
 # LuCI 组件更新器
 
-**V0.5.4 AX6S LuCI 菜单激活修复候选（尚未公开发布）· OpenWrt 双包管理器中文组件更新平台**
+**V0.5.5 AX6S 移动端标题重叠修复候选（尚未公开发布）· OpenWrt 双包管理器中文组件更新平台**
 
 > 已公开的管理器仍为 **V0.5.0 RC1**。2026-11-20 的 MT3600BE 手机截图确认旧版存在白底浅字、操作优先级不合理、设备信息过长的问题。V0.5.1 已经在 MT3600BE 手机上验证标题可读与主要操作。最新 V0.5.2 候选继续移除多余二级导航、处理 GL.iNet 主题蓝色条带、直接展示预设反代节点，并重新验收所有手机布局；尚不等于真机完成验收。
 
 **MT3600BE 真机验收更新（2026-11-20）**：用户的 iPhone Safari 截图确认 V0.5.2 首页和下载设置页可读、顶部多余菜单与蓝色条带消失、预设反代节点可选择，配置保存后重新进入仍保留。用户进一步报告在「版本查询与文件下载均使用中转」模式下，官方版本查询成功。**这只证明该查询在当前设置和环境下成功，不代表下载文件、SHA256 验证、升级或回滚已经在真机完成。** V0.5.3 只修复“已是最新”但仍提示首次检查的文案及按钮强调问题，未更改代理和更新引擎。
 
 **AX6S 真机进度（2026-11-20）**：用户已使用 `apk --no-network --allow-untrusted add /tmp/upload.apk` 安装 V0.5.3-r1（包数据库确认），但刷新 LuCI 未见菜单。这暴露出此前云端测试未覆盖的**安装后菜单/ACL 激活**缺口。用户已确认通过人工清理 LuCI 缓存并重启 rpcd/uhttpd 后菜单出现。V0.5.4 为独立 APK/IPK 构建及 OpenWrt SDK Makefile 打包均提供安装后激活钩子，并添加局部桌面导航层级隔离；这仍是代码修复候选，尚无新钩子与桌面层级修复的 AX6S 真机复测证据。V0.5.3 仍应保留作为问题复现版本。
+
+**V0.5.4 AX6S 真机 UI 反馈（2026-11-20）**：用户已在 AX6S 的 LuCI 打开组件更新器并看到 NaiveProxy、本机架构和原生 APK 信息；但 Safari 手机截图中“组件更新”标题竖排、说明与“下载设置”重叠，向下滚动时页头挡住主体。疑似宿主对全局语义 `header` 元素设置了横向 flex / sticky；V0.5.5 将主页与设置页的组件内页头改为普通容器，显式限定布局/定位，并在恶意主题模拟浏览器回归中检查标题不换成竖排、页头不压住正文。**V0.5.5-r3 已在 AX6S 手机端实测修复，完整安装/回滚和桌面抽屉仍未验收。**
+
+**AX6S 更新检查反馈（2026-11-20）**：设备已可联网，但 V0.5.4 实机截图中更新检查仍失败，且短暂把检查显示成安装任务；后续已从设备原始状态确认：初始检查失败由固定 16 MiB Overlay 门槛引起，具体请见下文空间预检记录。V0.5.5 候选区分检查/安装状态、补全 APK 错误提示及传输失败和 SHA256 校验失败的区别；不减弱校验门禁，仍需实机反馈。
 
 **设置入口**：在「系统 → 组件更新」主页标题右侧点击「下载设置」即可进入；下载节点不再因为当前选择官方直连而被隐藏。设置仅更改本地 UCI 下载参数，不会自动执行安装。
 
@@ -19,7 +23,7 @@
 - [中文知识库源目录](wiki-src/Home.md) · [GitHub Wiki](https://github.com/wekingchen/luci-app-component-updater/wiki)
 - [AI / 人类开发规则](AGENTS.md) · [文档治理与事实等级](docs/project-governance.md) · [Wiki 首次同步和授权](docs/wiki-initialization.md)
 - [兼容与真实固件证据](docs/ax6s-apk-compatibility.md) · [AX6S 真机验收待办](docs/ax6s-hardware-acceptance-checklist.md)
-- [质量验收门禁](docs/acceptance-gates.md) · [V0.5.4 手机/桌面可读性与操作验收](docs/product-ui-acceptance.md)
+- [质量验收门禁](docs/acceptance-gates.md) · [V0.5.5 手机/桌面可读性与操作验收](docs/product-ui-acceptance.md)
 - [安全反代与回滚说明](docs/signing-proxy-device-acceptance.md) · [历史实施记录](docs/implementation-notes.md)
 
 **主仓库的 `wiki-src/` 是知识库的版本化唯一源**，Wiki 页面通过 GitHub Actions 同步。Wiki 尚未初始化或同步认证失败时，直接阅读主仓库页面；不得声称 Wiki 已同步。
@@ -68,3 +72,11 @@ python3 tools/package_ipk.py --out dist
 GitHub Actions 还包含原生 opkg、APKv3、ARM64 和恢复测试。**CI 绿灯不等于设备已通过硬件验收**；只有完成指定机型实际测试，才能提升稳定版并开启 AX6S 后续自动发布。
 
 修改代码时请先阅读 [AGENTS.md](AGENTS.md) 和 [项目治理](docs/project-governance.md)，同步修改事实文档与 [知识库](wiki-src/Home.md)，CI 会检查版本和发布关键规则。
+
+**诊断修复包编号**：V0.5.5-r1 仅为早期页面布局候选；包含 AX6S 检查状态/错误诊断修复的后续包标记为 **V0.5.5-r2**，避免用同一个版本号覆盖不同二进制。尚未完成 AX6S 检查成功的真机验收。
+
+**2026-11-20 AX6S 空间预检真机定位**：实机状态 `check_state=unsupported`、`check_message=Insufficient space for APK backup`，其 `/tmp` 可用 115.9 MiB、`/etc` 所在 overlay 可用 12.3 MiB，之前共用的 `space_ok` 写死要求 overlay ≥16 MiB，因此在请求 GitHub 之前提前退出。V0.5.5-r3 候选改为 APK 专用空间预算：从已核验的 Release 元数据读取新旧 APK 字节数，检查阶段在 tmpfs 预下载并验证候选 APK、仅解包到 /tmp 测量真实 ELF 大小；预算覆盖持久恢复包、新包缓存、新旧 ELF 较大者与预留空间，并在安装前复查。去掉未供回滚使用的重复 `naive-old`，旧候选复用受验证硬链接，保留全量 APK 恢复及 config/world 校验。**12.3 MiB 不保证必然足够，只有动态预算满足才开放安装，真实硬件写入/回滚仍待验证。**
+
+**V0.5.5-r3 真机回报（2026-11-21）**：AX6S / iPhone Safari 页面页头、滚动布局、GitHub 下载设置及“正在检查”状态均已正常显示；官方 Release 标签 `v154.0.8037.49-5` 成功查询，动态预算提示需至少约 16 MiB Overlay，实机只有 12.3 MiB，安全禁用安装。**仍未执行实机下载更新和回滚，也未完成桌面固件导航抽屉复测。**
+
+**V0.5.5-r4 界面收尾候选**：将 `storage_limited` 的短暂提示从绿色成功色改为黄色警告（不影响正常检查成功与失败红色样式）；底部显示完整 `v0.5.5-r4` 管理器版本；同步两种打包格式和浏览器警告场景测试。AX6S 空间腾挪由设备管理员另行处理，不改动路由器服务或 Overlay 配置。

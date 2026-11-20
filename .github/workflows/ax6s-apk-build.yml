@@ -119,7 +119,7 @@ jobs:
               ninja -C /tmp/apk-build
               APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
               /tmp/apk-build/src/apk adbdump --format json \
-                dist/luci-app-component-updater-0.5.4-r1.apk > /tmp/manager-apk-adb.json
+                dist/luci-app-component-updater-0.5.5-r4.apk > /tmp/manager-apk-adb.json
               grep -q luci-app-component-updater /tmp/manager-apk-adb.json
               set -- source/naiveproxy_*_aarch64_cortex-a53.ipk
               test "$#" -eq 1
@@ -221,13 +221,13 @@ jobs:
             -o /tmp/manager-old.apk
           echo 'd6a28e3dffec8b3dc294a62a016b476c9f9effa38a693d27f759bd18c07d603c  /tmp/manager-old.apk' | sha256sum -c
           sudo cp /tmp/manager-old.apk "$ROOTFS/tmp/manager-old.apk"
-          sudo cp dist/luci-app-component-updater-0.5.4-r1.apk "$ROOTFS/tmp/manager-new.apk"
+          sudo cp dist/luci-app-component-updater-0.5.5-r4.apk "$ROOTFS/tmp/manager-new.apk"
           sudo chroot "$ROOTFS" /bin/sh -e -c '
             apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-old.apk
             grep -q "config updater" /etc/config/component-updater
             echo "    option github_proxy_mode '\''assets'\''" >> /etc/config/component-updater
             apk --no-network --allow-untrusted --no-scripts --no-commit-hooks add /tmp/manager-new.apk
-            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.4-r1"
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.5-r4"
             grep -q "option github_proxy_mode '\''assets'\''" /etc/config/component-updater
             test -x /usr/sbin/component-updaterctl
             test -r /usr/libexec/component-updater/ax6s-apkctl.sh
@@ -299,6 +299,7 @@ jobs:
           ROOTFS=/tmp/ax6s-native-rootfs
           sudo chroot "$ROOTFS" /bin/sh -eu -c '
             set -e
+            trap "rc=\$?; if [ \$rc -ne 0 ]; then echo AX6S_NATIVE_FAILURE_DIAGNOSTICS; cat /tmp/component-updater/job.json /tmp/component-updater/check-state.json /tmp/component-updater/job.log 2>/dev/null || :; fi" EXIT
             candidate_version=$(cat /tmp/component-acceptance-fixtures/expected_version)
             test -n "$candidate_version"
             source_root=$(sha256sum /usr/bin/naive | awk "{print \$1}")
@@ -306,12 +307,17 @@ jobs:
             printf "\n# local-user-config-test\n" >> /etc/config/naiveproxy
             config_sha=$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")
             world_sha=$(sha256sum /etc/apk/world | awk "{print \$1}")
+            echo "APK firmware original ELF bytes:"
+            wc -c /usr/bin/naive
             echo "APK world constraint before update:"
             grep "^naiveproxy" /etc/apk/world || true
             /usr/sbin/component-updaterctl check
             test -s /tmp/component-updater/plan.json
             cp /tmp/component-acceptance-fixtures/candidate.apk /tmp/good-candidate.apk
             printf X >> /tmp/component-acceptance-fixtures/candidate.apk
+            # The check phase caches a verified copy. Remove only that copy
+            # to force run() to fetch the deliberately tampered remote fixture.
+            rm -f /tmp/component-updater/apk-candidate-verified.apk
             if /usr/sbin/component-updaterctl run; then
               echo "BLOCK: tampered package unexpectedly installed"
               exit 1

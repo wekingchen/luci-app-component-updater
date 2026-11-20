@@ -3,6 +3,10 @@ import re
 import unittest
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+OVERVIEW = (ROOT / "luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/overview.js").read_text()
+SETTINGS = (ROOT / "luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/settings.js").read_text()
+FIXTURE = (ROOT / "tests/ui_visual_fixture.html").read_text()
 CSS = (Path(__file__).resolve().parents[1] /
        "luci-app-component-updater/htdocs/luci-static/resources/component-updater/design.css").read_text()
 
@@ -37,6 +41,19 @@ class VisualContrastContract(unittest.TestCase):
                 self.assertIn(fg, CSS, f"{name}: expected foreground token missing")
                 self.assertIn(bg, CSS, f"{name}: expected background token missing")
 
+    def test_overlay_storage_notice_is_amber_and_version_is_exact(self):
+        self.assertIn("warning: status === 'storage_limited'", OVERVIEW)
+        self.assertIn("this.notice.warning ? ' is-warning'", OVERVIEW)
+        self.assertIn("status.package_manager === 'apk' ? 'v0.5.5-r4' : 'v0.5.5-4'", OVERVIEW)
+        self.assertIn("'组件更新器 · ' + managerBuild", OVERVIEW)
+        self.assertIn("组件更新器 · v0.5.5-r4 · 原生 IPK / APK 双模式", FIXTURE)
+        self.assertIn(".cu-app .cu-notice.is-warning", CSS)
+        warn = re.search(r"\.cu-app \.cu-notice\.is-warning\s*\{([^}]+)\}", CSS, re.S)
+        self.assertIsNotNone(warn)
+        for token in ("#fff5da", "#815000", "border-color"):
+            self.assertIn(token, warn.group(1))
+        self.assertGreaterEqual(contrast("#815000", "#fff5da"), 4.5)
+
     def test_desktop_navigation_remains_outside_component_stacking_context(self):
         # The host drawer is owned by LuCI, not by the updater. A page-level
         # high z-index could cover it on desktop layouts.
@@ -47,6 +64,22 @@ class VisualContrastContract(unittest.TestCase):
             self.assertIn(property, root.group(1))
         self.assertNotRegex(CSS, r"(?m)^\s*(?:#mainmenu|#maincontent|body|header|aside)\s*\{")
         self.assertNotRegex(CSS, r"z-index:\s*[1-9]\d*")
+
+    def test_immortalwrt_generic_header_collision_is_regressed(self):
+        # The AX6S screenshot showed a vertical H2 and a header that remained
+        # pinned while scrolling over the hero card. The router's global
+        # header selector must not apply to these page-local headings.
+        self.assertIn("E('div', {'class': 'cu-page-head'}", OVERVIEW)
+        self.assertIn("E('div', {'class': 'cu-settings-heading'}", SETTINGS)
+        self.assertIn('<div class="cu-page-head">', FIXTURE)
+        self.assertIn('.legacy-theme header { display:flex!important; position:sticky!important;', FIXTURE)
+        block = re.search(r"\.cu-app :is\(\.cu-page-head, \.cu-settings-heading\)\s*\{([^}]+)\}", CSS, re.S)
+        self.assertIsNotNone(block)
+        for token in ("display: block !important", "position: static !important",
+                      "z-index: auto !important", "overflow: visible !important"):
+            self.assertIn(token, block.group(1))
+        self.assertIn("if(tRect.height>60 || tRect.width<85)", FIXTURE)
+        self.assertIn("if(heroRect.top<hRect.bottom-1)", FIXTURE)
 
     def test_luci_heading_background_is_explicitly_reset(self):
         # Production GL.iNet theme may set H2/H3 to white background and text.
