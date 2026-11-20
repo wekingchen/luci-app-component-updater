@@ -236,6 +236,12 @@ async function main() {
   const notificationText = visibleText(dashboard.renderContent(status,plan));
   assert(notificationText.includes('操作没有成功'));
   assert(!notificationText.includes('Unexpected unlocalized'));
+  dashboard.notify({status:'unsupported',message:'Insufficient space for APK backup'});
+  assert.strictEqual(dashboard.notice.error, true);
+  assert(dashboard.notice.text.includes('空间不足'));
+  dashboard.notify({});
+  assert.strictEqual(dashboard.notice.error, true);
+  assert(dashboard.notice.text.includes('没有返回有效的操作结果'));
   dashboard.notice = null;
 
   dashboard.confirmInstall();
