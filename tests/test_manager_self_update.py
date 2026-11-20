@@ -69,7 +69,7 @@ class SelfUpdateContract(unittest.TestCase):
         self.assertIn("uploadCall(kind,info.sha256sum,info.size)",UI)
         self.assertIn("manager-self-update",CI)
         self.assertIn("0.5.6",MAKE)
-        self.assertIn("备份",UI)
+        self.assertIn("恢复包",UI)
         self.assertIn("role",UI) if "role" in UI else None
 
 if __name__=="__main__":
