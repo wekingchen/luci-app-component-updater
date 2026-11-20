@@ -97,3 +97,5 @@ python3 -m unittest discover -s tests -v
 - r3 对 `storage_limited` 的通知消息仍使用绿色默认 `.cu-notice`（视觉语义错误）；r4 改为 scoped `.cu-notice.is-warning` 黄色，保留 `.is-error` 红色和普通成功绿色，明确完整管理器版本 `v0.5.5-r4`。
 - 新增 390px 手机与 1280px 桌面黄色空间提示截图测试，检查文本对比度和更新按钮禁用状态；LuCI JS 测试检查 `storage_limited` 为警告而不是成功/错误。
 - **未完成**：r4 真机视觉复核、桌面真实主题抽屉、空间恢复后的完整安装与回滚链路。不得把 CI 当作实际闪存写入验收。
+
+- **不同包管理器的版本展示**：r4 页脚根据设备报告的包管理器显示实际包号，AX6S/APKv3 显示 `v0.5.5-r4`，IPK/OPKG 显示 `v0.5.5-4`；Node 回归分别覆盖两个路径，避免把 APK 版本写法误用于 IPK。
