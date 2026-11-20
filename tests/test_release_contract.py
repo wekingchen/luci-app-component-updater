@@ -196,10 +196,12 @@ class ReleaseContractTests(unittest.TestCase):
                 self.assertEqual(t.getmember('./usr/libexec/rpcd/component-updater').mode,0o755)
                 acl=json.load(t.extractfile('./usr/share/rpcd/acl.d/luci-app-component-updater.json'))
                 rules=acl['luci-app-component-updater']
-                self.assertEqual(rules['read']['ubus']['component-updater'],['status','check','plan'])
-                self.assertEqual(rules['write']['ubus']['component-updater'],['start','rollback'])
+                self.assertEqual(rules['read']['ubus']['component-updater'],['status','check','plan','manager_status'])
+                self.assertEqual(rules['write']['ubus']['component-updater'],['start','rollback','manager_upload','manager_check','manager_start','manager_rollback'])
                 self.assertEqual(rules['read']['uci'],['component-updater'])
                 self.assertEqual(rules['write']['uci'],['component-updater'])
                 self.assertIn('./www/luci-static/resources/view/component-updater/settings.js',names)
+                self.assertIn('./www/luci-static/resources/view/component-updater/manager.js',names)
+                self.assertIn('./usr/libexec/component-updater/manager-self-update.sh',names)
 
 if __name__=='__main__':unittest.main()
