@@ -35,6 +35,7 @@ jobs:
           sh -n luci-app-component-updater/root/usr/sbin/component-updaterctl
           sh -n luci-app-component-updater/root/usr/libexec/rpcd/component-updater
           sh -n luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+          sh -n luci-app-component-updater/root/usr/libexec/component-updater/manager-self-update.sh
           sh -n scripts/device-readonly-acceptance.sh scripts/device-live-acceptance.sh
           shellcheck -S warning luci-app-component-updater/root/usr/sbin/component-updaterctl luci-app-component-updater/root/usr/libexec/rpcd/component-updater
           for path in luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/*.js; do
