@@ -365,10 +365,16 @@ launch() {
 }
 worker() {
     compatible && init_dirs || return 1
-    # launch() acquires the lock *before* spawning this worker. Keep the
-    # cleanup trap even if upgrade() fails its early plan validation.
+    # launch() normally acquires the lock before spawning us. Supervised
+    # root-only invocation from SSH/native firmware acceptance can run the
+    # worker directly without a pre-existing launch lock.
+    if [ ! -d "$LOCK" ]; then
+        mkdir "$LOCK" 2>/dev/null || return 1
+        : > "$LOCK/active" || { rmdir "$LOCK" 2>/dev/null || true; return 1; }
+    fi
+    # Keep cleanup active even when plan verification fails early.
     trap 'rm -f "$LOCK/pid" "$LOCK/active"; rmdir "$LOCK" 2>/dev/null || true' EXIT
-    printf '%s\n' "$" > "$LOCK/pid" || return 1
+    printf '%s\n' "$$" > "$LOCK/pid" || return 1
     if [ "$1" = upgrade ]; then upgrade; else restore; fi
     result=$?
     # NEVER restart rpcd/uhttpd from the worker. We deliberately install
