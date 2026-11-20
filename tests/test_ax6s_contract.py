@@ -106,6 +106,15 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
                                 'genuinely insufficient flash must still reject update')
             self.assertEqual(test(9000,True),0,
                              'a verified hardlink must not be charged as a duplicate APK')
+            # Measured from the original SHA256-pinned AX6S firmware rootfs.
+            # An exact budget must *reject* 12.3 MiB when restoring the real
+            # uncompressed 7,771,744-byte original ELF could exhaust flash.
+            binary.write_bytes(b'x' * 7771744)
+            self.assertNotEqual(test(12600),0,
+                                '12.3 MiB cannot guarantee original AX6S APK+ELF rollback')
+            self.assertEqual(test(18000),0,
+                             'sufficient persistent overlay should enable normal update')
+            self.assertIn("check_msg storage_limited 'Insufficient space for APK backup'",NATIVE)
             self.assertIn("current_elf=$(wc -c",NATIVE)
             self.assertIn("ln \"$APK_ACTIVE\" \"$bak/previous.apk\"",NATIVE)
             self.assertIn("ln \"$rd/previous.apk\" \"$APK_ACTIVE.tmp.$$",NATIVE)
