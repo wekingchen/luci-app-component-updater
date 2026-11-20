@@ -150,7 +150,8 @@ return view.extend({
             status === 'rolled_back' ? '上一版本已恢复。' :
             status === 'busy' ? '已有任务正在运行，请勿重复操作。' :
             '操作已提交，页面会自动更新进度。';
-        return {error: failure || missing, text: this.messageText(result.message || result.error, fallback)};
+        return {error: failure || missing, warning: status === 'storage_limited',
+            text: this.messageText(result.message || result.error, fallback)};
     },
 
     notify: function(result) {
@@ -162,7 +163,9 @@ return view.extend({
         var self = this;
         if (!this.notice)
             return null;
-        return E('div', {'class': 'cu-notice' + (this.notice.error ? ' is-error' : ''), role: 'status'}, [
+        return E('div', {'class': 'cu-notice' +
+            (this.notice.error ? ' is-error' : this.notice.warning ? ' is-warning' : ''),
+            role: this.notice.error ? 'alert' : 'status'}, [
             E('div', {'class': 'cu-notice-text'}, this.notice.text),
             E('button', {'class': 'cu-notice-dismiss', type: 'button', 'aria-label': '关闭提示',
                 click: function() { self.notice = null; self.repaint(); }}, '×')
@@ -312,7 +315,7 @@ return view.extend({
             content.push(notice);
         content.push(hero, overview, details,
             E('div', {'class': 'cu-footer'}, [
-                E('span', {}, '组件更新器 · v0.5.5 · 原生 IPK / APK 双模式')
+                E('span', {}, '组件更新器 · v0.5.5-r4 · 原生 IPK / APK 双模式')
             ]));
         return content;
     },
@@ -448,7 +451,7 @@ return view.extend({
         this.page = E('div', {}, this.renderContent(this.currentStatus, this.currentPlan));
         poll.add(this.refresh.bind(this), 5);
         return E('div', {'class': 'cu-app'}, [
-            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.5'}),
+            E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.5-r4'}),
             E('div', {'class': 'cu-page-head'}, [
                 E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
                 E('div', {'class': 'cu-page-title-row'}, [
