@@ -55,16 +55,7 @@ return view.extend({
                     E('h2', {}, 'GitHub 下载设置'),
                     E('p', {}, '根据当前网络选择官方直连或可信的下载中转服务。设置保存在设备本地，不改变官方来源，也不会自动安装更新。')
                 ]),
-                E('div', {'class': 'cu-setup-hint'}, [
-                    E('span', {'class': 'cu-setup-mark', 'aria-hidden': 'true'}, '1'),
-                    E('span', {}, '选择连接方式'),
-                    E('span', {'class': 'cu-setup-separator', 'aria-hidden': 'true'}, '·'),
-                    E('span', {'class': 'cu-setup-mark', 'aria-hidden': 'true'}, '2'),
-                    E('span', {}, '选择下载节点'),
-                    E('span', {'class': 'cu-setup-separator', 'aria-hidden': 'true'}, '·'),
-                    E('span', {'class': 'cu-setup-mark', 'aria-hidden': 'true'}, '3'),
-                    E('span', {}, '保存并应用')
-                ]),
+                E('div', {'class': 'cu-setup-hint'}, '先选择连接方式，再选择下载节点，最后保存并应用。'),
                 E('div', {'class': 'cu-settings-form'}, formNode),
                 E('div', {'class': 'cu-settings-note'}, [
                     E('strong', {}, '关于校验与可信度'),
