@@ -33,8 +33,8 @@ function button(tree, caption) {
 }
 function Section() { this.fields = []; }
 Section.prototype.option = function(_type, name, label) {
-  const field = {name, label, values: [], value: function(k,v) {this.values.push([k,v])},
-    depends: function(){}, validate: function(){return true}};
+  const field = {name, label, values: [], dependencies: [], value: function(k,v) {this.values.push([k,v])},
+    depends: function(){this.dependencies.push(Array.from(arguments));}, validate: function(){return true}};
   this.fields.push(field);
   return field;
 };
@@ -81,7 +81,19 @@ async function main() {
   const plan = {ready:'true',filename:'naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.ipk'};
   const rendered = dashboard.render([status,plan]);
   assert(rendered.tag === 'div');
-  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.1$/.test(n.attributes.href)));
+  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.2$/.test(n.attributes.href)));
+
+  const settingsShortcut = flatten(rendered).find(n => n.tag === 'a' &&
+    n.children === '下载设置');
+  assert(settingsShortcut, 'Settings must be discoverable above the fold');
+  assert(settingsShortcut.attributes.href.endsWith('/admin/system/component-updater/settings'));
+  const menu = JSON.parse(fs.readFileSync('luci-app-component-updater/root/usr/share/luci/menu.d/luci-app-component-updater.json','utf8'));
+  const settingsRoute = menu['admin/system/component-updater/settings'];
+  assert(settingsRoute && settingsRoute.action.type === 'view');
+  assert.strictEqual(settingsRoute.action.path, 'component-updater/settings');
+  assert(!Object.prototype.hasOwnProperty.call(settingsRoute,'title'),
+    'Do not show duplicate settings submenu above GL.iNet mobile pages');
+  assert.strictEqual(settingsRoute.firstchild_ineligible,true);
   let nodes = dashboard.renderContent(status,plan);
   const actions = flatten(nodes).filter(n => n.tag === 'button');
   assert.strictEqual(actions.length,3, 'only three clearly prioritized actions');
@@ -202,21 +214,32 @@ async function main() {
   const settingsPage = await settings.render();
   assert(settingsPage.tag === 'div');
   assert(visibleText(settingsPage).includes('GitHub 下载设置'));
-  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.1$/.test(n.attributes.href)));
+  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.2$/.test(n.attributes.href)));
   assert.strictEqual(formMap.sections.length,1);
   const fields = formMap.sections[0].fields;
   assert.deepStrictEqual(Array.from(fields.map(x => x.name)),
     ['github_proxy_mode','github_proxy_site','github_proxy_prefix','github_proxy_fallback']);
   assert.deepStrictEqual(Array.from(fields[1].values.map(v => v[0])),
     ['gh-proxy.org','ghproxy.cc','ghproxy.com','ghfast.top','custom']);
+  assert.strictEqual(fields[1].default, 'gh-proxy.org',
+    'Default proxy selection should be a predefined node');
+  assert.strictEqual(fields[1].dependencies.length, 0,
+    'Preset nodes must remain visible even when direct mode is selected');
+  assert.strictEqual(fields[2].dependencies.length, 2,
+    'Custom HTTPS URL must only appear for both proxy modes');
+  assert.deepStrictEqual(Array.from(fields[3].dependencies.map(x => x.join('/'))),
+    ['github_proxy_mode/assets','github_proxy_mode/all'],
+    'Fallback toggle is irrelevant in direct mode and must be hidden');
+  assert(visibleText(settingsPage).includes('选择下载节点'));
+  assert(visibleText(settingsPage).includes('保存并应用'));
   assert.strictEqual(fields[2].validate('main','https://trusted.example/'),true);
   for (const invalid of ['http://test.example/','https://localhost/..','https://evil.example/?p=1','']) {
     assert.notStrictEqual(fields[2].validate('main',invalid),true,invalid);
   }
   // Core mobile, keyboard and reduced-motion affordances are part of the UI contract.
-  for (const selector of ['.cu-actions','@media (max-width: 600px)','@media (max-width: 360px)',':focus-visible','prefers-reduced-motion','.cu-notice','.cu-detail','.cu-app :is(h2, h3)','.cu-btn:disabled']) {
+  for (const selector of ['.cu-actions','@media (max-width: 600px)','@media (max-width: 360px)',':focus-visible','prefers-reduced-motion','.cu-notice','.cu-detail','.cu-app :is(h2, h3)','.cu-btn:disabled','.cu-page-title-row','.cu-settings-form .cbi-map::before','.cu-setup-hint']) {
     assert(css.includes(selector), 'missing design token or accessibility contract: '+selector);
   }
-  console.log('LuCI 产品界面：高对比度标题、状态优先级、回滚可用性、移动端与下载设置 PASS');
+  console.log('LuCI 产品界面：隐藏重复菜单、预设节点可见、主题隔离及手机操作逻辑 PASS');
 }
 main().catch(err => {console.error(err); process.exitCode=1;});
