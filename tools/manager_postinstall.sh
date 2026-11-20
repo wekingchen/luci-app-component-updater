@@ -8,7 +8,7 @@ set -u
 # browser credentials, PassWall or other process state.
 rm -f /tmp/luci-indexcache /tmp/luci-indexcache.* 2>/dev/null || true
 if [ -d /tmp/luci-modulecache ]; then
-    rm -f /tmp/luci-modulecache/* 2>/dev/null || true
+    rm -rf /tmp/luci-modulecache/* 2>/dev/null || true
 fi
 
 # A rpcd "reload" on some ImmortalWrt builds does not reload newly
