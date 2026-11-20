@@ -38,7 +38,10 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ax6s-apk-release
+  # Do not let a busy main release run cancel a PR's read-only hardware
+  # fixture regression before any job can start. Main publication remains
+  # serialized; independent PR/push validations use their unique run IDs.
+  group: ${{ github.ref == 'refs/heads/main' && 'ax6s-apk-release-main' || format('ax6s-apk-validate-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   discover:
