@@ -57,7 +57,10 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
         self.assertIn('apk adbdump --format json',CI)
         self.assertIn('dist/*.apk',CI)
         self.assertIn('luci-app-component-updater-v0.5.6-rc3',CI)
-        self.assertIn('Physical AX6S device and live PassWall traffic validation remain outstanding',CI)
+        self.assertIn('NaiveProxy component update/rollback, live PassWall traffic and power-loss recovery remain unverified on physical hardware',CI)
+        self.assertIn('AX6S physical-router web manager upgrade r3 -> test-only r4 -> r3 rollback passed',CI)
+        self.assertIn('--prerelease',CI)
+        self.assertIn("vars.AX6S_APK_AUTO_PUBLISH == 'true'",CI)
 
     def test_apk_manifest_transport_and_digest_are_separate_fail_closed_paths(self):
         self.assertIn("check_msg error 'APK manifest download failed'", NATIVE)
