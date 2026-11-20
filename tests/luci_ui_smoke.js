@@ -313,6 +313,28 @@ async function main() {
   for (const selector of ['.cu-actions','@media (max-width: 600px)','@media (max-width: 360px)',':focus-visible','prefers-reduced-motion','.cu-notice','.cu-detail','.cu-app :is(h2, h3)','.cu-btn:disabled','.cu-page-title-row','.cu-settings-form .cbi-map::before','.cu-setup-hint']) {
     assert(css.includes(selector), 'missing design token or accessibility contract: '+selector);
   }
-  console.log('LuCI 产品界面：隐藏重复菜单、预设节点可见、主题隔离及手机操作逻辑 PASS');
+  const managerPage = load('manager.js');
+  const readyManager = {status:'ok',busy:'false',recovery_available:'false',
+    recovery_required:'false',current_archive:'false',installed_version:'0.5.6-r1'};
+  const managerNodes = managerPage.render(readyManager);
+  assert(visibleText(managerNodes).includes('管理器更新'));
+  assert(visibleText(managerNodes).includes('上传新版 APK'));
+  assert(visibleText(managerNodes).includes('上传当前版恢复 APK'));
+  assert.strictEqual(disabledInRealDom(button(managerNodes,'确认后安装')),true);
+  assert.strictEqual(disabledInRealDom(button(managerNodes,'恢复上一版')),true);
+  assert.strictEqual(disabledInRealDom(button(managerNodes,'上传新版 APK')),false);
+  managerPage.planReady=true;
+  managerPage.currentStatus={...readyManager,recovery_available:'true'};
+  const activeManager = managerPage.renderBody();
+  assert.strictEqual(disabledInRealDom(button(activeManager,'确认后安装')),false);
+  assert.strictEqual(disabledInRealDom(button(activeManager,'恢复上一版')),false);
+  managerPage.confirmUpdate();
+  assert(modal && modal.title.includes('确认更新管理器'));
+  assert(visibleText(modal.content).includes('没有独立发布签名'));
+  modal=null;
+  managerPage.confirmRollback();
+  assert(modal && modal.title.includes('确认恢复管理器'));
+  modal=null;
+  console.log('LuCI 产品界面：隐藏重复菜单、预设节点可见、主题隔离、管理器上传/恢复按钮逻辑 PASS');
 }
 main().catch(err => {console.error(err); process.exitCode=1;});
