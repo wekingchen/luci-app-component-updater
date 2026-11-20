@@ -47,7 +47,7 @@ class BackupRetentionTests(unittest.TestCase):
     def prune(self):
         # jsonval() is mocked only for the on-disk receipt field. All
         # directory checks, safety guards and removals run unmodified.
-        shell = """
+        shell = r"""
 jsonval() {
     [ -r "$1" ] || return 0
     sed -n 's/.*"previous_backup"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' "$1" | head -n 1
