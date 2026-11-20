@@ -167,7 +167,9 @@
   cursor: pointer;
   opacity: 1 !important;
   box-shadow: none !important;
-  transition: background-color .15s ease, border-color .15s ease;
+  /* No state transition: a disabled->enabled button otherwise briefly
+   * renders white active text against its old pale disabled background. */
+  transition: none !important;
 }
 .cu-app .cu-actions:not(.is-ready) .cu-btn-check:not(:disabled),
 .cu-app .cu-actions.is-ready .cu-btn-update:not(:disabled) {
