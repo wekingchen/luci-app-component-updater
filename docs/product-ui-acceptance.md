@@ -18,11 +18,12 @@
 ```sh
 python3 -m unittest discover -s tests -p test_ui_contrast.py -v
 node tests/luci_ui_smoke.js
+sh scripts/render_ui_previews.sh   # 需要 Chrome/Chromium 和中文字体
 python3 tools/check_docs.py
 python3 -m unittest discover -s tests -v
 ```
 
-主 CI 继续完成管理器原生 IPK/APKv3 双构建和完整 Python/JS 回归；AX6S 真实固件 rootfs/ARM64 chroot 回归需重新跑完。上述测试**不能代替 Safari/桌面浏览器中的真实主题渲染检查**，也不能替代 AX6S 路由器闪存和 PassWall 验收。
+主 CI 继续完成管理器原生 IPK/APKv3 双构建和完整 Python/JS 回归；AX6S 真实固件 rootfs/ARM64 chroot 回归需重新跑完。实际 Chromium 对抗性 LuCI 主题截图已加入 CI（320px/390px/1280px、等待检查/可更新）。这仍是**模拟宿主主题的浏览器视觉检查，不等于用户手机 Safari 或真实固件 LuCI 的最终验收**，也不能替代 AX6S 路由器闪存和 PassWall 验收。
 
 ## 实机复测清单
 

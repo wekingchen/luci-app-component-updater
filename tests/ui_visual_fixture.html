@@ -70,6 +70,7 @@ if(location.search.indexOf('ready')>=0){
   document.querySelector('.cu-status').classList.remove('is-muted');
   document.querySelector('.cu-headline').textContent='新版本已准备就绪';
   document.querySelector('.cu-lead').textContent='安装包已完成匹配及完整性校验，可以手动更新。';
+  document.querySelectorAll('.cu-version-value')[1].textContent='v154.0.8037.49-5';
   document.querySelector('.cu-action-hint').textContent='已找到适配安装包。确认后才会开始更新。';
 }
 (function(){

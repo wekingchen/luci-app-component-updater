@@ -55,6 +55,7 @@ python3 tools/check_docs.py
 python3 -m unittest discover -s tests -p test_ui_contrast.py -v
 python3 -m unittest discover -s tests -v
 node tests/luci_ui_smoke.js
+sh scripts/render_ui_previews.sh  # 有 Chrome/Chromium 与中文字体时运行
 python3 tools/package_ipk.py --out dist
 ~~~
 
