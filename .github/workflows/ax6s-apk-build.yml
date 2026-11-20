@@ -13,6 +13,10 @@ on:
       - tools/package_component_ipk.py
       - tests/test_ax6s_contract.py
       - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+      - luci-app-component-updater/root/usr/libexec/component-updater/manager-self-update.sh
+      - luci-app-component-updater/root/usr/libexec/rpcd/component-updater
+      - luci-app-component-updater/root/usr/share/rpcd/acl.d/luci-app-component-updater.json
+      - tests/test_manager_self_update.py
   pull_request:
     paths:
       - .github/workflows/ax6s-apk-build.yml
@@ -23,6 +27,10 @@ on:
       - 'tests/test_ui_contrast.py'
       - tools/build_ax6s_apk_assets.py
       - luci-app-component-updater/root/usr/libexec/component-updater/ax6s-apkctl.sh
+      - luci-app-component-updater/root/usr/libexec/component-updater/manager-self-update.sh
+      - luci-app-component-updater/root/usr/libexec/rpcd/component-updater
+      - luci-app-component-updater/root/usr/share/rpcd/acl.d/luci-app-component-updater.json
+      - tests/test_manager_self_update.py
   workflow_dispatch:
   workflow_run:
     workflows: [Component Builder / Official Releases & UPX]
@@ -450,6 +458,9 @@ jobs:
             fi
             test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r2"
             mv /tmp/manager-old-safe.apk /etc/component-updater/manager/previous/previous.apk
+            # Simulate crash after next/ was committed as previous/ but
+            # before TXN unlink; a healthy rollback still must be possible.
+            printf next > /etc/component-updater/manager/transaction.json
             /bin/sh /tmp/manager-worker-test.sh restore
             test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r1"
             test ! -f /etc/component-updater/manager/transaction.json
