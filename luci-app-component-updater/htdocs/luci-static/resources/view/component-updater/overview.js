@@ -221,14 +221,19 @@ return view.extend({
                     E('strong', {'class': 'cu-version-value'}, this.val(status.official_tag, '尚未检查'))
                 ])
             ]),
-            E('div', {'class': 'cu-actions'}, [
-                E('button', {'class': 'cu-btn', type: 'button', disabled: (busy || apkGuard) ? true : null,
+            E('div', {'class': 'cu-actions' + (ready ? ' is-ready' : '')}, [
+                E('button', {'class': 'cu-btn cu-btn-check', type: 'button', disabled: (busy || apkGuard) ? true : null,
                     click: function() { return self.handleCheck(); }}, '检查官方更新'),
-                E('button', {'class': 'cu-btn cu-btn-primary', type: 'button', disabled: (!ready || busy || apkGuard) ? true : null,
+                E('button', {'class': 'cu-btn cu-btn-update', type: 'button', disabled: (!ready || busy || apkGuard) ? true : null,
                     click: function() { return self.confirmInstall(); }}, '下载并更新'),
-                E('button', {'class': 'cu-btn cu-btn-subtle', type: 'button', disabled: (busy || apkGuard) ? true : null,
+                E('button', {'class': 'cu-btn cu-btn-rollback', type: 'button', disabled: (busy || !canRollback) ? true : null,
                     click: function() { return self.confirmRollback(); }}, '恢复上一个版本')
             ]),
+            E('p', {'class': 'cu-action-hint', role: 'status'}, apkGuard ? '当前固件未通过兼容性检测，更新与恢复均不可用。' :
+                busy ? '正在执行操作，请勿重复点击。' :
+                ready ? '已找到适配安装包。确认后才会开始更新。' :
+                canRollback ? '请先检查官方更新；已有旧版备份可供恢复。' :
+                '先检查官方更新；没有有效备份时无法恢复上一版本。'),
             E('p', {'class': 'cu-mini-note'}, apkGuard ? '原生 APK 环境尚未开启安装；请先通过设备兼容性验收。' :
                 (isApk ? 'APK 安装前先保存完整恢复包及原配置 · 不主动重启 PassWall' :
                     '安装前自动准备恢复包 · 不主动重启 PassWall · 已运行连接可能继续使用旧进程'))
@@ -374,7 +379,8 @@ return view.extend({
     confirmRollback: function() {
         var self = this;
         if (((self.currentStatus || {}).package_manager === 'apk' &&
-             (self.currentStatus || {}).compatibility !== 'ax6s-apk-native') || self.isBusy(self.currentStatus || {}))
+             (self.currentStatus || {}).compatibility !== 'ax6s-apk-native') || self.isBusy(self.currentStatus || {}) ||
+             (self.currentStatus || {}).rollback_available !== 'true')
             return;
         ui.showModal('恢复上一个版本', [
             E('p', {}, '将尝试通过先前生成的恢复包还原软件包与程序文件。仅在存在有效备份时才能恢复；更新器不会主动重启 PassWall。'),
