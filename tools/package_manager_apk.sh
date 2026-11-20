@@ -24,15 +24,10 @@ printf '/etc/config/component-updater\n' > "$stage/lib/apk/packages/luci-app-com
 hash=$(sha256sum "$stage/etc/config/component-updater" | awk '{print $1}')
 printf '/etc/config/component-updater %s\n' "$hash" > "$stage/lib/apk/packages/luci-app-component-updater.conffiles_static"
 find "$stage" -type f | sed "s|^$stage|/|" | sort > "$stage/lib/apk/packages/luci-app-component-updater.list"
-cat > "$work/post-install" <<'SCRIPT'
-#!/bin/sh
-# Same behavior as the opkg manager package; don't restart proxy services.
-[ -n "${IPKG_INSTROOT:-}" ] && exit 0
-rm -f /tmp/luci-indexcache /tmp/luci-indexcache.* 2>/dev/null || true
-rm -rf /tmp/luci-modulecache/* 2>/dev/null || true
-[ ! -x /etc/init.d/rpcd ] || /etc/init.d/rpcd reload >/dev/null 2>&1 || true
-exit 0
-SCRIPT
+# Share one LuCI/rpcd refresh implementation with the offline IPK builder.
+# Full service refresh is required on some AX6S ImmortalWrt builds: a
+# rpcd reload alone does not re-read newly installed ACL/menu registrations.
+cp "$ROOT/tools/manager_postinstall.sh" "$work/post-install"
 chmod 755 "$work/post-install"
 outfile="$OUT/luci-app-component-updater-$VERSION.apk"
 SOURCE_DATE_EPOCH=0 "$APK_TOOL" mkpkg \

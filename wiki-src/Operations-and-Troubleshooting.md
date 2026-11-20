@@ -34,6 +34,32 @@ sh /usr/libexec/component-updater/device-ax6s-apk-preflight.sh
 
 不同固件可能没有该脚本或位置不同；运行前请先使用 `ls` 确认。以上是只读预检；**不代表完成安装与回滚验收**。真实安装/回滚必须事先确认恢复通路，不建议远程无人值守执行。
 
+## AX6S 原生 APK 已安装但 LuCI 不显示（2026-11-20 实机问题）
+
+用户已经验证 `apk --no-network --allow-untrusted --simulate add /tmp/upload.apk` 模拟成功，并用 `apk --no-network --allow-untrusted add /tmp/upload.apk` 实际安装成功，安装包数据库显示 `luci-app-component-updater 0.5.3-r1`；但直接刷新网页后没有看到「组件更新」菜单。**软件包安装成功不等于 LuCI 菜单与 rpcd ACL 成功激活**。
+
+可先核对这些本机文件（只读）：
+
+~~~sh
+ls -l /usr/share/luci/menu.d/luci-app-component-updater.json
+ls -l /usr/share/rpcd/acl.d/luci-app-component-updater.json
+ls -l /www/luci-static/resources/view/component-updater/overview.js
+ls -l /usr/libexec/rpcd/component-updater
+~~~
+
+文件存在后，可清理 LuCI 缓存并仅重启控制面（网页会短时断开，**不会主动重启 PassWall**）：
+
+~~~sh
+rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*
+rm -rf /tmp/luci-modulecache/*
+/etc/init.d/rpcd restart
+/etc/init.d/uhttpd restart
+~~~
+
+随后退出 LuCI、重新登录，打开「系统 → 组件更新」或尝试直接访问 `/cgi-bin/luci/admin/system/component-updater`。如果仍然没有菜单或直达页面报 403/404，必须读取实际菜单文件、ACL 和 LuCI 日志再定位，不能盲目将问题归因于缓存。
+
+V0.5.4 修复候选复用一套 IPK/APKv3 post-install 脚本，并通过隔离 mock 服务测试缓存清理与 rpcd/uhttpd 重启。**固件真机 UI 尚未验收通过，暂不进行 NaiveProxy 实机更新。**
+
 ## 常见问题
 
 - **没有新版？** 云端组件包是提前构建并验证的；官方版本已更新但 CI 还未生成候选时，不会在路由器现场压缩。

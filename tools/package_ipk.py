@@ -13,7 +13,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "luci-app-component-updater"
 NAME = "luci-app-component-updater"
-VERSION = "0.5.3-1"
+VERSION = "0.5.4-1"
 
 
 def create_tar(path: Path, files: list[tuple[str, bytes, int]]) -> None:
@@ -64,10 +64,7 @@ def main():
                    "\nArchitecture: all\nMaintainer: wekingchen\n" +
                    "Depends: luci-base, rpcd, jsonfilter, libubox, opkg\n" +
                    "Section: luci\nDescription: GitHub native IPK updater (NaiveProxy adapter)\n")
-        postinst = ("#!/bin/sh\n[ -n \"${IPKG_INSTROOT:-}\" ] && exit 0\n"
-                    "rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true\n"
-                    "[ ! -x /etc/init.d/rpcd ] || /etc/init.d/rpcd restart >/dev/null 2>&1 || true\n"
-                    "exit 0\n")
+        postinst = (ROOT / "tools/manager_postinstall.sh").read_text(encoding="utf-8")
         create_tar(folder / "control.tar.gz", [
             ("./control", control.encode(), 0o644),
             ("./conffiles", b"/etc/config/component-updater\n", 0o644),

@@ -37,6 +37,10 @@
 - Ubuntu ARM64 runner 上使用固件真实 `/bin/sh`、`apk-tools 3.0.5`、`jshn`、`jsonfilter` 运行生产 `component-updaterctl` 和 `ax6s-apkctl.sh`（**只替换网络下载为经过摘要校验的本地 fixture**）：新版检查、故意篡改拒装、真实 APK 安装、用户更改配置不丢失、手动恢复及清除事务标记已验证。
 - 原有 opkg 21.02.5 / 24.10.5 软件包管理、LuCI、rpcd 回归测试保持独立，不能为了支持 APK 放宽 IPK 约束。
 
+## AX6S 实际安装后菜单缺失回归（2026-11-20）
+
+真实 AX6S 上，用户成功以本地 `--no-network --allow-untrusted` 安装管理器 `0.5.3-r1`（并确认 APK 已安装），但是 LuCI 菜单未出现。云端测试检查包数据库和 JSON 文件，不代表真实 HTTP 进程已重新读取菜单与 ACL。本次暴露出旧版 APK 的 post-install 仅 `rpcd reload`，与 IPK 的 `rpcd restart` 不一致。V0.5.4 在包内使用同一控制面刷新脚本：清理 LuCI 临时索引和模块缓存，重启 rpcd 和 uhttpd，**不重启 NaiveProxy/PassWall**。此变更尚须真机复验，也不能排除 ACL/菜单路径等其他原因。
+
 ## 尚需实体 AX6S 验收
 
 **这是一份实现完成、云端隔离回归通过的 RC，并非已在真实 AX6S 路由器上验收的稳定版。** 当前无实体设备控制权，无法验证 Flash 写入失败、设备实际 overlay 空间、保活的 PassWall 工作状态、LuCI/rpcd UI 及反代连接、真实断电后的恢复行为。最终需真实设备完成：安装管理器并保留配置、检查更新、升级、回滚、断网/断电恢复、现有代理连接与网络稳定性，随后才能确认商业发布门槛。
