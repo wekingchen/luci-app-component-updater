@@ -121,6 +121,15 @@ jobs:
               /tmp/apk-build/src/apk adbdump --format json \
                 dist/luci-app-component-updater-0.5.6-r1.apk > /tmp/manager-apk-adb.json
               grep -q luci-app-component-updater /tmp/manager-apk-adb.json
+              # Build an isolated second manager revision to exercise an
+              # actual self-upgrade + rollback in the pinned native firmware.
+              cp luci-app-component-updater/Makefile /tmp/manager-makefile
+              trap "cp /tmp/manager-makefile luci-app-component-updater/Makefile" EXIT
+              sed -i "s/^PKG_RELEASE:=1$/PKG_RELEASE:=2/" luci-app-component-updater/Makefile
+              APK_TOOL=/tmp/apk-build/src/apk sh tools/package_manager_apk.sh dist
+              test -s dist/luci-app-component-updater-0.5.6-r2.apk
+              cp /tmp/manager-makefile luci-app-component-updater/Makefile
+              trap - EXIT
               set -- source/naiveproxy_*_aarch64_cortex-a53.ipk
               test "$#" -eq 1
               python3 tools/build_ax6s_apk_assets.py \
@@ -404,6 +413,42 @@ jobs:
             echo "PASS: crash-recovery marker, tampered rollback protection and manual recovery"
 
           '
+
+      - name: AX6S manager self-upgrade, single backup and offline rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOTFS=/tmp/ax6s-native-rootfs
+          sudo cp dist/luci-app-component-updater-0.5.6-r1.apk "$ROOTFS/tmp/component-updater-manager-current.apk"
+          sudo cp dist/luci-app-component-updater-0.5.6-r2.apk "$ROOTFS/tmp/component-updater-manager-new.apk"
+          old_sha=$(sha256sum dist/luci-app-component-updater-0.5.6-r1.apk | awk '{print $1}')
+          old_size=$(wc -c < dist/luci-app-component-updater-0.5.6-r1.apk | tr -d ' ')
+          new_sha=$(sha256sum dist/luci-app-component-updater-0.5.6-r2.apk | awk '{print $1}')
+          new_size=$(wc -c < dist/luci-app-component-updater-0.5.6-r2.apk | tr -d ' ')
+          printf '{"kind":"previous","size":%s,"sha256":"%s"}\n' "$old_size" "$old_sha" |
+            sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh upload > /tmp/manager-old-accepted.json
+          grep -q '"status": "prepared"' /tmp/manager-old-accepted.json
+          printf '{"kind":"candidate","size":%s,"sha256":"%s"}\n' "$new_size" "$new_sha" |
+            sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh upload > /tmp/manager-new-accepted.json
+          grep -q '"status": "prepared"' /tmp/manager-new-accepted.json
+          sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh check > /tmp/manager-check.json
+          cat /tmp/manager-check.json
+          grep -q '"status": "ready"' /tmp/manager-check.json
+          sudo chroot "$ROOTFS" /bin/sh -ec '
+            cp /usr/libexec/component-updater/manager-self-update.sh /tmp/manager-worker-test.sh
+            /bin/sh /tmp/manager-worker-test.sh upgrade
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r2"
+            test ! -f /etc/component-updater/manager/transaction.json
+            test -s /etc/component-updater/manager/previous/previous.apk
+            test "$(sha256sum /etc/config/component-updater | awk "{print \$1}")" != ""
+            /bin/sh /tmp/manager-worker-test.sh restore
+            test "$(apk --no-network list --installed --manifest luci-app-component-updater)" = "luci-app-component-updater 0.5.6-r1"
+            test ! -f /etc/component-updater/manager/transaction.json
+            test ! -d /etc/component-updater/manager/previous
+            test -s /etc/component-updater/manager/active.apk
+            echo "PASS: AX6S manager full APK self-upgrade, preserved UCI/world and rollback"
+          '
+          sudo chroot "$ROOTFS" /bin/sh /usr/libexec/component-updater/manager-self-update.sh status
 
   publish-native-apk-candidate:
     name: Publish immutable AX6S native APK preview after native CI gates
