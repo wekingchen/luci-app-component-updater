@@ -44,6 +44,72 @@ apk_ownership_baseline_ok() {
     fi
 }
 apk_release_tag() { printf 'component-naiveproxy-%s-upx521-r3-ax6s-apk1\n' "$1"; }
+# Fetch the exact package sizes from the same GitHub release metadata whose
+# SHA256 digests already gate this update. Never infer free flash from /tmp.
+apk_asset_bytes() {
+    metadata=$1
+    name=$2
+    idx=0
+    while [ "$idx" -lt 80 ]; do
+        asset=$(jsonval "$metadata" "@.assets[$idx].name")
+        [ -n "$asset" ] || break
+        if [ "$asset" = "$name" ]; then
+            bytes=$(jsonval "$metadata" "@.assets[$idx].size")
+            case "$bytes" in ''|0|*[!0-9]*) return 1;; esac
+            [ "$bytes" -le 104857600 ] || return 1
+            printf '%s\n' "$bytes"
+            return 0
+        fi
+        idx=$((idx+1))
+    done
+    return 1
+}
+apk_tmp_ok() {
+    tmp_kib=$(df -Pk /tmp 2>/dev/null | awk 'NR==2 {print $4}')
+    case "$tmp_kib" in ''|*[!0-9]*) return 1;; esac
+    [ "$tmp_kib" -ge 32768 ]
+}
+# Read the *uncompressed* on-flash ELF size from a verified candidate package,
+# extracted only inside /tmp. No scripts run, no device files are changed.
+apk_candidate_binary_bytes() {
+    archive=$1
+    expected=$2
+    staging=$(mktemp -d "$CACHE/apk-inspect.XXXXXX") || return 1
+    chmod 700 "$staging" || { rm -rf "$staging"; return 1; }
+    if ! apk --no-network --allow-untrusted extract --no-chown --destination "$staging" "$archive" >/dev/null 2>&1 ||
+       [ ! -f "$staging/usr/bin/naive" ] || [ -L "$staging/usr/bin/naive" ] ||
+       ! check_sha "$staging/usr/bin/naive" "$expected"; then
+        rm -rf "$staging"
+        return 1
+    fi
+    n=$(wc -c < "$staging/usr/bin/naive" | tr -d ' ')
+    rm -rf "$staging"
+    case "$n" in ''|0|*[!0-9]*) return 1;; esac
+    printf '%s\n' "$n"
+}
+# In kB: one persistent rollback APK + the new active APK (for future
+# upgrades) + the *exact* extracted new ELF + 1.5 MiB filesystem/db headroom.
+# For subsequent updates the previous APK is hardlinked from APK_ACTIVE on
+# the same overlay; it requires no second full on-flash package copy.
+# Never assume all space in /tmp is available in the 14 MiB overlay.
+apk_overlay_budget_ok() {
+    old_bytes=$1
+    new_bytes=$2
+    binary_bytes=$3
+    for n in "$old_bytes" "$new_bytes" "$binary_bytes"; do
+        case "$n" in ''|0|*[!0-9]*) return 1;; esac
+        [ "$n" -le 104857600 ] || return 1
+    done
+    free_kib=$(df -Pk /etc 2>/dev/null | awk 'NR==2 {print $4}')
+    case "$free_kib" in ''|*[!0-9]*) return 1;; esac
+    if [ -r "$RECEIPT" ] && [ -f "$APK_ACTIVE" ] &&
+       [ ! -L "$APK_ACTIVE" ]; then
+        # A verified hardlink is made from the existing persisted APK.
+        old_bytes=0
+    fi
+    required_kib=$(((old_bytes+new_bytes+binary_bytes+1023)/1024+1536))
+    [ "$free_kib" -ge "$required_kib" ]
+}
 apk_plan_ok() {
     [ ! -r "$TXN" ] && [ -r "$PLAN" ] || return 1
     [ "$(jsonval "$PLAN" '@.manager')" = apk ] &&
@@ -78,7 +144,7 @@ apk_check() {
         check_msg unsupported 'Native APK package ownership or installed firmware does not match the verified AX6S baseline'
         return 1
     }
-    space_ok || { check_msg unsupported 'Insufficient space for APK backup'; return 1; }
+    apk_tmp_ok || { check_msg unsupported 'Insufficient temporary space for APK verification'; return 1; }
     download https://api.github.com/repos/klzgrad/naiveproxy/releases/latest "$CACHE/official.tmp" ||
         { check_msg error 'Official GitHub API unavailable'; return 1; }
     mv -f "$CACHE/official.tmp" "$CACHE/official.json" || return 1
@@ -128,10 +194,28 @@ apk_check() {
     [ "$(release_digest "$CACHE/apk-release.json" "$filename")" = "$digest" ] &&
     [ "$(release_digest "$CACHE/apk-release.json" "$APK_ORIG_FILE")" = "$original" ] ||
         { check_msg error 'APK asset digest does not match Release API'; return 1; }
+    baseline_bytes=$(apk_asset_bytes "$CACHE/apk-release.json" "$APK_ORIG_FILE") ||
+        { check_msg error 'APK recovery asset size unavailable'; return 1; }
+    candidate_bytes=$(apk_asset_bytes "$CACHE/apk-release.json" "$filename") ||
+        { check_msg error 'APK candidate asset size unavailable'; return 1; }
     if [ "$(apk_pkgversion)" = "$desired" ] && check_sha "$BINARY" "$binary"; then
         check_msg up_to_date 'Installed native APK matches latest official binary'
         return 0
     fi
+    # Read exact new ELF size before promising an installable candidate.
+    # SHA256 must match the verified release metadata before APK extraction.
+    rm -f "$CACHE/apk-candidate-verified.apk"
+    download "https://github.com/$GITHUB/releases/download/$build/$filename" "$CACHE/apk-candidate-verified.apk" ||
+        { check_msg error 'APK candidate download failed'; return 1; }
+    check_sha "$CACHE/apk-candidate-verified.apk" "$digest" ||
+        { rm -f "$CACHE/apk-candidate-verified.apk"; check_msg error 'APK candidate hash mismatch'; return 1; }
+    real_size=$(wc -c < "$CACHE/apk-candidate-verified.apk" | tr -d ' ')
+    [ "$real_size" = "$candidate_bytes" ] ||
+        { rm -f "$CACHE/apk-candidate-verified.apk"; check_msg error 'APK candidate size mismatch'; return 1; }
+    binary_bytes=$(apk_candidate_binary_bytes "$CACHE/apk-candidate-verified.apk" "$binary") ||
+        { check_msg error 'APK candidate extraction or binary verification failed'; return 1; }
+    apk_overlay_budget_ok "$baseline_bytes" "$candidate_bytes" "$binary_bytes" ||
+        { check_msg unsupported 'Insufficient space for APK backup'; return 1; }
     json_init
     json_add_string manager apk
     json_add_string ready true
@@ -145,6 +229,9 @@ apk_check() {
     json_add_string binary_sha256 "$binary"
     json_add_string baseline_filename "$APK_ORIG_FILE"
     json_add_string baseline_sha256 "$original"
+    json_add_string baseline_bytes "$baseline_bytes"
+    json_add_string candidate_bytes "$candidate_bytes"
+    json_add_string binary_bytes "$binary_bytes"
     json_add_string checked_at "$(date +%s)"
     json_dump > "$PLAN.tmp.$$" || return 1
     mv -f "$PLAN.tmp.$$" "$PLAN" || return 1
@@ -189,7 +276,8 @@ apk_restore() {
     apk_owned_files_ok || return 1
     if [ -s "$rd/receipt.json" ]; then
         cp "$rd/receipt.json" "$RECEIPT" || return 1
-        [ -s "$rd/active.apk" ] && cp "$rd/active.apk" "$APK_ACTIVE" || return 1
+        cp "$rd/previous.apk" "$APK_ACTIVE.tmp.$" &&
+        mv -f "$APK_ACTIVE.tmp.$" "$APK_ACTIVE" || return 1
     else
         rm -f "$RECEIPT" "$APK_ACTIVE"
     fi
@@ -197,7 +285,7 @@ apk_restore() {
 }
 apk_perform() {
     apk_plan_ok || { job_record failed 'Check for APK updates before installing'; return 1; }
-    space_ok || { job_record failed 'Insufficient storage for APK recovery'; return 1; }
+    apk_tmp_ok || { job_record failed 'Insufficient temporary space for APK verification'; return 1; }
     tag=$(jsonval "$PLAN" '@.upstream_tag')
     build=$(jsonval "$PLAN" '@.build_tag')
     newver=$(jsonval "$PLAN" '@.package_version')
@@ -208,11 +296,28 @@ apk_perform() {
     work="$CACHE/apk-job.$$"
     mkdir -m 700 "$work" || return 1
     job_record downloading 'Downloading native APK with SHA256 verification'
-    download "https://github.com/$GITHUB/releases/download/$build/$filename" "$work/update.apk" &&
+    # The check phase may already have a verified package in tmpfs.
+    # It is never trusted without re-verifying its immutable SHA256.
+    if [ -f "$CACHE/apk-candidate-verified.apk" ] &&
+       check_sha "$CACHE/apk-candidate-verified.apk" "$sum"; then
+        cp "$CACHE/apk-candidate-verified.apk" "$work/update.apk" || return 1
+    else
+        download "https://github.com/$GITHUB/releases/download/$build/$filename" "$work/update.apk" ||
+            { job_record failed 'APK download failed'; return 1; }
+    fi
     check_sha "$work/update.apk" "$sum" || {
         job_record failed 'APK download or checksum mismatch'
         return 1
     }
+    real_size=$(wc -c < "$work/update.apk" | tr -d ' ')
+    [ "$real_size" = "$(jsonval "$PLAN" '@.candidate_bytes')" ] ||
+        { job_record failed 'APK candidate size changed since check'; return 1; }
+    binary_bytes=$(apk_candidate_binary_bytes "$work/update.apk" "$binary") ||
+        { job_record failed 'APK candidate extraction or binary verification failed'; return 1; }
+    [ "$binary_bytes" = "$(jsonval "$PLAN" '@.binary_bytes')" ] ||
+        { job_record failed 'APK binary size changed since check'; return 1; }
+    apk_overlay_budget_ok "$(jsonval "$PLAN" '@.baseline_bytes')" "$real_size" "$binary_bytes" ||
+        { job_record failed 'Insufficient overlay capacity for APK recovery'; return 1; }
     job_record backing_up 'Preparing complete native APK rollback package'
     id="$(date +%s)-$$"
     bak="$BACKUPS/$id"
@@ -224,8 +329,7 @@ apk_perform() {
     [ -f /etc/apk/world ] && [ ! -L /etc/apk/world ] &&
     cp -p /etc/apk/world "$bak/world" &&
     sha256sum /etc/apk/world | awk '{print $1}' > "$bak/world.sha256" &&
-    cp -p /etc/config/naiveproxy "$bak/config-original" &&
-    cp -p "$BINARY" "$bak/naive-old" || {
+    cp -p /etc/config/naiveproxy "$bak/config-original" || {
         job_record failed 'Could not preserve current NaiveProxy files or APK world policy'
         return 1
     }
@@ -241,8 +345,7 @@ apk_perform() {
     else
         baseline_sum=$(jsonval "$RECEIPT" '@.package_sha256')
         valid_hash "$baseline_sum" && check_sha "$APK_ACTIVE" "$baseline_sum" &&
-        cp "$APK_ACTIVE" "$bak/previous.apk" &&
-        cp "$APK_ACTIVE" "$bak/active.apk" || {
+        ln "$APK_ACTIVE" "$bak/previous.apk" || {
             job_record failed 'Cached previous APK is unavailable'
             return 1
         }
