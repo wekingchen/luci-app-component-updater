@@ -118,6 +118,22 @@ old_pkg() {
        sha_ok "$file" "$(cat "$file.sha256" 2>/dev/null)" || return 1
     printf '%s\n' "$file"
 }
+# An interrupted launch can leave the old operation.lock directory in
+# /tmp even after state=completed and the persistent transaction is gone.
+# Future launched workers mark their live lock with active/pid; never remove
+# a lock with an active marker, unresolved transaction, or nonterminal state.
+# The unmarked lock from older manager builds can be safely recovered only
+# after a fully committed terminal state.
+clear_terminal_orphan_lock() {
+    [ -d "$LOCK" ] || return 0
+    [ -f "$TXN" ] && return 0
+    case "$(field "$STATE" '@.state')" in
+        completed|rolled_back|failed) ;;
+        *) return 0 ;;
+    esac
+    [ ! -e "$LOCK/active" ] && [ ! -e "$LOCK/pid" ] || return 0
+    rmdir "$LOCK" 2>/dev/null || true
+}
 capacity_ok() {
     a=$1; b=$2
     [ "$a" -ge 1024 ] && [ "$b" -ge 1024 ] || return 1
@@ -134,6 +150,7 @@ capacity_ok() {
 status() {
     compatible || { respond unsupported 'AX6S APKv3 manager only'; return 1; }
     init_dirs || return 1
+    clear_terminal_orphan_lock
     cache=false; old_pkg >/dev/null 2>&1 && cache=true
     backup=false
     # For a crash in an uncommitted manager transaction, the recovery file
@@ -253,7 +270,7 @@ restore_pkg() {
 upgrade() {
     plan_ok || { state failed 'Manager plan expired or invalid'; return 1; }
     [ -d "$LOCK" ] || mkdir "$LOCK" 2>/dev/null || return 1
-    trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+    trap 'rm -f "$LOCK/pid" "$LOCK/active"; rmdir "$LOCK" 2>/dev/null || true' EXIT
     [ ! -f "$TXN" ] || return 1
     state backing_up 'Preparing persistent manager recovery'
     old=$(old_pkg) || return 1
@@ -300,7 +317,7 @@ upgrade() {
 }
 restore() {
     [ -d "$LOCK" ] || mkdir "$LOCK" 2>/dev/null || return 1
-    trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+    trap 'rm -f "$LOCK/pid" "$LOCK/active"; rmdir "$LOCK" 2>/dev/null || true' EXIT
     dir=$PREV
     if [ -f "$TXN" ]; then
         # Crash-safe commit boundary: after next/ -> previous/ succeeds but
@@ -328,6 +345,7 @@ restore() {
 }
 launch() {
     compatible && init_dirs || { respond unsupported 'AX6S APKv3 manager only'; return 1; }
+    clear_terminal_orphan_lock
     [ ! -d "$LOCK" ] || { respond busy 'Manager transaction in progress'; return 1; }
     case "$1" in
         upgrade) plan_ok || { respond error 'Manager plan invalid'; return 1; };;
@@ -340,19 +358,32 @@ launch() {
         mv -f "$TMP/worker.tmp.$$" "$TMP/worker.sh" || return 1
     mkdir "$LOCK" 2>/dev/null ||
         { respond busy 'Manager operation already queued'; return 1; }
+    : > "$LOCK/active" || { rmdir "$LOCK" 2>/dev/null || true; return 1; }
     state queued 'Manager background task queued'
     (nohup /bin/sh "$TMP/worker.sh" "$1" > "$TMP/worker.log" 2>&1 </dev/null &)
     respond started 'Manager task started'
 }
 worker() {
     compatible && init_dirs || return 1
-    # launch() acquires the lock *before* spawning this worker. Keep the
-    # cleanup trap even if upgrade() fails its early plan validation.
-    trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+    # launch() normally acquires the lock before spawning us. Supervised
+    # root-only invocation from SSH/native firmware acceptance can run the
+    # worker directly without a pre-existing launch lock.
+    if [ ! -d "$LOCK" ]; then
+        mkdir "$LOCK" 2>/dev/null || return 1
+        : > "$LOCK/active" || { rmdir "$LOCK" 2>/dev/null || true; return 1; }
+    fi
+    # Keep cleanup active even when plan verification fails early.
+    trap 'rm -f "$LOCK/pid" "$LOCK/active"; rmdir "$LOCK" 2>/dev/null || true' EXIT
+    printf '%s\n' "$$" > "$LOCK/pid" || return 1
     if [ "$1" = upgrade ]; then upgrade; else restore; fi
     result=$?
-    /etc/init.d/rpcd restart >/dev/null 2>&1 || true
-    /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+    # NEVER restart rpcd/uhttpd from the worker. We deliberately install
+    # with --no-scripts: the already registered RPC methods execute this
+    # script on each call, and LuCI versioned resources load on page reload.
+    # Restarting the active login/session providers here invalidates ubus
+    # sessions and can strand the user with a misleading login error.
+    # A future package needing a new RPC method must provide a separately
+    # confirmed service-refresh operation after the transaction completes.
     exit "$result"
 }
 case "$1" in

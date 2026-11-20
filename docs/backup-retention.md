@@ -48,3 +48,30 @@ df -h /etc /tmp
 独立于 NaiveProxy 目录，使用 `/etc/component-updater/manager/` 保存最多一个管理器历史恢复包及当前已验证 APK 缓存。上传包固定暂存 `/tmp/component-updater-manager-*.apk`，只允许从 LuCI 指定路径导入，严格校验文件摘要、包名、架构及安装文件路径，拒绝任意 APK/命令。首次更新须上传与当前安装版本一致的旧 APK，保障恢复可用。背景 worker 在 `/tmp` 执行，安装时禁用包内脚本，校验结果持久可观察；更新成功再单独重载 rpcd/uhttpd，绝不主动重启 PassWall。
 
 自我更新属于高权限功能，SHA256 与包名检查不等于独立代码签名；本地文件来源的可信度须由上传者判断。真实硬件最终验收前不建议用于关键设备。
+
+## 2026-11-21 AX6S V0.5.6-r1 → r2 真机事故复盘（待进一步硬件回归）
+
+用户通过 LuCI 网页提交管理器自升级，浏览器停留在“后台任务已提交”且不自动更新；手动刷新后被登出，输入原密码时 LuCI 返回“无效的用户名或密码”。随后用户重启后恢复登录，**原 root 密码未改变**。
+
+来自设备日志的实证：
+- `/tmp/component-updater-manager/state.json` 为 `completed`，无 `/etc/component-updater/manager/transaction.json` 未完成事务；
+- 原生 APK DB 显示 `luci-app-component-updater 0.5.6-r2`，安装日志有 `Upgrading ... (0.5.6-r1 -> 0.5.6-r2)` 与 `OK`，因此安装确实成功；
+- LuCI `dispatcher.uc` 在当晚记录连续的 `failed login`，但重启后原密码可用，**无法支持“升级器修改了密码”的推断**；
+- 当前 AX6S 上 `/etc/init.d/rpcd restart` 返回 `Command failed: Not found`，进程检查未显示独立 `rpcd` 进程；`ubus -S list session` 仍返回 `session`。不能假定该 ImmortalWrt 构建支持标准 rpcd init-service 重启；
+- 旧版后台 worker 不管升级成功或失败都会尝试重启 `rpcd` 与 `uhttpd`，并且 JS 轮询吞掉所有请求错误。这两项均为确定的代码缺陷。与登录异常的因果关系有较强嫌疑，但尚缺事故发生时的实时服务日志，不能声称已证明唯一根因；
+- `apk` 在保留原 UCI 文件的情况下新增 `/etc/config/component-updater.apk-new`，属配置冲突副本，并非密码文件，不能当作登录故障原因。
+
+修复方向：管理器原生自升级**绝不主动重启 rpcd/uhttpd**，后台轮询反馈成功状态和持续认证错误，保持配置、密码和代理服务不变。任何新版本的物理 AX6S 实机升级/回滚必须重新验证 LuCI 会话及重新登录；不以隔离 chroot 回归代替此验收。在此之前保留 PR Draft 和升级发布门禁。
+
+只读核查上一版恢复包：
+
+```sh
+ls -lh /etc/component-updater/manager/previous/previous.apk 2>/dev/null
+cat /etc/component-updater/manager/previous/version 2>/dev/null
+sha256sum /etc/component-updater/manager/previous/previous.apk 2>/dev/null
+cat /etc/component-updater/manager/previous/previous.sha256 2>/dev/null
+```
+
+## V0.5.6-r3 修复候选及升级过渡限制
+
+PR #19 提供保持 LuCI 服务会话、后台状态轮询、终态残留锁安全清理及活跃任务标记。AX6S 当前 r2 → r3 **由旧 r2 的 worker 执行安装**，故并不能证明此过程会自动刷新，也仍可能受 r2 的 rpcd/uhttpd 重启及旧锁问题影响。安装后的 r3 页面状态查询会尝试在无持久事务、无运行 worker、且锁内无活动标记的安全终态下清理旧式空锁。后续 r3 → r4 才是新 worker 的完整无感升级验收。

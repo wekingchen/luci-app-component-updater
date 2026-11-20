@@ -19,6 +19,17 @@
 - **修复候选**：V0.5.4 将 APK 与 IPK 使用同一套 post-install 缓存清理和控制面重启脚本，补此前未覆盖的真实脚本效果单测；仍需真机实测验证，不宣称完成 AX6S G2 及 G3。
 - **安全**：跳过签名只能对已经独立核对可信 SHA256 的特定本地包使用 `--allow-untrusted`，不可全局关闭签名校验；安装本地包可使用 `--no-network`。
 
+## 2026-11-21 AX6S 真机新增证据：管理器网页升级与回滚闭环
+
+用户在实体 AX6S/ImmortalWrt 上完成 **V0.5.6-r3 → 测试版 r4 → r3** 的网页管理器自升级与手动回滚。r4 是从 r3 临时将包修订号改为 `4` 的自动化测试包，不是新的正式产品版本。保留以下可复核的终态证据：
+
+- 升级后：`apk list --installed --manifest luci-app-component-updater` 输出 `luci-app-component-updater 0.5.6-r4`；`manager-self-update.sh status` 返回 `installed_version=0.5.6-r4`、`job_state=completed`、`busy=false`、`recovery_available=true`、`recovery_required=false`，消息为 `Manager upgrade completed; one rollback archive retained`。
+- 用户通过网页执行「恢复上一版本」，页面显示 `当前版本：0.5.6-r3`；SSH APK 数据库也确认 `luci-app-component-updater 0.5.6-r3`。
+- 回滚后 `manager-self-update.sh status` 返回 `installed_version=0.5.6-r3`、`job_state=rolled_back`、`job_message=Previous manager restored and checked`、`busy=false`、`recovery_required=false`、`recovery_available=false`；末项为已消耗上一版恢复包后的正常结果，并非回滚失败。`staged_candidate=0.5.6-r4` 是旧候选记录，不代表当前运行 r4。
+- `uci show component-updater` 仍存在完整主配置（稳定通道、`auto_install=0`、保留两级组件备份、官方上游与仓库、反代关闭及预置节点）。
+- 这一证据支持**管理器网页自升级/回滚子流程在 AX6S 实机通过**，特别是 r2 曾出现的升级后 `busy` 不释放问题，在此次 r3→r4 未复现。没有单独采集掉电恢复、NaiveProxy APK 升降级、PassWall 实时流量或更新失败自动回滚证据；这些保持未完成，不能将整个 AX6S G3/G4 标记通过。
+- 对应分支 PR [#19](https://github.com/wekingchen/luci-app-component-updater/pull/19)，同一提交的[管理器/双包 CI](https://github.com/wekingchen/luci-app-component-updater/actions/runs/44807615639)与[原生 AX6S ARM64 回归](https://github.com/wekingchen/luci-app-component-updater/actions/runs/44807615837)均成功。自动发布条件仍必须保留关闭。
+
 ## 实机验收清单（进行中）
 
 - [ ] 确认实际 AX6S 固件身份、架构、板型、APK 包管理器、NaiveProxy 版本、文件归属，并保存当前完整恢复基线。

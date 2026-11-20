@@ -9,6 +9,7 @@ const calls = [];
 let modal = null;
 let formMap = null;
 let renderCount = 0;
+let managerStatusOverride = null;
 const E = (tag, attributes, children) => ({tag, attributes: attributes || {}, children: children == null ? [] : children});
 function flatten(node) {
   if (Array.isArray(node)) return node.flatMap(flatten);
@@ -46,6 +47,9 @@ const ctx = {
   L: {url: x => '/cgi-bin/luci/' + x, resource: x => '/luci-static/resources/' + x},
   rpc: {declare: spec => function() {
     calls.push(spec.method);
+    if (spec.method === 'manager_status' && managerStatusOverride !== null)
+      return managerStatusOverride instanceof Error ?
+        Promise.reject(managerStatusOverride) : Promise.resolve(managerStatusOverride);
     return Promise.resolve({status:'ok', message:'Native IPK installation started'});
   }},
   view: {extend: x => x},
@@ -81,7 +85,7 @@ async function main() {
   const plan = {ready:'true',filename:'naiveproxy_154.0.8037.49.5-r3_aarch64_cortex-a53.ipk'};
   const rendered = dashboard.render([status,plan]);
   assert(rendered.tag === 'div');
-  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r2$/.test(n.attributes.href)));
+  assert(flatten(rendered).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r3$/.test(n.attributes.href)));
 
   const settingsShortcut = flatten(rendered).find(n => n.tag === 'a' &&
     n.children === '下载设置');
@@ -260,8 +264,8 @@ async function main() {
   assert.strictEqual(dashboard.notice.error, true);
   assert(dashboard.notice.text.includes('没有返回有效的操作结果'));
   dashboard.notice = null;
-  assert(visibleText(dashboard.renderContent({...status,package_manager:'apk'},plan)).includes('组件更新器 · v0.5.6-r2'));
-  assert(visibleText(dashboard.renderContent({...status,package_manager:'opkg'},plan)).includes('组件更新器 · v0.5.6-2'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'apk'},plan)).includes('组件更新器 · v0.5.6-r3'));
+  assert(visibleText(dashboard.renderContent({...status,package_manager:'opkg'},plan)).includes('组件更新器 · v0.5.6-3'));
   assert(css.includes('.cu-app .cu-notice.is-warning'));
   dashboard.confirmInstall();
   assert(modal && modal.title.includes('NaiveProxy'));
@@ -287,7 +291,7 @@ async function main() {
   const settingsPage = await settings.render();
   assert(settingsPage.tag === 'div');
   assert(visibleText(settingsPage).includes('GitHub 下载设置'));
-  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r2$/.test(n.attributes.href)));
+  assert(flatten(settingsPage).some(n => n.tag === 'link' && /design\.css\?v=0\.5\.6-r3$/.test(n.attributes.href)));
   assert.strictEqual(formMap.sections.length,1);
   const fields = formMap.sections[0].fields;
   assert.deepStrictEqual(Array.from(fields.map(x => x.name)),
@@ -315,7 +319,7 @@ async function main() {
   }
   const managerPage = load('manager.js');
   const readyManager = {status:'ok',busy:'false',recovery_available:'false',
-    recovery_required:'false',current_archive:'false',installed_version:'0.5.6-r2'};
+    recovery_required:'false',current_archive:'false',installed_version:'0.5.6-r3'};
   const managerNodes = managerPage.render(readyManager);
   assert(visibleText(managerNodes).includes('管理器更新'));
   assert(visibleText(managerNodes).includes('上传新版 APK'));
@@ -335,6 +339,16 @@ async function main() {
   managerPage.confirmRollback();
   assert(modal && modal.title.includes('确认恢复管理器'));
   modal=null;
-  console.log('LuCI 产品界面：隐藏重复菜单、预设节点可见、主题隔离、管理器上传/恢复按钮逻辑 PASS');
+  managerStatusOverride={...readyManager,job_state:'completed',installed_version:'0.5.6-r4'};
+  await managerPage.refresh();
+  assert(visibleText(managerPage.renderBody()).includes('0.5.6-r4'));
+  assert(managerPage.notice.includes('管理器升级已完成'));
+  managerStatusOverride=new Error('rpcd authentication failure');
+  await managerPage.refresh();
+  await managerPage.refresh();
+  assert(managerPage.notice.includes('无法连接 LuCI 后端'),
+    'session/authentication errors must be shown instead of silently swallowed');
+  managerStatusOverride=null;
+  console.log('LuCI 产品界面：隐藏重复菜单、主题隔离、管理器上传/恢复、轮询完成与认证故障提示 PASS');
 }
 main().catch(err => {console.error(err); process.exitCode=1;});

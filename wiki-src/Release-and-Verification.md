@@ -22,8 +22,14 @@
 
 - **V0.5.0 RC1 管理器**：同版本 IPK 和 APK 在一个 GitHub Release；本次明确获得用户授权作为 *pre-release* 发布。
 - **NaiveProxy**：IPK 组件按已验证的官方版本预编译，AX6S APK 组件使用相同的上游版本二进制单独构建并有原固件恢复包。
-- **AX6S 目前达到 G1**：固件哈希固定、原版 APK 数据库、ARM64 环境下生产控制器与回滚流程通过；G2/G3 尚未完成。
+- **AX6S 当前分项验收**：固件哈希固定、原版 APK 数据库、ARM64 环境下生产控制器与回滚流程通过；**管理器自升级和上一版回滚**已取得实体设备证据（2026-11-21，见下方），但 **NaiveProxy 更新、PassWall 网络、受控断电与完整 G3/G4** 未验收。
 - **自动发布门禁**：`AX6S_APK_AUTO_PUBLISH` 在真机验收之前不得开启；不要把一次性 V0.5.0 RC 授权延伸成所有后续版本的许可。
+
+### V0.5.6-r3 管理器升级/回滚真机证据（2026-11-21）
+
+AX6S 实体路由器网页操作完成 `0.5.6-r3 → 0.5.6-r4 → 0.5.6-r3`，其中 r4 仅为测试修订号，无独立产品功能变化。升级后 APK 与管理器版本均为 r4、`job_state=completed`、`busy=false`、`recovery_available=true`；网页恢复上一版后 APK 与管理器均为 r3、`job_state=rolled_back`、`busy=false`、`recovery_required=false`。UCI 配置保持，回滚后 `recovery_available=false` 说明该轮恢复包已经使用。此前 r2 的终态空锁问题在本次 r3→r4 没有复现。未单独验证掉电恢复与组件安装失败自动恢复。
+
+因此可将 **管理器自身网页升级/回滚子流程**列为真机通过，但不能宣称整个组件更新器的 G3/G4 通过；r3 仍只能标为 RC 预发布，自动发布门禁保持关闭。
 
 证据与待办：[AX6S 固件兼容与 CI](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/ax6s-apk-compatibility.md) · [实机验收清单](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/ax6s-hardware-acceptance-checklist.md) · [门禁原始细则](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/acceptance-gates.md)。
 

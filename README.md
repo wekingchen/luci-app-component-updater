@@ -1,6 +1,6 @@
-**当前主分支测试预发布：V0.5.6-r2（管理器网页自升级候选，仍须在物理 AX6S 上验证）**。
+**V0.5.6-r3 AX6S 管理器修复候选（2026-11-21 真机升级/回滚通过）**：修复升级时主动打断 LuCI 会话、遗留后台锁和终态反馈不清的问题。实体 AX6S 上已从 r3 通过网页升级到**仅供回归测试的 r4**，确认 APK 数据库及管理器均为 `0.5.6-r4`、`job_state=completed`、`busy=false`、`recovery_available=true`；随后从网页恢复上一版本 r3。回滚后 `apk list --installed --manifest luci-app-component-updater` 为 `luci-app-component-updater 0.5.6-r3`，`job_state=rolled_back`、`busy=false`、`recovery_required=false`，`uci show component-updater` 保留 `update_channel='stable'`、`keep_backups='2'`、GitHub 直连及预设反代等设置。回滚后 `recovery_available=false` 符合已使用上一版恢复包的结果，不代表失败。
 
-从已安装的 V0.5.6-r1 使用 LuCI「管理器更新」上传 V0.5.6-r2 APK；首次升级还需提供同版本 V0.5.6-r1 APK 作为离线恢复基线。NaiveProxy 保留最多两级备份，管理器保留一级，更新与恢复失败时不得绕过事务保护。
+**发布与使用边界**：r3 是本轮应保留的交付版本，r4 只用于验证升级/回滚机制，不作为正式产品版本。从 r2 启动 r3 安装时使用的仍是 r2 worker，不保证该首次跳转不会断开登录或留锁。**此次真机通过仅针对管理器自身的网页升级与回滚，不代表 NaiveProxy 的实际更新/回滚、PassWall 流量、断电恢复或 AX6S 整机稳定版验收完成。**在完整硬件门禁达标之前，管理器只能以 RC/pre-release 方式发布，`AX6S_APK_AUTO_PUBLISH` 保持关闭。NaiveProxy 保留最多两级备份，管理器保留一级，更新与恢复失败时不得绕过事务保护。
 
 # LuCI 组件更新器
 
