@@ -234,6 +234,7 @@
   background: #e9f7f4;
   color: #145950;
 }
+.cu-app .cu-notice.is-warning { border-color: #e5cb8f; background: #fff5da; color: #815000; }
 .cu-app .cu-notice.is-error { border-color: #efb9c2; background: #fff1f2; color: #8c2936; }
 .cu-app .cu-notice-text { flex: 1; min-width: 0; font-size: 13px; }
 .cu-app button.cu-notice-dismiss { border: none; background: transparent; color: inherit; cursor: pointer; padding: 0 5px; font: inherit; font-size: 19px; line-height: 1; }
