@@ -88,7 +88,8 @@ apk_candidate_binary_bytes() {
     printf '%s\n' "$n"
 }
 # In kB: one persistent rollback APK + the new active APK (for future
-# upgrades) + the *exact* extracted new ELF + 1.5 MiB filesystem/db headroom.
+# upgrades) + the larger of old/new ELF sizes (for worst-case rollback)
+# + 1.5 MiB filesystem/db headroom.
 # For subsequent updates the previous APK is hardlinked from APK_ACTIVE on
 # the same overlay; it requires no second full on-flash package copy.
 # Never assume all space in /tmp is available in the 14 MiB overlay.
@@ -100,6 +101,10 @@ apk_overlay_budget_ok() {
         case "$n" in ''|0|*[!0-9]*) return 1;; esac
         [ "$n" -le 104857600 ] || return 1
     done
+    current_elf=$(wc -c < "$BINARY" 2>/dev/null | tr -d ' ') || return 1
+    case "$current_elf" in ''|0|*[!0-9]*) return 1;; esac
+    [ "$current_elf" -le 104857600 ] || return 1
+    [ "$current_elf" -le "$binary_bytes" ] || binary_bytes=$current_elf
     free_kib=$(df -Pk /etc 2>/dev/null | awk 'NR==2 {print $4}')
     case "$free_kib" in ''|*[!0-9]*) return 1;; esac
     if [ -r "$RECEIPT" ] && [ -f "$APK_ACTIVE" ] &&
@@ -276,8 +281,10 @@ apk_restore() {
     apk_owned_files_ok || return 1
     if [ -s "$rd/receipt.json" ]; then
         cp "$rd/receipt.json" "$RECEIPT" || return 1
-        cp "$rd/previous.apk" "$APK_ACTIVE.tmp.$" &&
-        mv -f "$APK_ACTIVE.tmp.$" "$APK_ACTIVE" || return 1
+        # Reuse the already-verified rollback package without copying
+        # another full APK into the small persistent overlay.
+        ln "$rd/previous.apk" "$APK_ACTIVE.tmp.$$" &&
+        mv -f "$APK_ACTIVE.tmp.$$" "$APK_ACTIVE" || return 1
     else
         rm -f "$RECEIPT" "$APK_ACTIVE"
     fi
