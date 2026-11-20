@@ -72,11 +72,16 @@ inspect() {
     apk --no-network --allow-untrusted extract --no-chown --destination "$temp/root" "$file" >/dev/null 2>&1 ||
         { rm -rf "$temp"; return 1; }
     for mandatory in usr/sbin/component-updaterctl usr/libexec/rpcd/component-updater \
-        usr/libexec/component-updater/manager-self-update.sh \
-        usr/share/rpcd/acl.d/luci-app-component-updater.json \
-        www/luci-static/resources/view/component-updater/manager.js; do
+        usr/share/rpcd/acl.d/luci-app-component-updater.json; do
         [ -f "$temp/root/$mandatory" ] || { rm -rf "$temp"; return 1; }
     done
+    if [ -z "$required" ]; then
+        # New candidates must ship the independently copied worker and UI;
+        # legacy installed r4 APKs do not yet contain these paths.
+        [ -f "$temp/root/usr/libexec/component-updater/manager-self-update.sh" ] &&
+        [ -f "$temp/root/www/luci-static/resources/view/component-updater/manager.js" ] ||
+            { rm -rf "$temp"; return 1; }
+    fi
     bad=$(find "$temp/root" ! -type d ! -type f -print -quit)
     [ -z "$bad" ] || { rm -rf "$temp"; return 1; }
     valid=true
@@ -245,6 +250,9 @@ upgrade() {
     [ ! -f "$TXN" ] || return 1
     state backing_up 'Preparing persistent manager recovery'
     old=$(old_pkg) || return 1
+    # A pre-transaction interruption can leave a partial next directory.
+    # The durable TXN guard above prevents removal during recovery.
+    rm -rf "$ROOT/next"
     mkdir "$ROOT/next" 2>/dev/null || return 1
     cp "$old" "$ROOT/next/previous.apk" &&
         printf '%s\n' "$(pkgver)" > "$ROOT/next/version" &&
@@ -288,6 +296,9 @@ restore() {
     state restoring 'Restoring previous manager APK'
     if restore_pkg "$dir"; then
         rm -f "$TXN" "$PLAN"
+        # On a user-requested rollback, previous and active now point to the
+        # same version; do not retain a redundant, unusable recovery entry.
+        [ "$dir" != "$PREV" ] || rm -rf "$PREV"
         state rolled_back 'Previous manager restored and checked'
     else
         state recovery_required 'Manager recovery failed; archive kept'
