@@ -58,6 +58,54 @@ class SelfUpdateContract(unittest.TestCase):
         self.assertIn("无法连接 LuCI 后端", UI)
         self.assertIn("s.job_state === 'completed'", UI)
 
+    def test_terminal_orphan_lock_cleanup_protects_active_transactions(self):
+        # Run the production POSIX shell helper, not a duplicate algorithm.
+        import tempfile
+        helper = "clear_terminal_orphan_lock() {" + BACKEND.split(
+            "clear_terminal_orphan_lock() {", 1
+        )[1].split("\ncapacity_ok() {", 1)[0]
+        with tempfile.TemporaryDirectory() as td:
+            from pathlib import Path
+            base = Path(td)
+            lock = base / "operation.lock"
+            state = base / "state.json"
+            txn = base / "transaction.json"
+            shell = r"""
+field() {
+  sed -n 's/.*"state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -n 1
+}
+""" + helper + "\n" + (
+                'LOCK="$1"\nSTATE="$2"\nTXN="$3"\n'
+                'clear_terminal_orphan_lock\n'
+            )
+            def call():
+                return subprocess.run(
+                    ["sh", "-c", shell, "test",
+                     str(lock), str(state), str(txn)],
+                    capture_output=True, text=True
+                )
+            state.write_text('{"state":"completed"}')
+            lock.mkdir()
+            self.assertEqual(call().returncode, 0)
+            self.assertFalse(lock.exists(), "safe terminal orphan must be removed")
+            lock.mkdir()
+            (lock / "active").touch()
+            call()
+            self.assertTrue(lock.exists(), "active worker marker must protect lock")
+            (lock / "active").unlink()
+            txn.write_text('{"backup":"next"}')
+            call()
+            self.assertTrue(lock.exists(), "unresolved transaction protects lock")
+            txn.unlink()
+            state.write_text('{"state":"installing"}')
+            call()
+            self.assertTrue(lock.exists(), "in-progress state protects lock")
+            state.write_text('{"state":"rolled_back"}')
+            call()
+            self.assertFalse(lock.exists())
+        self.assertIn('clear_terminal_orphan_lock', BACKEND)
+        self.assertIn('printf \\'%s\\n\\' "$" > "$LOCK/pid"', BACKEND)
+
     def test_manager_menu_and_upload_acl_are_scoped(self):
         self.assertEqual(MENU["admin/system/component-updater/manager"]["action"]["path"],
                          "component-updater/manager")
