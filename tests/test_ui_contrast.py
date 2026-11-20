@@ -71,6 +71,8 @@ class VisualContrastContract(unittest.TestCase):
             ".cu-page-title-row", ".cu-page-settings",
             ".cu-settings-form .cbi-value-description",
             ".cu-settings-form .cbi-page-actions",
+            ".cu-settings-form [hidden]",
+            "font-size: 16px !important",
             ".cu-setup-hint", "min-height: 44px",
         ):
             self.assertIn(token, CSS)
