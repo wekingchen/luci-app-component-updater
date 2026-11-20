@@ -247,7 +247,7 @@ restore_pkg() {
 }
 upgrade() {
     plan_ok || { state failed 'Manager plan expired or invalid'; return 1; }
-    mkdir "$LOCK" 2>/dev/null || return 1
+    [ -d "$LOCK" ] || mkdir "$LOCK" 2>/dev/null || return 1
     trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
     [ ! -f "$TXN" ] || return 1
     state backing_up 'Preparing persistent manager recovery'
@@ -261,6 +261,9 @@ upgrade() {
         sha256sum "$ROOT/next/previous.apk" | awk '{print $1}' > "$ROOT/next/previous.sha256" &&
         save_world "$ROOT/next" || { state failed 'Cannot preserve recovery archive'; return 1; }
     sha_ok "$ROOT/next/previous.apk" "$(cat "$ROOT/next/previous.sha256")" || return 1
+    # Durable one-command rescue if the manager's package tree is replaced
+    # or the router reboots mid-transaction. Only retained while needed.
+    cp "$SELF" "$ROOT/rescue.sh" && chmod 700 "$ROOT/rescue.sh" || return 1
     printf '%s\n' next > "$TXN"
     sync
     state installing 'Updating LuCI manager without running package hooks'
@@ -287,7 +290,7 @@ upgrade() {
         }
     rm -rf "$PREV" || return 1
     mv "$ROOT/next" "$PREV" || return 1
-    rm -f "$TXN" "$PLAN"
+    rm -f "$TXN" "$PLAN" "$ROOT/rescue.sh"
     state completed 'Manager upgrade completed; one rollback archive retained'
 }
 restore() {
@@ -297,7 +300,7 @@ restore() {
     [ ! -f "$TXN" ] || dir=$ROOT/next
     state restoring 'Restoring previous manager APK'
     if restore_pkg "$dir"; then
-        rm -f "$TXN" "$PLAN"
+        rm -f "$TXN" "$PLAN" "$ROOT/rescue.sh"
         # On a user-requested rollback, previous and active now point to the
         # same version; do not retain a redundant, unusable recovery entry.
         [ "$dir" != "$PREV" ] || rm -rf "$PREV"
@@ -319,6 +322,8 @@ launch() {
     cp "$SELF" "$TMP/worker.tmp.$$" &&
         chmod 700 "$TMP/worker.tmp.$$" &&
         mv -f "$TMP/worker.tmp.$$" "$TMP/worker.sh" || return 1
+    mkdir "$LOCK" 2>/dev/null ||
+        { respond busy 'Manager operation already queued'; return 1; }
     state queued 'Manager background task queued'
     (nohup /bin/sh "$TMP/worker.sh" "$1" > "$TMP/worker.log" 2>&1 </dev/null &)
     respond started 'Manager task started'
