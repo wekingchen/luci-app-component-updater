@@ -106,7 +106,7 @@ class ReleaseContractTests(unittest.TestCase):
         wrapper=(ROOT/'tools/package_ipk.py').read_text()
         workflow=(ROOT/'.github/workflows/ci.yml').read_text()
         self.assertIn('PKG_VERSION:=0.5.5',manager)
-        self.assertIn('PKG_RELEASE:=1',manager)
+        self.assertIn('PKG_RELEASE:=2',manager)
         self.assertIn('VERSION = "0.5.5-2"',wrapper)
         self.assertIn('luci-app-component-updater_0.5.5-2_all.ipk',workflow)
         self.assertIn('pkg=luci-app-component-updater_0.5.5-2_all.ipk',workflow)
