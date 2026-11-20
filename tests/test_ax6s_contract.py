@@ -64,7 +64,7 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
         self.assertIn("check_msg error 'APK manifest hash mismatch'", NATIVE)
         self.assertRegex(
             NATIVE,
-            r'(?s)download "https://github.com/\\$GITHUB/releases/download/\\$build/manifest.json".*?APK manifest download failed.*?check_sha.*?APK manifest hash mismatch')
+            r'(?s)download "https://github[.]com/\$GITHUB/releases/download/\$build/manifest[.]json".*?APK manifest download failed.*?check_sha.*?APK manifest hash mismatch')
         self.assertIn("'APK manifest download failed':", UI)
         self.assertIn("'APK manifest hash mismatch':", UI)
 
