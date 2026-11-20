@@ -72,3 +72,11 @@ python3 -m unittest discover -s tests -v
 - **V0.5.5 代码修复**：组件主页和下载设置页的本地 `header` 替换为普通 `div` 页头；本地页头显式采用 block、static、自动高度；标题横向保留完整词组，允许标题与操作入口在极窄屏幕分行；不修改 LuCI 宿主导航样式和其他页面。
 - **新增门禁**：恶意主题 fixture 模拟 `header { display:flex; position:sticky }`，在 320/390/1280px 检查页头元素类型、计算样式、标题高度、说明文字与主体卡片的几何分离；下载设置页也检查表单前区域不被页头盖住。
 - **尚未确认**：V0.5.5 的 iPhone Safari / 桌面浏览器真机页面截图和交互仍待复测。本次只是 V0.5.4 截图反馈驱动的修复候选，不可声明 V0.5.5 已真机通过。
+
+## 2026-11-20 AX6S 更新检查失败的真实设备反馈
+
+- 用户报告 AX6S 已恢复正常互联网连接，但 LuCI「检查官方更新」先出现“检查未通过/暂时无法更新”，随后短暂显示“更新进行中/正在处理更新任务”，说明文字却写“当前没有正在执行的任务”。这仅能说明 UI 显示了错误/矛盾状态，**尚无设备后端 check-state 原始消息，不能声称已找到真实检查失败的根因**。
+- 源码确认 `operationBusy` 同时用于正在检查和正在安装，导致 `job_state=idle` 时错误显示“更新进行中”；V0.5.5 候选用 `operationKind=check` 显式区分检查与更新。另一方面，RPC 返回缺少 `status` 或 `unsupported` 时不再提示“操作已提交”。
+- AX6S APK 检查此前把下载校验清单失败和 SHA256 不匹配合并返回“APK manifest hash mismatch”，现已拆为传输失败和摘要不匹配两个不同失败条件，均保留原先的严格 SHA256 拒绝策略。新增 APK 检查失败原因中文映射及 Node/Python 回归。
+- 实机定位需只读查看 `/usr/sbin/component-updaterctl status` 和 `/tmp/component-updater/check-state.json`，确认具体失败阶段、下载设置/固件基线与回滚状态；不能把“能上网”直接推导为“官方 GitHub API 和 Release 文件均可达”。
+- 以上修复不改变 NaiveProxy 安装许可、包摘要算法、原厂基线哈希、APK world/恢复策略，亦不放宽对未知设备的写入限制。实机最终检查成功与安装/恢复仍未验收。
