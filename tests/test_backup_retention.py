@@ -59,7 +59,7 @@ TXN=$3
 prune_backup_chain
 """
         return subprocess.run(
-            ["/bin/sh", "-c", shell, "test", str(self.backups),
+            ["/bin/sh", "-xc", shell, "test", str(self.backups),
              str(self.receipt), str(self.txn)],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
