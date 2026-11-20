@@ -45,9 +45,11 @@ class MenuActivationTests(unittest.TestCase):
             (cache / "luci-modulecache" / "module").write_text("stale")
             for name in ("rpcd", "uhttpd"):
                 service = services / name
-                service.write_text(
-                    '#!/bin/sh\\nprintf "%s:%s\\n" "' + name + '" "$1" >> "$MOCK_LOG"\\n'
-                )
+                service.write_text(chr(10).join([
+                    "#!/bin/sh",
+                    'echo "' + name + ':$1" >> "$MOCK_LOG"',
+                    ""
+                ]))
                 service.chmod(0o755)
             script = script.replace("/tmp/luci-indexcache", str(cache / "luci-indexcache"))
             script = script.replace("/tmp/luci-modulecache", str(cache / "luci-modulecache"))
