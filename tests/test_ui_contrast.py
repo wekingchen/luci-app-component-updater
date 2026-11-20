@@ -41,6 +41,18 @@ class VisualContrastContract(unittest.TestCase):
                 self.assertIn(fg, CSS, f"{name}: expected foreground token missing")
                 self.assertIn(bg, CSS, f"{name}: expected background token missing")
 
+    def test_overlay_storage_notice_is_amber_and_version_is_exact(self):
+        self.assertIn("warning: status === 'storage_limited'", OVERVIEW)
+        self.assertIn("this.notice.warning ? ' is-warning'", OVERVIEW)
+        self.assertIn("组件更新器 · v0.5.5-r4 · 原生 IPK / APK 双模式", OVERVIEW)
+        self.assertIn("组件更新器 · v0.5.5-r4 · 原生 IPK / APK 双模式", FIXTURE)
+        self.assertIn(".cu-app .cu-notice.is-warning", CSS)
+        warn = re.search(r"\\.cu-app \\.cu-notice\\.is-warning\\s*\\{([^}]+)\\}", CSS, re.S)
+        self.assertIsNotNone(warn)
+        for token in ("#fff5da", "#815000", "border-color"):
+            self.assertIn(token, warn.group(1))
+        self.assertGreaterEqual(contrast("#815000", "#fff5da"), 4.5)
+
     def test_desktop_navigation_remains_outside_component_stacking_context(self):
         # The host drawer is owned by LuCI, not by the updater. A page-level
         # high z-index could cover it on desktop layouts.
