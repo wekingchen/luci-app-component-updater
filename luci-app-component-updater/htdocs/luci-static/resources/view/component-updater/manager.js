@@ -184,6 +184,8 @@ return view.extend({
         var supported=s.status==='ok';
         var recover=s.recovery_available==='true';
         var need=s.recovery_required==='true';
+        var stale=s.busy==='true' && !need &&
+            (s.job_state==='completed' || s.job_state==='rolled_back' || s.job_state==='failed');
         return [
             E('section',{'class':'cu-panel cu-manager-panel'},[
                 E('div',{'class':'cu-section-head'},[
@@ -207,8 +209,14 @@ return view.extend({
                     E('div',{'class':'cu-property'},[
                         E('span',{'class':'cu-property-label'},'任务状态'),
                         E('strong',{'class':'cu-property-value'},JOB[s.job_state] || '没有正在执行的任务')
+                    ]),
+                    E('div',{'class':'cu-property'},[
+                        E('span',{'class':'cu-property-label'},'操作锁'),
+                        E('strong',{'class':'cu-property-value'},s.busy==='true' ? '锁定中' : '已释放')
                     ])
                 ]),
+                stale ? E('div', {'class':'cu-notice is-warning',role:'status'},
+                    '后台任务已经结束，但操作锁仍然存在。更新器会尝试安全回收；请勿重复安装，必要时使用 SSH 检查任务锁。') : null,
                 this.notice ? E('div',{'class':'cu-notice '+
                     (this.lastResult==='storage_limited'?'is-warning':
                      this.lastResult==='error'?'is-error':'')},
