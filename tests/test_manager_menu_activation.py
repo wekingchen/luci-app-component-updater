@@ -100,7 +100,7 @@ class MenuActivationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             subprocess.run([sys.executable, str(IPK_BUILDER), "--out", td],
                            check=True, stdout=subprocess.DEVNULL)
-            ipk = Path(td) / "luci-app-component-updater_0.5.4-1_all.ipk"
+            ipk = Path(td) / "luci-app-component-updater_0.5.5-1_all.ipk"
             self.assertTrue(ipk.is_file())
             with tarfile.open(ipk, mode="r:gz") as outer:
                 control = outer.extractfile("./control.tar.gz").read()
