@@ -85,7 +85,11 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
                     +f'APK_ACTIVE={shlex.quote(str(active))}\n'
                     +'df() { printf "Filesystem 1024-blocks Used Available Capacity Mounted\n"; '
                     'printf "/overlay 14746 2146 %s 15%% /\n" "$FREE_KIB"; }\n'
-                    +'apk_overlay_budget_ok 3969118 3218562 3210000\n')
+                    +'binary_bytes=3210000\n'
+                    +'apk_overlay_budget_ok 3969118 3218562 "$binary_bytes"\n'
+                    +'rc=$?\n'
+                    +'[ "$binary_bytes" = 3210000 ] || exit 77\n'
+                    +'exit "$rc"\n')
             def test(free_kib,receipt_present=False):
                 if receipt_present:
                     receipt.write_text('{}')
