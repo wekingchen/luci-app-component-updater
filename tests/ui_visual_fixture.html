@@ -85,7 +85,7 @@ if(location.search.indexOf('ready')>=0){
    if(cs.color==='rgb(255, 255, 255)')problems.push('white-title:'+name);
  }
  const active=get(location.search.includes('ready')?'.cu-btn-update':'.cu-btn-check');
- if(ratio(active.color,active.backgroundColor)<4.5)problems.push('active-contrast');
+ if(ratio(active.color,active.backgroundColor)<4.5)problems.push('active-contrast:'+active.color+'-on-'+active.backgroundColor);
  const disabled=document.querySelector('.cu-btn-update:disabled')||document.querySelector('.cu-btn-rollback:disabled');
  if(disabled){const cs=get('.cu-btn-rollback:disabled');if(Number(cs.opacity)<.99)problems.push('disabled-opacity');if(ratio(cs.color,cs.backgroundColor)<4.5)problems.push('disabled-contrast')}
  if(document.documentElement.scrollWidth>window.innerWidth+2)problems.push('horizontal-overflow');
