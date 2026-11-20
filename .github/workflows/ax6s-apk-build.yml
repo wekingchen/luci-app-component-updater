@@ -307,6 +307,8 @@ jobs:
             printf "\n# local-user-config-test\n" >> /etc/config/naiveproxy
             config_sha=$(sha256sum /etc/config/naiveproxy | awk "{print \$1}")
             world_sha=$(sha256sum /etc/apk/world | awk "{print \$1}")
+            echo "APK firmware original ELF bytes:"
+            wc -c /usr/bin/naive
             echo "APK world constraint before update:"
             grep "^naiveproxy" /etc/apk/world || true
             /usr/sbin/component-updaterctl check
