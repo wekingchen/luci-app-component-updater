@@ -24,5 +24,18 @@
       ]
     },
     "firstchild_ineligible": true
+  },
+  "admin/system/component-updater/manager": {
+    "order": 3,
+    "action": {
+      "type": "view",
+      "path": "component-updater/manager"
+    },
+    "depends": {
+      "acl": [
+        "luci-app-component-updater"
+      ]
+    },
+    "firstchild_ineligible": true
   }
 }
