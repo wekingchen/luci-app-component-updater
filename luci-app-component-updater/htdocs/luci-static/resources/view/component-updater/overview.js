@@ -129,14 +129,16 @@ return view.extend({
     noteForResult: function(result) {
         result = result || {};
         var status = result.status || '';
-        var fallback = status === 'error' || status === 'failed' ?
-            '操作没有成功，请检查网络连接及系统日志。' :
+        var failure = ['error', 'failed', 'unsupported', 'recovery_required', 'unavailable'].indexOf(status) >= 0;
+        var missing = !status;
+        var fallback = missing ? '设备没有返回有效的操作结果。请查看检查状态或诊断信息。' :
+            failure ? '操作没有成功，请查看检查原因或系统日志。' :
             status === 'up_to_date' ? '当前已是最新版本，无需重新安装。' :
-            status === 'pending' ? '已发现新版，云端正在准备安装包。' :
+            status === 'pending' ? '当前云端版本暂不可确认，可稍后重新检查。' :
             status === 'rolled_back' ? '上一版本已恢复。' :
             status === 'busy' ? '已有任务正在运行，请勿重复操作。' :
             '操作已提交，页面会自动更新进度。';
-        return {error: status === 'error' || status === 'failed', text: this.messageText(result.message || result.error, fallback)};
+        return {error: failure || missing, text: this.messageText(result.message || result.error, fallback)};
     },
 
     notify: function(result) {
