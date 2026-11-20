@@ -56,7 +56,7 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
                          'Packaging must not silently install anything on the device')
         self.assertIn('apk adbdump --format json',CI)
         self.assertIn('dist/*.apk',CI)
-        self.assertIn('luci-app-component-updater-v0.5.4-rc1',CI)
+        self.assertIn('luci-app-component-updater-v0.5.5-rc1',CI)
         self.assertIn('Physical AX6S device and live PassWall traffic validation remain outstanding',CI)
 
     def test_world_constraints_remain_unchanged_after_native_apk_transactions(self):
