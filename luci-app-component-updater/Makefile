@@ -45,7 +45,7 @@ endef
 # Skip image/rootfs staging: only a live LuCI installation may restart services.
 define Package/luci-app-component-updater/postinst
 #!/bin/sh
-[ -n "${IPKG_INSTROOT:-}" ] && exit 0
+[ -n "$${IPKG_INSTROOT:-}" ] && exit 0
 rm -f /tmp/luci-indexcache /tmp/luci-indexcache.* 2>/dev/null || true
 if [ -d /tmp/luci-modulecache ]; then
 	rm -rf /tmp/luci-modulecache/* 2>/dev/null || true
