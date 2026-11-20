@@ -59,6 +59,15 @@ class Ax6sApkCompatibilityTests(unittest.TestCase):
         self.assertIn('luci-app-component-updater-v0.5.5-rc1',CI)
         self.assertIn('Physical AX6S device and live PassWall traffic validation remain outstanding',CI)
 
+    def test_apk_manifest_transport_and_digest_are_separate_fail_closed_paths(self):
+        self.assertIn("check_msg error 'APK manifest download failed'", NATIVE)
+        self.assertIn("check_msg error 'APK manifest hash mismatch'", NATIVE)
+        self.assertRegex(
+            NATIVE,
+            r'(?s)download "https://github.com/\\$GITHUB/releases/download/\\$build/manifest.json".*?APK manifest download failed.*?check_sha.*?APK manifest hash mismatch')
+        self.assertIn("'APK manifest download failed':", UI)
+        self.assertIn("'APK manifest hash mismatch':", UI)
+
     def test_world_constraints_remain_unchanged_after_native_apk_transactions(self):
         self.assertIn('cp -p /etc/apk/world "$bak/world"',NATIVE)
         self.assertIn('cp -p "$bak/world" /etc/apk/world',NATIVE)
