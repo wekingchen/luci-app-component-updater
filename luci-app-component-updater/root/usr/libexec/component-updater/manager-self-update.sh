@@ -345,6 +345,7 @@ restore() {
 }
 launch() {
     compatible && init_dirs || { respond unsupported 'AX6S APKv3 manager only'; return 1; }
+    clear_terminal_orphan_lock
     [ ! -d "$LOCK" ] || { respond busy 'Manager transaction in progress'; return 1; }
     case "$1" in
         upgrade) plan_ok || { respond error 'Manager plan invalid'; return 1; };;
@@ -355,7 +356,6 @@ launch() {
     cp "$SELF" "$TMP/worker.tmp.$$" &&
         chmod 700 "$TMP/worker.tmp.$$" &&
         mv -f "$TMP/worker.tmp.$$" "$TMP/worker.sh" || return 1
-    clear_terminal_orphan_lock
     mkdir "$LOCK" 2>/dev/null ||
         { respond busy 'Manager operation already queued'; return 1; }
     : > "$LOCK/active" || { rmdir "$LOCK" 2>/dev/null || true; return 1; }
