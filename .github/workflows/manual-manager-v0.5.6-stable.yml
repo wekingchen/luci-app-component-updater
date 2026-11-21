@@ -1,0 +1,149 @@
+name: Release / V0.5.6 Stable (scoped one-time manual)
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_release:
+        description: 'Enter PUBLISH_0.5.6_STABLE to release both verified manager packages'
+        type: string
+        required: true
+
+# This is NOT the automatic AX6S stable-release gate. No push/PR/schedule trigger.
+# One-time, manually authorized RC publication from a pinned, successful main CI.
+permissions:
+  contents: read
+
+concurrency:
+  group: component-updater-manager-0.5.6-stable-manual
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+      SOURCE_SHA: 91008d098080552e8579872ec52f1bb9cb87b366
+      SOURCE_RUN_ID: '44898618719'
+      ARTIFACT_ID: '14705110670'
+      ARTIFACT_DIGEST: 'sha256:2f61569d4c6a078ec55f5eb9a750537e14f722bad2a1ddb626031f0c29378637'
+      TAG: luci-app-component-updater-v0.5.6
+      IPK: luci-app-component-updater_0.5.6-3_all.ipk
+      APK: luci-app-component-updater-0.5.6-r3.apk
+    steps:
+      - name: Verify explicit release authorization and pinned successful main run
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CONFIRM_RELEASE" = 'PUBLISH_0.5.6_Stable' || {
+            echo "::error::Explicit Stable authorization text is required."
+            exit 1
+          }
+          run_info="$(gh api "repos/$GH_REPO/actions/runs/$SOURCE_RUN_ID")"
+          printf '%s' "$run_info" | jq -e --arg sha "$SOURCE_SHA" '
+            .head_sha == $sha and
+            .head_branch == "main" and
+            .event == "push" and
+            .status == "completed" and
+            .conclusion == "success" and
+            .name == "Component Updater / CI & native IPK/APK"
+          ' >/dev/null
+          artifact_info="$(gh api "repos/$GH_REPO/actions/artifacts/$ARTIFACT_ID")"
+          printf '%s' "$artifact_info" | jq -e --arg digest "$ARTIFACT_DIGEST" --argjson run "$SOURCE_RUN_ID" '
+            .name == "luci-app-component-updater-ipk" and
+            (.expired | not) and
+            .digest == $digest and
+            .workflow_run.id == $run
+          ' >/dev/null
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release already exists: $TAG; immutable assets will not be replaced."
+            exit 1
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag already exists: $TAG; refusing to retarget."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: 91008d098080552e8579872ec52f1bb9cb87b366
+          persist-credentials: false
+
+      - name: Confirm package versions and recheck source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          grep -qx 'PKG_VERSION:=0.5.6' luci-app-component-updater/Makefile
+          grep -qx 'PKG_RELEASE:=3' luci-app-component-updater/Makefile
+          grep -Fqx 'VERSION = "0.5.6-3"' <(grep '^VERSION =' tools/package_ipk.py)
+          python3 tools/check_docs.py
+          python3 -m unittest discover -s tests -p test_release_contract.py -v
+
+      - name: Download exactly the two artifacts from the pinned passing CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download "$SOURCE_RUN_ID" --name 'luci-app-component-updater-ipk' --dir dist
+          test -s "dist/$IPK"
+          test -s "dist/$APK"
+          count="$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          test "$count" = 2 || {
+            echo "::error::Unexpected files in manager CI artifact ($count instead of 2)."
+            find dist -maxdepth 1 -type f
+            exit 1
+          }
+          (cd dist && sha256sum "$IPK" "$APK" > SHA256SUMS.txt)
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          python3 - <<'PY'
+          import io, pathlib, tarfile
+          path=pathlib.Path('dist/luci-app-component-updater_0.5.6-3_all.ipk')
+          with tarfile.open(path,mode='r:gz') as tar:
+              control=tar.extractfile('./control.tar.gz').read()
+          with tarfile.open(fileobj=io.BytesIO(control),mode='r:gz') as tar:
+              body=tar.extractfile('./control').read().decode()
+          assert 'Package: luci-app-component-updater\n' in body
+          assert 'Version: 0.5.6-3\n' in body
+          assert 'Architecture: all\n' in body
+          print('Native IPK control identity verified')
+          PY
+
+      - name: Publish immutable Stable Release with scoped device support
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/component-updater-stable-notes.md <<'NOTES'
+          ## LuCI Component Updater V0.5.6 Stable · scoped devices (IPK + APK)
+
+          Stable release for normal package updates and manual rollback on GL-MT3600BE (IPK/opkg) and the audited Redmi AX6S firmware (APKv3). N1 physical testing is not required for this release, and N1 is not claimed as hardware certified.
+
+          Both manager files come from one successful pinned main CI run 44898618719 (commit 91008d098080552e8579872ec52f1bb9cb87b366); SHA256SUMS.txt is included.
+
+          AX6S evidence: manager web 0.5.6-r3 -> test-only r4 -> r3 rollback; NaiveProxy APK 154.0.8037.49.5-r1 -> r3 -> r1 rollback, original ELF SHA256 restored, config and /etc/apk/world preserved.
+
+          MT3600BE IPK evidence: the owner confirmed real-device normal update and rollback. LuCI mobile UI, proxy official-version query and retained settings are separately documented. Complete three-stage IPK command logs were not archived; no unknown CLI hashes or exact upgrade versions are inferred. Native opkg 21.02.5 and 24.10.5 rootfs install/rollback tests passed CI.
+
+          Not validated: N1 physical testing (not a release requirement), live PassWall traffic or process hot switching, physical interrupted downloads/write failures, power-loss recovery or other APK firmware. AX6S had no active PassWall. The stale check_state=ready with ready=false is a known nonblocking display artifact.
+
+          SHA256 and GitHub digest are not independent digital signatures. Keep an independent recovery path. AX6S_APK_AUTO_PUBLISH stays disabled; this approval applies only to this one manually triggered release.
+          NOTES
+          if gh release view "$TAG" >/dev/null 2>&1 ||
+             gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag or release appeared while checking; do not overwrite."
+            exit 1
+          fi
+          gh release create "$TAG" "dist/$IPK" "dist/$APK" dist/SHA256SUMS.txt \
+            --target "$SOURCE_SHA" --title 'LuCI Component Updater V0.5.6 Stable' \
+            --latest --notes-file /tmp/component-updater-stable-notes.md
+          gh api "repos/$GH_REPO/releases/tags/$TAG" |
+            jq -e --arg ipk "$IPK" --arg apk "$APK" '
+              .prerelease == false and .draft == false and
+              ([.assets[].name] | sort) == ([$ipk, $apk, "SHA256SUMS.txt"] | sort)
+            '
+          echo "::notice::Stable published; auto-publish gate remains unchanged."
