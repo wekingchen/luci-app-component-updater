@@ -1,22 +1,14 @@
-# 管理器 V0.5.6 RC3 的一次性人工发布（历史候选）
+# V0.5.6 RC3 手动发布尝试 · 历史归档（已退役）
 
-> **2026-11-21 更新**：用户改为按 MT3600BE + 指定固件 AX6S 的限定设备范围推进 **V0.5.6 Stable**，N1 不需要真机测试。RC3 人工工作流已退役；改用 [V0.5.6 Stable 自动发布](manual-manager-v0.5.6-stable.md)，不再要求输入确认码。
+> **请勿按此文档操作发版。** V0.5.6 正式版本已于 2026-11-21 通过主分支 CI 的一次性自动发布流程创建，并将标题与发行说明修正为简体中文。
 
-**状态**：仅在 GitHub Actions 中人工触发的 **RC/prerelease** 发布入口；不影响 `AX6S_APK_AUTO_PUBLISH` 自动稳定发布安全门禁。这个工作流只发布 V0.5.6-r3 APK 和 V0.5.6-3 IPK，不做设备安装。
+当时曾为 RC3 候选建立仅能手动触发的发布工作流，用于复用同一主分支 CI 的 IPK/APK 资产；随后改为限定 MT3600BE（IPK）和已适配 AX6S（APK）的 Stable 发布范围，**N1 不需要专门真机验收**。旧 RC3 工作流已从主分支删除，因此旧说明中的确认码、Run workflow 操作与“尚未发布”判定均已失效。
 
-## 何时可以使用
+V0.5.6 Stable 初次手动发布失败的直接原因是确认字串大小写不一致；修复后采用固定版本、可信 main CI 成功自动触发、精确资产来源及摘要核验、已存在同名 Release 则安全跳过的方案。该一次性授权**不延伸至未来新版本**，`AX6S_APK_AUTO_PUBLISH` 仍关闭。
 
-- GitHub 主分支的 `Component Updater / CI & native IPK/APK` Run [44897597757](https://github.com/wekingchen/luci-app-component-updater/actions/runs/44897597757) 已成功、双包 Artifact 没有过期。
-- 该 Run 对应的源提交固定为 `8981a7f8e08b3f788080b36a716a27ec08052b46`，工作流只复用该次已成功的构建资产，不二次编译。
-- AX6S 的 APK 管理器自升级/回滚、NaiveProxy 正常安装/回滚已有实体设备证据；IPK 为两代原生 opkg 隔离 rootfs 与 CI 证据，GL-MT3600BE、N1 尚无同等级完整升级/回滚实机证据。
-- 整机稳定版 G4 未满足，因此此发布必须为 `--prerelease --latest=false`，不得标记 Stable。
+- [当前中文正式版 Release](https://github.com/wekingchen/luci-app-component-updater/releases/tag/luci-app-component-updater-v0.5.6)
+- [正式版发布工作流与安全边界](manual-manager-v0.5.6-stable.md)
+- [中文正式版发行说明](releases/v0.5.6-zh-CN.md)
+- [版本及验证门禁](acceptance-gates.md)
 
-## 操作
-
-原 RC3 发布动作已经停用。新版本发布进展以 [V0.5.6 Stable](https://github.com/wekingchen/luci-app-component-updater/releases/tag/luci-app-component-updater-v0.5.6) 的真实资产为准。
-
-工作流验证固定 CI Run 的源码 SHA、通过状态、Artifact 名称和摘要，验证包号与文件 SHA256；若标签或 Release 已存在就直接失败，**绝不覆盖已发布文件或重新指向标签**。该工作流没有 push、schedule 或 PR 发布触发器，只有本人主动手工运行才可能发布。
-
-## 发布后的边界
-
-这个 RC 是**正式公开的预发布**，不是稳定版认证。保留未验收：IPK 两台实机的完整升级回滚、PassWall 实时流量、异常/断电恢复与未知 APK 设备兼容性。自动发布门禁保持关闭。发布后不要将 RC3 的成功解释为所有环境 G4 验收完成。
+此文件只保留版本发布决策的历史背景，**不再包含可执行的旧 RC3 发布步骤**。

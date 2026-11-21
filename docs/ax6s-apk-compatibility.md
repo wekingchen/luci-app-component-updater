@@ -39,7 +39,7 @@
 
 ## AX6S 实际安装后菜单缺失回归（2026-11-20）
 
-真实 AX6S 上，用户成功以本地 `--no-network --allow-untrusted` 安装管理器 `0.5.3-r1`（并确认 APK 已安装），但是 LuCI 菜单未出现。云端测试检查包数据库和 JSON 文件，不代表真实 HTTP 进程已重新读取菜单与 ACL。本次暴露出旧版 APK 的 post-install 仅 `rpcd reload`，与 IPK 的 `rpcd restart` 不一致。V0.5.4 在包内使用同一控制面刷新脚本：清理 LuCI 临时索引和模块缓存，重启 rpcd 和 uhttpd，**不重启 NaiveProxy/PassWall**。此变更尚须真机复验，也不能排除 ACL/菜单路径等其他原因。
+真实 AX6S 上，用户成功以本地 `--no-network --allow-untrusted` 安装管理器 `0.5.3-r1`（并确认 APK 已安装），但是 LuCI 菜单未出现。云端测试检查包数据库和 JSON 文件，不代表真实 HTTP 进程已重新读取菜单与 ACL。本次暴露出旧版 APK 的 post-install 仅 `rpcd reload`，与 IPK 的 `rpcd restart` 不一致。V0.5.4 在包内使用同一控制面刷新脚本：清理 LuCI 临时索引和模块缓存，重启 rpcd 和 uhttpd，**不重启 NaiveProxy/PassWall**。此段记录 2026-11-20 当时的修复预案；其后 AX6S 已实际通过 LuCI 菜单、管理器升级回滚及 NaiveProxy 更新回滚，但不能据此补造当时缺失的菜单/ACL 单独诊断日志。
 
 ## 2026-11-21 AX6S 真机：NaiveProxy r1 → r3 → r1 完整正常更新与手动回滚
 
@@ -64,4 +64,4 @@
 
 **已通过的分项**：实体 AX6S 上的管理器网页自升级/回滚，以及 NaiveProxy 正常 APK 检查、下载安装、原配置与 world 保持、手动 r3→r1 回滚。设备的实际 Flash/overlay 写入在正常安装/恢复场景已经发生，不能再笼统写成「真机写入和回滚从未测试」。
 
-**尚未验证**：真实代理进程运行中热切换、PassWall/NaiveProxy 流量与服务恢复、下载中断、损坏包导致的自动恢复、Flash/Overlay 写入失败、意外断电、所有桌面 LuCI 导航场景和其它 APK 固件身份。由于本次设备未运行 PassWall，这些运行时项目不能据此视为通过。**整机完整验收和稳定版资格尚未达到**；RC / prerelease 与自动发布门禁继续保持。
+**尚未验证**：真实代理进程运行中热切换、PassWall/NaiveProxy 流量与服务恢复、下载中断、损坏包导致的自动恢复、Flash/Overlay 写入失败、意外断电、所有桌面 LuCI 导航场景和其它 APK 固件身份。由于本次设备未运行 PassWall，这些运行时项目不能据此视为通过。**本次 V0.5.6 已以限定设备的正常升级与手动回滚能力正式发布 Stable**；上述未验证项不因此变成通过，未来版本的自动发布门禁继续保持关闭。
