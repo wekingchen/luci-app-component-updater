@@ -12,6 +12,10 @@
 | G3：实机写入与回滚 | 备份、真实安装、依赖、服务、配置、失败/手动回滚 | 待确认稳定 |
 | G4：审查与正式晋升 | 全部指定设备验收、回滚保障和记录可核查 | 稳定版资格 |
 
+## V0.5.6 RC3 的公开发布路径
+
+同一来源提交的 IPK/APK 双包已由主分支 CI 验证。为了不打开长期自动发布门禁，提供 [RC3 一次性人工发布工作流](https://github.com/wekingchen/luci-app-component-updater/actions/workflows/manual-manager-rc3-release.yml)，按要求输入确认字串才能执行；详细说明见 [人工发布指引](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/manual-manager-rc3-release.md)。**只有 GitHub Release 页面实际存在且三个资产核对完成，才算正式公开发布。**本次目标是预发布 RC，不代表已有 IPK 全部真机验收或 G4 通过。
+
 ## 本次版本的事实状态
 
 - **V0.5.4 AX6S LuCI 安装后菜单修复候选（未发布）**：用户真机安装 V0.5.3-r1 成功，但菜单未出现。V0.5.4 统一 APK 与 IPK post-install 控制面刷新，新增 mock-service 回归；仍需设备复测，不能将“包已安装”记为 LuCI UI 已验收通过。
