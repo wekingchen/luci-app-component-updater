@@ -30,4 +30,5 @@ jobs:
       - name: Prune only merged and unchanged development branches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ONE_TIME_V056_RELEASE_CLEANUP: '1'
         run: python3 scripts/prune_merged_branches.py

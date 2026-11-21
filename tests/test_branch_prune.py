@@ -69,5 +69,102 @@ class BranchCleanupTests(unittest.TestCase):
             self.assertIsNotNone(mod.ALLOWED.fullmatch(name))
 
 
+    def test_one_time_release_cleanup_requires_original_head_and_verified_release(self):
+        expected = mod.ONE_TIME_V056_RELEASE_BRANCHES
+        branches = {
+            name: {"name": name, "protected": False, "commit": {"sha": sha}}
+            for name, (sha, _) in expected.items()
+        }
+        merged = [
+            pr(name, sha, number)
+            for name, (sha, number) in expected.items()
+            if number is not None
+        ]
+        deleted = []
+        calls = []
+
+        def fake_api(path, method="GET"):
+            calls.append((path, method))
+            if method == "DELETE":
+                deleted.append(path)
+                return None
+            if path.endswith("/releases/tags/luci-app-component-updater-v0.5.6"):
+                return {
+                    "tag_name": "luci-app-component-updater-v0.5.6",
+                    "draft": False, "prerelease": False,
+                    "assets": [
+                        {"name": name, "digest": digest, "state": "uploaded"}
+                        for name, digest in mod.ONE_TIME_V056_RELEASE_ASSETS.items()
+                    ]
+                }
+            if "/compare/" in path:
+                self.assertIn("91008d098080552e8579872ec52f1bb9cb87b366...main", path)
+                return {"status": "ahead", "behind_by": 0}
+            raise AssertionError(path)
+
+        with patch.object(mod, "gh_api", side_effect=fake_api):
+            cleaned = mod.prune_one_time_v056_release_branches(
+                branches, merged, set()
+            )
+        self.assertEqual(set(cleaned), set(expected))
+        self.assertEqual(len(deleted), 3)
+        self.assertTrue(all("/git/refs/heads/release/" in p for p in deleted))
+        self.assertFalse(mod.ALLOWED.fullmatch("release/stable"))
+        # Running the same cleanup after the branches vanish is a safe no-op.
+        with patch.object(mod, "gh_api", side_effect=fake_api):
+            self.assertEqual(
+                mod.prune_one_time_v056_release_branches({}, merged, set()), []
+            )
+
+    def test_one_time_release_cleanup_rejects_drift_and_unverified_artifacts(self):
+        expected = mod.ONE_TIME_V056_RELEASE_BRANCHES
+        names = list(expected)
+        branches = {
+            names[0]: {"name": names[0], "protected": False,
+                       "commit": {"sha": "new-unmerged-work"}},
+            names[1]: {"name": names[1], "protected": True,
+                       "commit": {"sha": expected[names[1]][0]}},
+            names[2]: {"name": names[2], "protected": False,
+                       "commit": {"sha": expected[names[2]][0]}},
+        }
+        merged = [
+            pr(name, sha, number)
+            for name, (sha, number) in expected.items()
+            if number is not None
+        ]
+        deleted = []
+        def fake_api(path, method="GET"):
+            if method == "DELETE":
+                deleted.append(path)
+                return None
+            if path.endswith("/releases/tags/luci-app-component-updater-v0.5.6"):
+                return {
+                    "tag_name": "luci-app-component-updater-v0.5.6",
+                    "draft": False, "prerelease": False,
+                    "assets": [
+                        {"name": name, "digest": digest, "state": "uploaded"}
+                        for name, digest in mod.ONE_TIME_V056_RELEASE_ASSETS.items()
+                    ]
+                }
+            if "/compare/" in path:
+                return {"status": "diverged", "behind_by": 1}
+            raise AssertionError(path)
+        with patch.object(mod, "gh_api", side_effect=fake_api):
+            self.assertEqual(
+                mod.prune_one_time_v056_release_branches(
+                    branches, merged, set()), []
+            )
+        self.assertFalse(deleted)
+
+        def bad_release(path, method="GET"):
+            return {
+                "tag_name": "luci-app-component-updater-v0.5.6",
+                "draft": False, "prerelease": False, "assets": []
+            }
+        with patch.object(mod, "gh_api", side_effect=bad_release):
+            with self.assertRaises(RuntimeError):
+                mod.prune_one_time_v056_release_branches(branches, merged, set())
+
+
 if __name__ == "__main__":
     unittest.main()
