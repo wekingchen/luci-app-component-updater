@@ -13,7 +13,7 @@ import re
 import subprocess
 from urllib.parse import quote
 
-ALLOWED = re.compile(r"^(?:feat|fix|chore|docs|test|refactor|release)/[A-Za-z0-9._/-]+$")
+ALLOWED = re.compile(r"^(?:feat|fix|chore|docs|test|refactor)/[A-Za-z0-9._/-]+$")
 REPOSITORY = "wekingchen/luci-app-component-updater"
 PAGE_SIZE = 100
 
