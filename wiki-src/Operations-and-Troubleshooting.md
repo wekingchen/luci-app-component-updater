@@ -58,7 +58,7 @@ rm -rf /tmp/luci-modulecache/*
 
 随后退出 LuCI、重新登录，打开「系统 → 组件更新」或尝试直接访问 `/cgi-bin/luci/admin/system/component-updater`。如果仍然没有菜单或直达页面报 403/404，必须读取实际菜单文件、ACL 和 LuCI 日志再定位，不能盲目将问题归因于缓存。
 
-V0.5.4 修复候选复用一套 IPK/APKv3 post-install 脚本，并通过隔离 mock 服务测试缓存清理与 rpcd/uhttpd 重启。**固件真机 UI 尚未验收通过，暂不进行 NaiveProxy 实机更新。**
+V0.5.4 修复候选复用一套 IPK/APKv3 post-install 脚本，并通过隔离 mock 服务测试缓存清理与 rpcd/uhttpd 重启。这属于 2026-11-20 的历史故障；2026-11-21 AX6S 用户已使用修复后的页面完成 NaiveProxy 正常更新与回滚。
 
 ## 管理器网页自升级及回滚（V0.5.6-r3）
 
@@ -74,7 +74,19 @@ apk list --installed --manifest luci-app-component-updater
 uci show component-updater
 ~~~
 
-回滚成功后 `job_state=rolled_back`、`recovery_required=false`、`busy=false` 为正常；`recovery_available=false` 可能只是本轮上一版恢复包已被消耗，不应误判为失败。该能力仅针对**管理器自身**，不代表 NaiveProxy 实时更新/回滚或断电恢复已通过。
+回滚成功后 `job_state=rolled_back`、`recovery_required=false`、`busy=false` 为正常；`recovery_available=false` 可能只是本轮上一版恢复包已被消耗，不应误判为失败。该能力仅针对**管理器自身**；NaiveProxy 的**正常**升级及手动回滚也已在真机单独通过（见下一节），但断电及异常恢复仍待测试。
+
+## AX6S NaiveProxy 原生 APK 真机升级/回滚验收
+
+2026-11-21 实体 AX6S 上已在 LuCI 完成 `naiveproxy 154.0.8037.49.5-r1 → r3 → r1`，升级任务为 `completed`，回滚任务为 `rolled_back`。升级后的二进制 SHA256 为 `fb19517f2738b131e23c6e49a30d246bf69a2cef835b37c7b6ae82c2168715da`；回滚后是原版 `94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861`。配置和 `/etc/apk/world` 三次 SHA256 均一致。用户当前停留在原厂 r1，无须为此次验收再次升级。
+
+~~~sh
+apk list --installed --manifest naiveproxy
+sha256sum /usr/bin/naive /etc/config/naiveproxy /etc/apk/world
+/usr/sbin/component-updaterctl status
+~~~
+
+回滚后 `rollback_available=false` 表示当前已恢复到此前备份版本；上游版本号仍为 `154.0.8037.49`，r1/r3 是同一官方版本的不同本地包修订。本次设备并未运行 PassWall，`runtime_processes=0` 属于预期，不能声称已验证运行中进程或代理流量。当前 `check_state=ready` 与 `ready=false` 同时出现，源于缓存的旧检查状态仍在，实际更新计划已清除、按钮正确禁用；这是待后续修复的状态一致性问题，不要为消除文案而绕过备份/校验保护。
 
 ## 常见问题
 

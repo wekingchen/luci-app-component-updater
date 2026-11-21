@@ -1,6 +1,8 @@
 **V0.5.6-r3 AX6S 管理器修复候选（2026-11-21 真机升级/回滚通过）**：修复升级时主动打断 LuCI 会话、遗留后台锁和终态反馈不清的问题。实体 AX6S 上已从 r3 通过网页升级到**仅供回归测试的 r4**，确认 APK 数据库及管理器均为 `0.5.6-r4`、`job_state=completed`、`busy=false`、`recovery_available=true`；随后从网页恢复上一版本 r3。回滚后 `apk list --installed --manifest luci-app-component-updater` 为 `luci-app-component-updater 0.5.6-r3`，`job_state=rolled_back`、`busy=false`、`recovery_required=false`，`uci show component-updater` 保留 `update_channel='stable'`、`keep_backups='2'`、GitHub 直连及预设反代等设置。回滚后 `recovery_available=false` 符合已使用上一版恢复包的结果，不代表失败。
 
-**发布与使用边界**：r3 是本轮应保留的交付版本，r4 只用于验证升级/回滚机制，不作为正式产品版本。从 r2 启动 r3 安装时使用的仍是 r2 worker，不保证该首次跳转不会断开登录或留锁。**此次真机通过仅针对管理器自身的网页升级与回滚，不代表 NaiveProxy 的实际更新/回滚、PassWall 流量、断电恢复或 AX6S 整机稳定版验收完成。**在完整硬件门禁达标之前，管理器只能以 RC/pre-release 方式发布，`AX6S_APK_AUTO_PUBLISH` 保持关闭。NaiveProxy 保留最多两级备份，管理器保留一级，更新与恢复失败时不得绕过事务保护。
+**发布与使用边界**：r3 是本轮应保留的交付版本，r4 只用于验证升级/回滚机制，不作为正式产品版本。从 r2 启动 r3 安装时使用的仍是 r2 worker，不保证该首次跳转不会断开登录或留锁。**当前真机已分别通过管理器网页升级/回滚与 NaiveProxy 正常 APK 升级/手动回滚；未验证 PassWall 实时流量、进程热切换、故障/断电恢复与 AX6S 整机稳定版门禁。**在完整硬件门禁达标之前，管理器只能以 RC/pre-release 方式发布，`AX6S_APK_AUTO_PUBLISH` 保持关闭。NaiveProxy 保留最多两级备份，管理器保留一级，更新与恢复失败时不得绕过事务保护。
+
+**AX6S NaiveProxy 真机收尾（2026-11-21）**：设备空间限制解除后，LuCI 已完成 `naiveproxy 154.0.8037.49.5-r1 → r3 → r1`。新版 ELF SHA256 为 `fb19517f2738b131e23c6e49a30d246bf69a2cef835b37c7b6ae82c2168715da`；回滚后恢复原厂 SHA256 `94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861`。更新前后及回滚后的 `/etc/config/naiveproxy` 和 `/etc/apk/world` 哈希完全一致，任务分别为 `completed` / `rolled_back`。用户没有运行 PassWall，`runtime_processes=0` 符合预期，不能据此宣称已测试代理流量。回滚后暂时停留原厂 r1。完整证据及剩余待办见[AX6S 实机验收记录](docs/ax6s-hardware-acceptance-checklist.md)。
 
 # LuCI 组件更新器
 
@@ -20,7 +22,7 @@
 
 在 LuCI 中完成组件版本检查、下载与 SHA256 校验、原生软件包更新、失败恢复和手动回滚。目前首个适配组件为 **NaiveProxy**；这不是固件升级器，也不允许执行任意远程命令。
 
-> **当前状态**：管理器 IPK 与 APK 已同版本发布。AX6S APK 组件通过指定真实固件镜像、原生 APK 数据库和 ARM64 隔离环境安装/回滚测试，但**尚未完成实体 AX6S 路由器的 Flash/overlay、LuCI 浏览器和 PassWall 实际流量验收**。RC 不等于稳定版，不等于所有 OpenWrt/APK 固件都兼容。
+> **当前状态（2026-11-21）**：管理器具备同版本 IPK/APK 打包能力，已公开版本及资产以 GitHub Releases 为准。AX6S 的 LuCI 管理器自升级/回滚与 NaiveProxy 原生 APK 正常升级/手动回滚均已有实体设备证据；**PassWall 运行与流量、异常恢复、断电恢复以及其他固件/设备兼容性未验收**。RC 不等于稳定版。
 
 ## 知识库与规则
 
@@ -37,7 +39,7 @@
 | 体系 | 已涉及环境 | 真实支持边界 |
 | --- | --- | --- |
 | opkg / IPK | GL-MT3600BE、Phicomm N1（LEDE / OpenWrt） | 现有 IPK 更新与回滚路径；原生 opkg 21.02.5 和 24.10.5 在隔离 rootfs 中完成回归 |
-| APK / APKv3 | 指定 AX6Sproject 2026.11.17-2044-AX6S-MTK 固件 | **V0.5.0 RC1 云端真实固件环境验证通过；V0.5.2 UI 候选仍待实体设备验收** |
+| APK / APKv3 | 指定 AX6Sproject 2026.11.17-2044-AX6S-MTK 固件 | **V0.5.6-r3 管理器网页自升级/回滚、NaiveProxy r1→r3→r1 原生 APK 安装及手动回滚已完成真机分项验收；网络/异常/断电与完整稳定版门禁仍未完成** |
 | 其它 APK 设备或新固件 | 暂未独立适配 | 只读或拒绝写入，不能绕过设备和软件包归属检查 |
 
 两种原生引擎共用中文 LuCI、rpcd 和 GitHub 下载设置；**不允许跨包管理器混装**。管理器 IPK 与 APK 同版本、同一个管理器 Release；组件 IPK/APK 可按不同的安装和验收链路分别发布，但共享经校验的上游版本。
