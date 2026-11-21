@@ -86,6 +86,47 @@ def release_policy_errors(ci, apk):
     return errors
 
 
+
+def current_stable_docs_errors(root, version):
+    """Catch stale 'latest release' claims; preserve explicitly historical records."""
+    if version != "0.5.6":
+        # Future version changes require their own release decision, not a V0.5.6 assertion.
+        return []
+    errors = []
+    tag_url = ("https://github.com/wekingchen/luci-app-component-updater/"
+               "releases/tag/luci-app-component-updater-v0.5.6")
+    for rel in ("README.md", "wiki-src/Home.md",
+                "wiki-src/Operations-and-Troubleshooting.md",
+                "wiki-src/Release-and-Verification.md"):
+        source = (root / rel).read_text(encoding="utf-8")
+        if tag_url not in source:
+            errors.append(f"{rel}: 未链接当前 V0.5.6 Stable 正式版")
+    expected = {
+        "README.md": ("当前正式版：V0.5.6 Stable", "N1 不需要实机测试"),
+        "wiki-src/Home.md": ("当前正式版本：V0.5.6 Stable", "N1"),
+        "docs/manual-manager-v0.5.6-stable.md": ("已完成的一次性自动发布", "已于 2026-11-21"),
+        "docs/ax6s-apk-compatibility.md": ("V0.5.6", "正式发布 Stable"),
+        "docs/product-ui-acceptance.md": ("历史验收档案", "不是 V0.5.6 Stable 的当前发布状态"),
+    }
+    for rel, snippets in expected.items():
+        source = (root / rel).read_text(encoding="utf-8")
+        for snippet in snippets:
+            if snippet not in source:
+                errors.append(f"{rel}: 缺少已发布稳定版事实: {snippet}")
+    old_claims = {
+        "README.md": ("已公开的管理器仍为 **V0.5.0 RC1**",),
+        "wiki-src/Home.md": ("完整设备验收前，只允许 RC/prerelease",),
+        "wiki-src/Operations-and-Troubleshooting.md": ("从 [管理器 V0.5.0 RC1 Release]",),
+        "docs/ax6s-apk-compatibility.md": ("整机完整验收和稳定版资格尚未达到",),
+    }
+    for rel, claims in old_claims.items():
+        source = (root / rel).read_text(encoding="utf-8")
+        for claim in claims:
+            if claim in source:
+                errors.append(f"{rel}: 仍把历史 RC 状态写成当前状态: {claim}")
+    return errors
+
+
 def validate(root=ROOT):
     errors = []
     required = [
@@ -141,6 +182,7 @@ def validate(root=ROOT):
                 errors.append(f"CI 双包版本不一致: {package}")
         if f'VERSION = "{v}-{r}"' not in texts["tools/package_ipk.py"]:
             errors.append("IPK 打包版本不同于 Makefile")
+        errors.extend(current_stable_docs_errors(root, v))
         if f"V{v}" not in readme or f"V{v}" not in read(root, "wiki-src/Home.md", errors):
             errors.append(f"README/Wiki 当前版本未同步 V{v}")
     return errors

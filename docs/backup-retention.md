@@ -43,7 +43,7 @@ df -h /etc /tmp
 
 ## 管理器 APK 自我更新（V0.5.6）
 
-独立于 NaiveProxy 目录，使用 `/etc/component-updater/manager/` 保存最多一个管理器历史恢复包及当前已验证 APK 缓存。上传包固定暂存 `/tmp/component-updater-manager-*.apk`，只允许从 LuCI 指定路径导入，严格校验文件摘要、包名、架构及安装文件路径，拒绝任意 APK/命令。首次更新须上传与当前安装版本一致的旧 APK，保障恢复可用。背景 worker 在 `/tmp` 执行，安装时禁用包内脚本，校验结果持久可观察；更新成功再单独重载 rpcd/uhttpd，绝不主动重启 PassWall。
+独立于 NaiveProxy 目录，使用 `/etc/component-updater/manager/` 保存最多一个管理器历史恢复包及当前已验证 APK 缓存。上传包固定暂存 `/tmp/component-updater-manager-*.apk`，只允许从 LuCI 指定路径导入，严格校验文件摘要、包名、架构及安装文件路径，拒绝任意 APK/命令。首次更新须上传与当前安装版本一致的旧 APK，保障恢复可用。背景 worker 在 `/tmp` 执行，安装时禁用包内脚本，校验结果持久可观察；V0.5.6-r3 后台 worker **不主动重启 rpcd/uhttpd**，避免打断 LuCI 会话；需要时由用户主动刷新页面加载新资源，且不会主动重启 PassWall。
 
 自我更新属于高权限功能，SHA256 与包名检查不等于独立代码签名；本地文件来源的可信度须由上传者判断。AX6S 实机已完成 V0.5.6-r3 → 仅供测试 r4 → r3 的管理器自升级及手动回滚，配置保留且任务终态正常；这不等于已测试异常写入、受控断电或运行中的代理流量。
 
