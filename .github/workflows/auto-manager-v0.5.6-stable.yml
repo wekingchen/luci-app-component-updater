@@ -100,7 +100,7 @@ jobs:
             exit 1
           }
           existing_title="$(printf '%s' "$existing" | jq -r .name)"
-          printf '%s' "$existing" | jq -r .body > /tmp/previous-release-notes.md
+          printf '%s' "$existing" | jq -rj .body > /tmp/previous-release-notes.md
           if [ "$existing_title" = "$RELEASE_TITLE" ] &&
              cmp -s "$notes_file" /tmp/previous-release-notes.md; then
             echo "::notice::The release is already fully localized; no changes needed."
@@ -109,7 +109,7 @@ jobs:
           gh release edit "$TAG" --title "$RELEASE_TITLE" --notes-file "$notes_file"
           updated="$(gh api "repos/$GH_REPO/releases/tags/$TAG")"
           test "$(printf '%s' "$updated" | jq -r .name)" = "$RELEASE_TITLE"
-          printf '%s' "$updated" | jq -r .body > /tmp/updated-release-notes.md
+          printf '%s' "$updated" | jq -rj .body > /tmp/updated-release-notes.md
           cmp "$notes_file" /tmp/updated-release-notes.md
           echo "::notice::Published V0.5.6 title and notes localized to Chinese; assets unchanged."
 
