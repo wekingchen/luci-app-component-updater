@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | GL-MT3600BE · opkg 固件 | `luci-app-component-updater_0.5.6-3_all.ipk` | 用户确认已完成 IPK 正常更新/回滚；手机 LuCI、反代查询与设置保留有记录；完整三阶段原始 Shell 日志未归档 |
 | Redmi AX6S · 已验证的指定 APKv3 固件 | `luci-app-component-updater-0.5.6-r3.apk` | 管理器网页自升级/回滚、NaiveProxy APK 正常更新/回滚均已真机通过，包数据库与 SHA256 可核对 |
-| Phicomm N1 · opkg | 通用 IPK 路线 | **不要求 N1 实机测试**，也不将 N1 描述为已获真机认证；以 opkg CI/隔离 rootfs 兼容性回归为证据 |
+| Phicomm N1 · opkg | 通用 IPK 路线 | **N1 不需要实机测试**，也不将 N1 描述为已获真机认证；以 opkg CI/隔离 rootfs 兼容性回归为证据 |
 | 其它 APK 设备及不同固件 | 不提供通用写入承诺 | 未独立适配时应由设备身份、架构及包归属检查拒绝安装，不能跨格式强制安装 |
 
 AX6S 验证的固件基线为 [AX6Sproject 2026.11.17-2044-AX6S-MTK](https://github.com/golldenstj/AX6Sproject/releases/tag/2026.11.17-2044-AX6S-MTK)；详见 [固件兼容证明](docs/ax6s-apk-compatibility.md)。两种管理器安装包**不能混装或互相改扩展名**。请从正式 Release 下载对应文件与 `SHA256SUMS.txt`，在更新前保留独立的管理通道和恢复手段。
