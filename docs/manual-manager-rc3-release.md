@@ -1,6 +1,6 @@
 # 管理器 V0.5.6 RC3 的一次性人工发布（历史候选）
 
-> **2026-11-21 更新**：用户改为按 MT3600BE + 指定固件 AX6S 的限定设备范围推进 **V0.5.6 Stable**，N1 不需要真机测试。本文件/原 RC3 工作流作为历史候选保留，请优先使用 [V0.5.6 Stable 的人工发布指引](manual-manager-v0.5.6-stable.md)，避免误发 RC3。
+> **2026-11-21 更新**：用户改为按 MT3600BE + 指定固件 AX6S 的限定设备范围推进 **V0.5.6 Stable**，N1 不需要真机测试。RC3 人工工作流已退役；改用 [V0.5.6 Stable 自动发布](manual-manager-v0.5.6-stable.md)，不再要求输入确认码。
 
 **状态**：仅在 GitHub Actions 中人工触发的 **RC/prerelease** 发布入口；不影响 `AX6S_APK_AUTO_PUBLISH` 自动稳定发布安全门禁。这个工作流只发布 V0.5.6-r3 APK 和 V0.5.6-3 IPK，不做设备安装。
 
@@ -13,7 +13,7 @@
 
 ## 操作
 
-进入 [GitHub Actions / Release / V0.5.6 RC3 manager (one-time manual)](https://github.com/wekingchen/luci-app-component-updater/actions/workflows/manual-manager-rc3-release.yml)，在主分支选择 **Run workflow**，输入 `PUBLISH_0.5.6_RC3`。完成后核对 [Release 标签 luci-app-component-updater-v0.5.6-rc3](https://github.com/wekingchen/luci-app-component-updater/releases/tag/luci-app-component-updater-v0.5.6-rc3) 的 IPK、APK 和 `SHA256SUMS.txt` 三个资产。
+原 RC3 发布动作已经停用。新版本发布进展以 [V0.5.6 Stable](https://github.com/wekingchen/luci-app-component-updater/releases/tag/luci-app-component-updater-v0.5.6) 的真实资产为准。
 
 工作流验证固定 CI Run 的源码 SHA、通过状态、Artifact 名称和摘要，验证包号与文件 SHA256；若标签或 Release 已存在就直接失败，**绝不覆盖已发布文件或重新指向标签**。该工作流没有 push、schedule 或 PR 发布触发器，只有本人主动手工运行才可能发布。
 

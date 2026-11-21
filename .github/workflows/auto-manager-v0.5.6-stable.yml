@@ -1,24 +1,21 @@
-name: Release / V0.5.6 Stable (scoped one-time manual)
+name: Release / V0.5.6 Stable (one-time automatic after CI)
 on:
-  workflow_dispatch:
-    inputs:
-      confirm_release:
-        description: 'Enter PUBLISH_0.5.6_STABLE to release both verified manager packages'
-        type: string
-        required: true
+  workflow_run:
+    workflows: ["Component Updater / CI & native IPK/APK"]
+    types: [completed]
+    branches: [main]
 
-# This is NOT the automatic AX6S stable-release gate. No push/PR/schedule trigger.
-# One-time, manually authorized RC publication from a pinned, successful main CI.
+# Only the pinned V0.5.6 package may be published; future versions stay gated.
 permissions:
   contents: read
 
 concurrency:
-  group: component-updater-manager-0.5.6-stable-manual
+  group: component-updater-manager-0.5.6-stable-once
   cancel-in-progress: false
 
 jobs:
   publish:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -27,7 +24,6 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
-      CONFIRM_RELEASE: ${{ inputs.confirm_release }}
       SOURCE_SHA: 91008d098080552e8579872ec52f1bb9cb87b366
       SOURCE_RUN_ID: '44898618719'
       ARTIFACT_ID: '14705110670'
@@ -36,45 +32,47 @@ jobs:
       IPK: luci-app-component-updater_0.5.6-3_all.ipk
       APK: luci-app-component-updater-0.5.6-r3.apk
     steps:
-      - name: Verify explicit release authorization and pinned successful main run
+      - name: Verify successful pinned CI and avoid duplicate publication
+        id: preflight
         shell: bash
         run: |
           set -euo pipefail
-          test "$CONFIRM_RELEASE" = 'PUBLISH_0.5.6_Stable' || {
-            echo "::error::Explicit Stable authorization text is required."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            existing="$(gh api "repos/$GH_REPO/releases/tags/$TAG")"
+            printf '%s' "$existing" | jq -e --arg ipk "$IPK" --arg apk "$APK" '
+              .prerelease == false and .draft == false and
+              ([.assets[].name] | sort) == ([$ipk, $apk, "SHA256SUMS.txt"] | sort)
+            ' >/dev/null || { echo "::error::Existing release metadata/assets differ; refusing overwrite."; exit 1; }
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::V0.5.6 Stable already published; no-op."
+            exit 0
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag already exists without matching release; refusing retarget."
             exit 1
-          }
+          fi
           run_info="$(gh api "repos/$GH_REPO/actions/runs/$SOURCE_RUN_ID")"
           printf '%s' "$run_info" | jq -e --arg sha "$SOURCE_SHA" '
-            .head_sha == $sha and
-            .head_branch == "main" and
-            .event == "push" and
-            .status == "completed" and
+            .head_sha == $sha and .head_branch == "main" and
+            .event == "push" and .status == "completed" and
             .conclusion == "success" and
             .name == "Component Updater / CI & native IPK/APK"
           ' >/dev/null
           artifact_info="$(gh api "repos/$GH_REPO/actions/artifacts/$ARTIFACT_ID")"
           printf '%s' "$artifact_info" | jq -e --arg digest "$ARTIFACT_DIGEST" --argjson run "$SOURCE_RUN_ID" '
             .name == "luci-app-component-updater-ipk" and
-            (.expired | not) and
-            .digest == $digest and
-            .workflow_run.id == $run
+            (.expired | not) and .digest == $digest and .workflow_run.id == $run
           ' >/dev/null
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::error::Release already exists: $TAG; immutable assets will not be replaced."
-            exit 1
-          fi
-          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
-            echo "::error::Tag already exists: $TAG; refusing to retarget."
-            exit 1
-          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
+        if: ${{ steps.preflight.outputs.skip != 'true' }}
         with:
           ref: 91008d098080552e8579872ec52f1bb9cb87b366
           persist-credentials: false
 
       - name: Confirm package versions and recheck source contracts
+        if: ${{ steps.preflight.outputs.skip != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -86,6 +84,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_release_contract.py -v
 
       - name: Download exactly the two artifacts from the pinned passing CI
+        if: ${{ steps.preflight.outputs.skip != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -115,6 +114,7 @@ jobs:
           PY
 
       - name: Publish immutable Stable Release with scoped device support
+        if: ${{ steps.preflight.outputs.skip != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -131,7 +131,7 @@ jobs:
 
           Not validated: N1 physical testing (not a release requirement), live PassWall traffic or process hot switching, physical interrupted downloads/write failures, power-loss recovery or other APK firmware. AX6S had no active PassWall. The stale check_state=ready with ready=false is a known nonblocking display artifact.
 
-          SHA256 and GitHub digest are not independent digital signatures. Keep an independent recovery path. AX6S_APK_AUTO_PUBLISH stays disabled; this approval applies only to this one manually triggered release.
+          SHA256 and GitHub digest are not independent digital signatures. Keep an independent recovery path. AX6S_APK_AUTO_PUBLISH stays disabled; this approval automatically publishes only V0.5.6 after trusted main CI; future versions remain gated.
           NOTES
           if gh release view "$TAG" >/dev/null 2>&1 ||
              gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
