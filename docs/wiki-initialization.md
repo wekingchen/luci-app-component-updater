@@ -16,7 +16,7 @@
 - 主仓库 `wiki-src/` 是**唯一事实源**；未来编辑 Markdown 后，`main` 分支变更会自动触发 Wiki 同步。
 - 同步只覆盖当前受托管的 8 个 Markdown 页面；不会删除社区自行创建的其它 Wiki 页面，不使用 `force push`。
 - 所有仓库 PR/fork 不会执行带 Wiki 写权限的推送步骤；仅可信的 `main` 触发。
-- 文档合约、Wiki 内部链接、IPK/APK 管理器版本、正式发布门禁均在主 CI 校验；Wiki 发布失败会单独标红，**不会伪称成功，也不会影响已发布的 V0.5.0 RC1 二进制**。
+- 文档合约、Wiki 内部链接、IPK/APK 管理器版本、正式发布门禁均在主 CI 校验；Wiki 发布失败会单独标红，**不会伪称成功，也不会影响已发布的 V0.5.6 Stable（或历史 V0.5.0 RC1）二进制**。
 - 2026-11-20 已完成 Wiki 内容一致性及实际写入验收。后续如果因 token 权限变化导致同步失败，应重新核验工作流与 Wiki 页面；不得以旧的成功记录证明新一次更新成功。
 
 可直接访问 [GitHub Wiki 首页](https://github.com/wekingchen/luci-app-component-updater/wiki) 或 [主仓库版本化源](../wiki-src/Home.md)。规则以主仓库 `AGENTS.md`、`docs/` 和测试为准。
