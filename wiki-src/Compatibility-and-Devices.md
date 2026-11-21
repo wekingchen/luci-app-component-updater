@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | GL-MT3600BE（GL.iNet 定制 OpenWrt） | opkg / IPK | 原有 IPK 路线；已有用户反馈的基础真实安装与界面操作，发布前的全量验收需按清单核对 |
 | Phicomm N1（LEDE/OpenWrt） | opkg / IPK | 原有 IPK 路线，隔离 rootfs 已覆盖原生 opkg，不能把隔离测试当作 N1 的完整实测 |
-| Redmi AX6S（`AX6Sproject 2026.11.17-2044-AX6S-MTK`） | APK / APKv3 | V0.5.0 RC1 已通过固件原始数据与 ARM64 chroot 安装/回滚；**实体路由器仍待验收** |
+| Redmi AX6S（`AX6Sproject 2026.11.17-2044-AX6S-MTK`） | APK / APKv3 | 已有原固件 rootfs/ARM64 回归及实体 AX6S **管理器自升级/回滚、NaiveProxy r1→r3→r1 正常安装与手动恢复**实测；运行时代理流量、异常及断电恢复未验收 |
 | 其他 AX6S 固件或其他 APK 设备 | APK / APKv3 | **暂未适配；保持只读或禁止写入**，不可推断兼容 |
 | 未经适配的组件或设备 | 任意 | 不提供强制安装绕过 |
 

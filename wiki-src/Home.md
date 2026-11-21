@@ -2,9 +2,11 @@
 
 **面向 OpenWrt 的中文组件更新平台**。在路由器 LuCI 中检查组件官方稳定版、下载预先构建并校验的软件包、执行本机原生软件包更新，以及在失败时恢复旧版本。
 
-> **已公开版本 V0.5.0 RC1（预发布）**，管理器 IPK/APK 均已发布。**V0.5.3 是尚未公开发布的状态提示修复候选**：V0.5.2 的 MT3600BE 真机 Safari 首页与设置界面已完成可读性检查，预设反代节点及保存可用；在用户选择 API 与文件均使用中转的模式下，官方更新检查成功。V0.5.3 修复“已是最新”时仍提示首次检查、继续突出检查按钮的不一致。AX6S APK 路线通过真实固件镜像/ARM64 隔离环境测试，**尚未完成实体 AX6S 验收**。
+> **当前实机进展（2026-11-21）**：AX6S 的 V0.5.6-r3 管理器网页自升级与手动回滚、NaiveProxy 原生 APK 从 `154.0.8037.49.5-r1 → r3 → r1` 的正常升级与手动回滚均已通过实体设备分项验收。NaiveProxy 配置及 `/etc/apk/world` 的 SHA256 在升级/回滚前后一致，原厂程序哈希已恢复。**此次设备未运行 PassWall，异常恢复与断电恢复仍未验证；完整稳定版门禁未解除。**管理器已公开 Release 版本与资产以 GitHub Releases 为准。
 
-> **V0.5.5 是正在 CI 验证的 AX6S 手机页头布局修复候选，未公开发布。** AX6S 真机上 V0.5.3-r1 已通过离线 APK 安装并出现在本机软件包数据库，但用户反馈 LuCI 菜单缺失。用户已确认手动清理缓存并重启 rpcd/uhttpd 后菜单出现。新候选补齐独立 IPK/APK 与 SDK Makefile 安装后激活和桌面端局部层级隔离；V0.5.4 已在 AX6S 实机展示主页面，但出现页头竖排与滚动遮挡。V0.5.5 修复组件页头与固件全局 `header` 样式冲突，并对 AX6S 反馈的“检查失败但误显示安装进行中”增加 UI 状态与错误阶段修复。后续实机状态已确认：初始检查失败是 12.3 MiB Overlay 低于旧版 16 MiB 固定门槛；V0.5.5-r3 已在 AX6S 手机端验证官方版本检查与安全空间拒装，完整升级/回滚及桌面抽屉仍待验收。
+> **历史回顾**：V0.5.2/0.5.3 的 MT3600BE UI、反代状态文字候选，以及 AX6S 早期 LuCI 菜单、页头和低空间预检问题，已由后续 0.5.5/0.5.6 迭代分别处理；这些历史记录不能取代以下最新验收事实。
+
+> **此前问题的状态**：AX6S 早期存在安装后 LuCI 菜单缺失、组件标题竖排和 Overlay 空间不足导致拒装。2026-11-21 用户解决空间后，当前 LuCI 已可检查并实际执行 NaiveProxy 正常升级与手动回滚；但桌面固件抽屉及其它极端/故障场景仍待复核。
 
 ## 从哪里开始？
 
@@ -17,6 +19,8 @@
 
 当前 UI 验收基准见 [V0.5.5 视觉与功能验收清单](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/product-ui-acceptance.md)。
 
+> **回滚后的最新状态**：AX6S 当前由用户确认停留原厂 `naiveproxy 154.0.8037.49.5-r1`，`job_state=rolled_back`、`rollback_available=false` 正常；`runtime_processes=0` 因为没有运行 PassWall。存在非阻断性旧检查信息残留 `check_state=ready` / `ready=false`，留待后续修复。
+
 ## 最新产物
 
 - [组件更新器 V0.5.0 RC1：同一 Release 下的 IPK / APK](https://github.com/wekingchen/luci-app-component-updater/releases/tag/luci-app-component-updater-v0.5.0-rc1)
@@ -28,4 +32,4 @@
 
 > **V0.5.6-r3 / 2026-11-21 管理器真机验收进展**：实体 AX6S 已经通过网页执行 `r3 → r4（仅供回归测试）→ r3`，升级后任务 `completed`、`busy=false`、回滚可用；回滚后 APK 数据库回到 r3、任务 `rolled_back`、`busy=false`，原 UCI 组件配置保留。r2 首次跳转 r3 时仍运行 r2 旧 worker，不保证无感刷新；从 r3 启动的升级/回滚闭环已实测通过。r3 是建议保留的交付候选版本，r4 不是正式新功能版。
 
-> **发布边界**：V0.5.6-r3 管理器子流程的真机验收不能替代 AX6S NaiveProxy 更新/回滚、PassWall 实时流量及断电恢复测试。完整设备验收前，只允许 RC/prerelease，不得解除 `AX6S_APK_AUTO_PUBLISH` 安全门禁；是否已公开发布以 [GitHub Releases](https://github.com/wekingchen/luci-app-component-updater/releases) 实际资产为准。早期 r1/r2 启用网页自升级的试验与故障修复记录保留在版本历史。
+> **发布边界**：V0.5.6-r3 管理器与 AX6S NaiveProxy 正常 APK 升级/回滚子流程已分别取得真机证据，但不能替代 PassWall 实时流量、异常恢复及断电恢复测试。完整设备验收前，只允许 RC/prerelease，不得解除 `AX6S_APK_AUTO_PUBLISH` 安全门禁；是否已公开发布以 [GitHub Releases](https://github.com/wekingchen/luci-app-component-updater/releases) 实际资产为准。早期 r1/r2 启用网页自升级的试验与故障修复记录保留在版本历史。

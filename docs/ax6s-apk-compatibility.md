@@ -1,4 +1,4 @@
-# AX6S APKv3 原生更新与回滚 · V0.5.0 RC1
+# AX6S APKv3 原生更新与回滚 · 固件适配及真机分项验收
 
 ## 验证的固件来源
 
@@ -41,8 +41,27 @@
 
 真实 AX6S 上，用户成功以本地 `--no-network --allow-untrusted` 安装管理器 `0.5.3-r1`（并确认 APK 已安装），但是 LuCI 菜单未出现。云端测试检查包数据库和 JSON 文件，不代表真实 HTTP 进程已重新读取菜单与 ACL。本次暴露出旧版 APK 的 post-install 仅 `rpcd reload`，与 IPK 的 `rpcd restart` 不一致。V0.5.4 在包内使用同一控制面刷新脚本：清理 LuCI 临时索引和模块缓存，重启 rpcd 和 uhttpd，**不重启 NaiveProxy/PassWall**。此变更尚须真机复验，也不能排除 ACL/菜单路径等其他原因。
 
+## 2026-11-21 AX6S 真机：NaiveProxy r1 → r3 → r1 完整正常更新与手动回滚
+
+用户在 Redmi AX6S 实体路由器的 LuCI 页面上完成检查更新、下载并更新和「恢复上一个版本」，以 SSH 原始输出核对了**同一上游版本的两个 APK 构建修订**（不是 NaiveProxy 上游版本升级）：
+
+| 校验项 | 更新前（原厂） | 更新后（优化构建） | 网页回滚后 |
+| --- | --- | --- | --- |
+| `apk list --installed --manifest naiveproxy` | `154.0.8037.49.5-r1` | `154.0.8037.49.5-r3` | `154.0.8037.49.5-r1` |
+| `/usr/bin/naive` SHA256 | `94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861` | `fb19517f2738b131e23c6e49a30d246bf69a2cef835b37c7b6ae82c2168715da` | `94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861` |
+| `/etc/config/naiveproxy` SHA256 | `201d0b3afd1e131f7695a4e4f541ec0ff6447dc8bf824eb8f96827d530b03682` | 相同 | 相同 |
+| `/etc/apk/world` SHA256 | `5f8b004990fc8d141196c98b55917df51c41ceecea7bdcc7163cf5960eb9ac2a` | 相同 | 相同 |
+| `job_state` | — | `completed` | `rolled_back` |
+| `rollback_available` | 初始网页禁用 | `true` | `false`（上一版本已恢复） |
+
+- 更新后程序输出 `naive 154.0.8037.49`，组件管理器报告 `package_version=154.0.8037.49.5-r3`、`job_message=Native APK installed; PassWall not restarted`；回滚后报告 `package_version=154.0.8037.49.5-r1`、`job_message=Original APK version and configuration restored`。
+- 设备识别：`device_board=xiaomi,redmi-router-ax6s`、`firmware_target=mediatek/mt7622`、`architecture=aarch64_cortex-a53`、`compatibility=ax6s-apk-native`。用户处理空间限制后，页面实际进入「新版本已准备就绪」，并能执行安装。
+- 已证实：本机真实 APK 软件包更新、可执行文件替换、原配置及 APK world 完整保留、正常手动回滚和原文件恢复。已安装版本与 SHA256 的前后对比由用户实机 Shell 输出支持。
+- **未验证**：用户明确表示当前没有运行 PassWall，`runtime_processes=0` 属于预期；因此本次**不构成代理流量、进程热切换或连接不中断验收**。也未实际诱发下载中断、损坏包、安装中故障、overlay 写入失败及断电恢复。
+- **已知小问题（不阻断回滚，留待后续版本修复）**：更新/回滚后 `check_state=ready`、`check_message=Verified native APK is ready for manual installation` 是检查阶段残留，实际 `ready=false`；页面的版本、按钮及回滚状态已正确刷新。后续将终态检查状态与已清除的更新计划统一，补单测；本次仅更新验收文档，不改运行逻辑或另发 r4。
+
 ## 尚需实体 AX6S 验收
 
-**这是一份实现完成、云端隔离回归通过的 RC，并非已在真实 AX6S 路由器上验收的稳定版。** 当前无实体设备控制权，无法验证 Flash 写入失败、设备实际 overlay 空间、保活的 PassWall 工作状态、LuCI/rpcd UI 及反代连接、真实断电后的恢复行为。最终需真实设备完成：安装管理器并保留配置、检查更新、升级、回滚、断网/断电恢复、现有代理连接与网络稳定性，随后才能确认商业发布门槛。
+**已通过的分项**：实体 AX6S 上的管理器网页自升级/回滚，以及 NaiveProxy 正常 APK 检查、下载安装、原配置与 world 保持、手动 r3→r1 回滚。设备的实际 Flash/overlay 写入在正常安装/恢复场景已经发生，不能再笼统写成「真机写入和回滚从未测试」。
 
-开发分支及 RC 在这些门禁通过之前不应标记“真机验收通过”。
+**尚未验证**：真实代理进程运行中热切换、PassWall/NaiveProxy 流量与服务恢复、下载中断、损坏包导致的自动恢复、Flash/Overlay 写入失败、意外断电、所有桌面 LuCI 导航场景和其它 APK 固件身份。由于本次设备未运行 PassWall，这些运行时项目不能据此视为通过。**整机完整验收和稳定版资格尚未达到**；RC / prerelease 与自动发布门禁继续保持。
