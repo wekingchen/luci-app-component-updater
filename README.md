@@ -1,12 +1,14 @@
 **V0.5.6-r3 AX6S 管理器修复候选（2026-11-21 真机升级/回滚通过）**：修复升级时主动打断 LuCI 会话、遗留后台锁和终态反馈不清的问题。实体 AX6S 上已从 r3 通过网页升级到**仅供回归测试的 r4**，确认 APK 数据库及管理器均为 `0.5.6-r4`、`job_state=completed`、`busy=false`、`recovery_available=true`；随后从网页恢复上一版本 r3。回滚后 `apk list --installed --manifest luci-app-component-updater` 为 `luci-app-component-updater 0.5.6-r3`，`job_state=rolled_back`、`busy=false`、`recovery_required=false`，`uci show component-updater` 保留 `update_channel='stable'`、`keep_backups='2'`、GitHub 直连及预设反代等设置。回滚后 `recovery_available=false` 符合已使用上一版恢复包的结果，不代表失败。
 
-**发布与使用边界**：r3 是本轮应保留的交付版本，r4 只用于验证升级/回滚机制，不作为正式产品版本。从 r2 启动 r3 安装时使用的仍是 r2 worker，不保证该首次跳转不会断开登录或留锁。**当前真机已分别通过管理器网页升级/回滚与 NaiveProxy 正常 APK 升级/手动回滚；未验证 PassWall 实时流量、进程热切换、故障/断电恢复与 AX6S 整机稳定版门禁。**在完整硬件门禁达标之前，管理器只能以 RC/pre-release 方式发布，`AX6S_APK_AUTO_PUBLISH` 保持关闭。NaiveProxy 保留最多两级备份，管理器保留一级，更新与恢复失败时不得绕过事务保护。
+**发布与使用边界**：r3 是本轮应保留的交付版本，r4 只用于验证升级/回滚机制，不作为正式产品版本。**V0.5.6 Stable 的硬件验收目标仅为 MT3600BE（IPK）和指定固件 AX6S（APK），N1 不需要实机测试、不阻止发布，也不被宣称已通过 N1 真机验证。**MT3600BE IPK 正常更新/回滚由用户确认完成，但未归档三阶段原始命令输出。从 r2 启动 r3 安装时使用的仍是 r2 worker，不保证该首次跳转不会断开登录或留锁。**当前真机已分别通过管理器网页升级/回滚与 NaiveProxy 正常 APK 升级/手动回滚；未验证 PassWall 实时流量、进程热切换、故障/断电恢复与 AX6S 整机稳定版门禁。**可按上述限定设备和正常升级/手动回滚主路径一次性发布 Stable；未测的运行中流量、异常/断电恢复须明确披露，`AX6S_APK_AUTO_PUBLISH` 保持关闭。NaiveProxy 保留最多两级备份，管理器保留一级，更新与恢复失败时不得绕过事务保护。
 
 **AX6S NaiveProxy 真机收尾（2026-11-21）**：设备空间限制解除后，LuCI 已完成 `naiveproxy 154.0.8037.49.5-r1 → r3 → r1`。新版 ELF SHA256 为 `fb19517f2738b131e23c6e49a30d246bf69a2cef835b37c7b6ae82c2168715da`；回滚后恢复原厂 SHA256 `94a9d2ebce92b2fd877e1e7019dbfa09a7bb7a5d481ec593bd34b5d5abd2a861`。更新前后及回滚后的 `/etc/config/naiveproxy` 和 `/etc/apk/world` 哈希完全一致，任务分别为 `completed` / `rolled_back`。用户没有运行 PassWall，`runtime_processes=0` 符合预期，不能据此宣称已测试代理流量。回滚后暂时停留原厂 r1。完整证据及剩余待办见[AX6S 实机验收记录](docs/ax6s-hardware-acceptance-checklist.md)。
 
 # LuCI 组件更新器
 
-**V0.5.6 管理器网页自升级与安全清理候选（尚未公开发布）· OpenWrt 双包管理器中文组件更新平台**
+**V0.5.6 管理器网页自升级与安全清理 · IPK/APK 双格式已通过 CI，Stable 一次性人工发布入口已准备；是否正式公开以 GitHub Release 资产为准。**
+
+[限定设备 Stable 发布决策与人工发布指引](docs/manual-manager-v0.5.6-stable.md)：MT3600BE（IPK）与指定固件 AX6S（APK）；N1 不需要实机验收，后续自动发布门禁不变。
 
 > 已公开的管理器仍为 **V0.5.0 RC1**。2026-11-20 的 MT3600BE 手机截图确认旧版存在白底浅字、操作优先级不合理、设备信息过长的问题。V0.5.1 已经在 MT3600BE 手机上验证标题可读与主要操作。最新 V0.5.2 候选继续移除多余二级导航、处理 GL.iNet 主题蓝色条带、直接展示预设反代节点，并重新验收所有手机布局；尚不等于真机完成验收。
 

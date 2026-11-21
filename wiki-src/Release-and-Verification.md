@@ -16,6 +16,12 @@
 
 同一来源提交的 IPK/APK 双包已由主分支 CI 验证。为了不打开长期自动发布门禁，提供 [RC3 一次性人工发布工作流](https://github.com/wekingchen/luci-app-component-updater/actions/workflows/manual-manager-rc3-release.yml)，按要求输入确认字串才能执行；详细说明见 [人工发布指引](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/manual-manager-rc3-release.md)。**只有 GitHub Release 页面实际存在且三个资产核对完成，才算正式公开发布。**本次目标是预发布 RC，不代表已有 IPK 全部真机验收或 G4 通过。
 
+## V0.5.6 Stable 验收范围调整（2026-11-21）
+
+本次正式版的硬件目标收敛为 **MT3600BE（IPK/opkg）** 与 **指定固件 AX6S（APKv3）**；**N1 不需要真机测试，也不作为稳定版的阻塞条件**，N1 的 IPK 兼容性以现有原生 opkg CI 为基础，但不宣称 N1 已实测。用户确认 MT3600BE 的 IPK 正常更新与回滚已完成，仓库目前只有手机端 LuCI、反代版本查询、设置保留的具体记录，三阶段 IPK Shell 日志尚未归档，因此按用户确认而非完整原始日志的证据等级描述。AX6S 管理器及 NaiveProxy APK 正常升级回滚均已有详尽真机版本/哈希记录。
+
+Stable 的范围只涵盖这两个目标设备的**正常安装与手动回滚主流程**，不代表 PassWall 在线切换、实体异常写入或断电恢复已验证。自动发布开关仍关闭；一次性 Stable 发布须人工确认，不能自动授权后续版本。
+
 ## 本次版本的事实状态
 
 - **V0.5.4 AX6S LuCI 安装后菜单修复候选（未发布）**：用户真机安装 V0.5.3-r1 成功，但菜单未出现。V0.5.4 统一 APK 与 IPK post-install 控制面刷新，新增 mock-service 回归；仍需设备复测，不能将“包已安装”记为 LuCI UI 已验收通过。
@@ -33,7 +39,7 @@
 
 AX6S 实体路由器网页操作完成 `0.5.6-r3 → 0.5.6-r4 → 0.5.6-r3`，其中 r4 仅为测试修订号，无独立产品功能变化。升级后 APK 与管理器版本均为 r4、`job_state=completed`、`busy=false`、`recovery_available=true`；网页恢复上一版后 APK 与管理器均为 r3、`job_state=rolled_back`、`busy=false`、`recovery_required=false`。UCI 配置保持，回滚后 `recovery_available=false` 说明该轮恢复包已经使用。此前 r2 的终态空锁问题在本次 r3→r4 没有复现。未单独验证掉电恢复与组件安装失败自动恢复。
 
-因此可将 **管理器自身网页升级/回滚子流程**列为真机通过，但不能仅凭这一项宣称整个组件更新器 G3/G4 通过。NaiveProxy 的正常 APK 分项另见下文；管理器 r3 仍只能作为 RC 候选，自动发布门禁保持关闭。
+因此可将 **管理器自身网页升级/回滚子流程**列为真机通过，但不能仅凭这一项宣称整个组件更新器 G3/G4 通过。NaiveProxy 的正常 APK 分项另见下文；上述判断对应此前完整硬件门禁的历史口径。2026-11-21 用户决定采用 **MT3600BE/AX6S 限定范围 Stable**，详见本页设备范围调整；自动发布门禁仍保持关闭。
 
 ### NaiveProxy 正常 APK 升级与回滚真机证据（2026-11-21）
 

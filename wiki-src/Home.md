@@ -32,4 +32,4 @@
 
 > **V0.5.6-r3 / 2026-11-21 管理器真机验收进展**：实体 AX6S 已经通过网页执行 `r3 → r4（仅供回归测试）→ r3`，升级后任务 `completed`、`busy=false`、回滚可用；回滚后 APK 数据库回到 r3、任务 `rolled_back`、`busy=false`，原 UCI 组件配置保留。r2 首次跳转 r3 时仍运行 r2 旧 worker，不保证无感刷新；从 r3 启动的升级/回滚闭环已实测通过。r3 是建议保留的交付候选版本，r4 不是正式新功能版。
 
-> **发布边界**：V0.5.6-r3 管理器与 AX6S NaiveProxy 正常 APK 升级/回滚子流程已分别取得真机证据，但不能替代 PassWall 实时流量、异常恢复及断电恢复测试。完整设备验收前，只允许 RC/prerelease，不得解除 `AX6S_APK_AUTO_PUBLISH` 安全门禁；是否已公开发布以 [GitHub Releases](https://github.com/wekingchen/luci-app-component-updater/releases) 实际资产为准。早期 r1/r2 启用网页自升级的试验与故障修复记录保留在版本历史。
+> **发布边界**：V0.5.6 Stable 目标仅为 MT3600BE（IPK）与指定固件 AX6S（APK）。**N1 不需要真机测试，也不构成发布门槛**。MT3600BE 的 IPK 完整更新/回滚为用户确认，未归档三阶段 Shell 原始日志；AX6S 的正常更新与回滚已有实际版本/哈希记录。PassWall 实时流量、异常及断电恢复仍未实机验证。完整设备验收前，只允许 RC/prerelease，不得解除 `AX6S_APK_AUTO_PUBLISH` 安全门禁；是否已公开发布以 [GitHub Releases](https://github.com/wekingchen/luci-app-component-updater/releases) 实际资产为准。早期 r1/r2 启用网页自升级的试验与故障修复记录保留在版本历史。

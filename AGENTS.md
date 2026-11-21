@@ -17,7 +17,7 @@
 
 - 管理器 IPK 和 APK 必须**同一应用版本**，来自同一个主分支提交，同一次 CI 检查，并放在同一个管理器 Release；组件 IPK/APK 可分开构建与 Release，但必须使用同一个已验证的官方上游版本。
 - **CI 通过 ≠ 实际设备验收**。明确区分 Python 单测、真实软件包管理器隔离 rootfs 测试、ARM64 chroot、用户反馈的真机操作、完整设备验收。
-- RC 可以说明仍待实机测试，不得宣称稳定版。稳定版与后续 APK 自动发布需要完成 `docs/ax6s-hardware-acceptance-checklist.md` 的实际验收。
+- RC 可以说明尚待实机测试，不得误称稳定版。**V0.5.6 的一次性限定设备 Stable**以 MT3600BE（IPK）和指定固件 AX6S（APK）的正常更新/手动回滚证据为准；N1 **无需真机测试**，不得宣称 N1 已实测。后续自动 APK 发布仍按 `docs/ax6s-hardware-acceptance-checklist.md` 的网络与异常/断电门禁执行，不能借本次 Stable 绕过自动发布保护。
 - 保留 `AX6S_APK_AUTO_PUBLISH` 的安全门禁；禁止借修改文件或版本标记绕过它。V0.5.0 RC1 已经一次性授权并公开发布，不意味着日后通行许可。
 - 不重写既有 Release 资产、不悄悄改变旧 tag 下的二进制。发布版本变更须同步修改两种管理包、Release tag、回归测试和说明。
 
