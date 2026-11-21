@@ -21,3 +21,7 @@ N1 真机（无需测试）、PassWall 运行中流量/进程切换、实体设�
 **这不等于所有未来版本自动 Stable**。本次只对已确认的 V0.5.6 授权，其他版本仍需定义相应验收及发布规则；`AX6S_APK_AUTO_PUBLISH` 保持关闭。
 
 [核对 GitHub V0.5.6 Stable Release](https://github.com/wekingchen/luci-app-component-updater/releases/tag/luci-app-component-updater-v0.5.6)。未确认实际 Release 和附件存在前，不得宣称发版完成。
+
+## 正式版说明语言
+
+V0.5.6 Stable 的 GitHub Release **标题与更新说明以简体中文为准**。2026-11-21 首次自动发行时曾错误使用英文说明，后续通过受控工作流修正**原有 Release 元数据**：仅允许编辑固定标签的标题/说明，编辑前核对 APK、IPK、SHA256SUMS 三个附件的发布 SHA256，不覆盖二进制、不重新建标签，也不晋升新版本。中文说明源文件为 [V0.5.6 中文发行说明](releases/v0.5.6-zh-CN.md)。后续版本应优先撰写中文 Release Notes。

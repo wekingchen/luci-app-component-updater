@@ -15,6 +15,20 @@ class AutoStableContract(unittest.TestCase):
                   'PUBLISH_0.5.6_STABLE', 'PUBLISH_0.5.6_Stable',
                   'AX6S_APK_AUTO_PUBLISH ==', '  schedule:'):
             self.assertNotIn(v,WF)
+    def test_chinese_release_metadata_without_republishing_assets(self):
+        notes = (ROOT / 'docs/releases/v0.5.6-zh-CN.md').read_text()
+        self.assertIn('LuCI 组件更新器 V0.5.6 正式稳定版', WF)
+        self.assertIn('gh release edit', WF)
+        self.assertIn('--notes-file "$notes_file"', WF)
+        self.assertIn('steps.preflight.outputs.skip == \'true\'', WF)
+        self.assertIn('APK_SHA256:', WF)
+        self.assertIn('IPK_SHA256:', WF)
+        self.assertIn('SUMS_SHA256:', WF)
+        self.assertIn('N1 不要求额外实机测试', notes)
+        self.assertIn('MT3600BE', notes)
+        self.assertIn('AX6S', notes)
+        self.assertIn('SHA256SUMS.txt', notes)
+
     def test_one_time_pinned_artifact_and_fail_closed(self):
         for v in ('91008d098080552e8579872ec52f1bb9cb87b366',
                   '44898618719','14705110670',

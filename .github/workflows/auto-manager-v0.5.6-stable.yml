@@ -65,6 +65,54 @@ jobs:
           ' >/dev/null
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
+      # The release already exists. Correct its display language only; never replace binary assets.
+      - name: Checkout reviewed Chinese release notes
+        if: ${{ steps.preflight.outputs.skip == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: localized-release
+          persist-credentials: false
+
+      - name: Update existing V0.5.6 release title and notes to Chinese only
+        if: ${{ steps.preflight.outputs.skip == 'true' }}
+        shell: bash
+        env:
+          RELEASE_TITLE: 'LuCI 组件更新器 V0.5.6 正式稳定版'
+          APK_SHA256: 'sha256:5cd154cca438b599d29b5332eefa37c08043c4b6287aa386f591de7f2bff3cc7'
+          IPK_SHA256: 'sha256:6b6fcbd0c037d9083b47a49c0a17cd668a52de6558e4c0364957dc481d6aecdc'
+          SUMS_SHA256: 'sha256:51f14f2a1ee4a8da3a4a309edd32fb142eaff63d8400780e2864ba077d588a27'
+        run: |
+          set -euo pipefail
+          notes_file="localized-release/docs/releases/v0.5.6-zh-CN.md"
+          test -s "$notes_file"
+          existing="$(gh api "repos/$GH_REPO/releases/tags/$TAG")"
+          printf '%s' "$existing" | jq -e \
+            --arg tag "$TAG" --arg apk "$APK" --arg ipk "$IPK" \
+            --arg apksha "$APK_SHA256" --arg ipksha "$IPK_SHA256" --arg sumsha "$SUMS_SHA256" '
+            .tag_name == $tag and .draft == false and .prerelease == false and
+            (.assets | length) == 3 and
+            (any(.assets[]; .name == $apk and .digest == $apksha and .state == "uploaded")) and
+            (any(.assets[]; .name == $ipk and .digest == $ipksha and .state == "uploaded")) and
+            (any(.assets[]; .name == "SHA256SUMS.txt" and .digest == $sumsha and .state == "uploaded"))
+          ' >/dev/null || {
+            echo "::error::Published assets or digests changed; refusing to edit the release."
+            exit 1
+          }
+          existing_title="$(printf '%s' "$existing" | jq -r .name)"
+          printf '%s' "$existing" | jq -r .body > /tmp/previous-release-notes.md
+          if [ "$existing_title" = "$RELEASE_TITLE" ] &&
+             cmp -s "$notes_file" /tmp/previous-release-notes.md; then
+            echo "::notice::The release is already fully localized; no changes needed."
+            exit 0
+          fi
+          gh release edit "$TAG" --title "$RELEASE_TITLE" --notes-file "$notes_file"
+          updated="$(gh api "repos/$GH_REPO/releases/tags/$TAG")"
+          test "$(printf '%s' "$updated" | jq -r .name)" = "$RELEASE_TITLE"
+          printf '%s' "$updated" | jq -r .body > /tmp/updated-release-notes.md
+          cmp "$notes_file" /tmp/updated-release-notes.md
+          echo "::notice::Published V0.5.6 title and notes localized to Chinese; assets unchanged."
+
       - uses: actions/checkout@v4
         if: ${{ steps.preflight.outputs.skip != 'true' }}
         with:
@@ -119,19 +167,46 @@ jobs:
         run: |
           set -euo pipefail
           cat > /tmp/component-updater-stable-notes.md <<'NOTES'
-          ## LuCI Component Updater V0.5.6 Stable · scoped devices (IPK + APK)
-
-          Stable release for normal package updates and manual rollback on GL-MT3600BE (IPK/opkg) and the audited Redmi AX6S firmware (APKv3). N1 physical testing is not required for this release, and N1 is not claimed as hardware certified.
-
-          Both manager files come from one successful pinned main CI run 44898618719 (commit 91008d098080552e8579872ec52f1bb9cb87b366); SHA256SUMS.txt is included.
-
-          AX6S evidence: manager web 0.5.6-r3 -> test-only r4 -> r3 rollback; NaiveProxy APK 154.0.8037.49.5-r1 -> r3 -> r1 rollback, original ELF SHA256 restored, config and /etc/apk/world preserved.
-
-          MT3600BE IPK evidence: the owner confirmed real-device normal update and rollback. LuCI mobile UI, proxy official-version query and retained settings are separately documented. Complete three-stage IPK command logs were not archived; no unknown CLI hashes or exact upgrade versions are inferred. Native opkg 21.02.5 and 24.10.5 rootfs install/rollback tests passed CI.
-
-          Not validated: N1 physical testing (not a release requirement), live PassWall traffic or process hot switching, physical interrupted downloads/write failures, power-loss recovery or other APK firmware. AX6S had no active PassWall. The stale check_state=ready with ready=false is a known nonblocking display artifact.
-
-          SHA256 and GitHub digest are not independent digital signatures. Keep an independent recovery path. AX6S_APK_AUTO_PUBLISH stays disabled; this approval automatically publishes only V0.5.6 after trusted main CI; future versions remain gated.
+          # LuCI 组件更新器 V0.5.6 正式稳定版
+          
+          本次提供 **IPK（opkg）与 APK（APKv3）两种原生管理器安装包**，适用于经过本轮验收的指定设备和固件。首个受支持的更新组件为 **NaiveProxy**。本软件用于更新组件，不负责升级路由器固件。
+          
+          ## 安装包
+          
+          | 设备与软件包体系 | 发布文件 |
+          | --- | --- |
+          | GL-MT3600BE · opkg / IPK | `luci-app-component-updater_0.5.6-3_all.ipk` |
+          | Redmi AX6S · 已适配固件 / APKv3 | `luci-app-component-updater-0.5.6-r3.apk` |
+          
+          请同时下载 `SHA256SUMS.txt` 校验文件完整性。IPK 与 APK 是**两种不同格式**，不能混装。
+          
+          ## 本次主要能力
+          
+          - 中文 LuCI 页面，适配移动端与桌面端。
+          - 查询 NaiveProxy 官方版本，支持 GitHub 直连或可选反代下载。
+          - 核对下载文件与发布资产摘要，使用对应固件的原生包管理器执行更新。
+          - 升级前保留恢复基线，支持管理器自身升级、组件更新及手动恢复上一版本。
+          - 更新和回滚时保留原有 UCI 配置；AX6S APKv3 额外保护 `/etc/apk/world`。
+          
+          ## 已完成的验证
+          
+          **AX6S（APKv3，指定固件）：** 真机通过管理器 `0.5.6-r3 → 测试版 r4 → r3` 的网页升级、回滚；NaiveProxy 组件通过 `154.0.8037.49.5-r1 → r3 → r1` 的正常升级、回滚。回滚后原始程序 SHA256 与更新前一致，NaiveProxy 配置和 `/etc/apk/world` 的哈希在更新前后保持一致。
+          
+          **GL-MT3600BE（IPK/opkg）：** 用户确认已完成实际 IPK 更新与回滚；此前也验证了手机 LuCI 页面、GitHub 反代版本查询与设置保留。仓库尚未归档完整三阶段的终端命令日志，因此不声称拥有未提供的具体版本或哈希记录。
+          
+          **自动化回归：** 已覆盖原生 opkg 21.02.5 / 24.10.5 软件环境、APKv3、ARM64、软件包安装与恢复、LuCI/rpcd 及相关单元测试。
+          
+          ## 兼容范围与注意事项
+          
+          - 本次正式版的主要验收目标是 **GL-MT3600BE（IPK）** 和 **指定固件的 Redmi AX6S（APK）**。
+          - **N1 不要求额外实机测试**，保留通用 IPK 兼容路径；这不代表已经完成 N1 真机认证。
+          - 没有验证运行中的 PassWall 代理流量、进程热切换、实体设备写入失败和意外断电后的恢复，也不能据此推断其他 APK 固件兼容。
+          - 已知非阻断问题：组件完成更新或回滚后，旧的 `check_state=ready` 检查状态可能残留；实际 `ready=false` 和已安装版本为准。
+          - 发布摘要校验**不等于独立数字签名**。请使用可信来源下载，并保留独立的设备管理和恢复通道。
+          
+          **发布原则：** 本版是经过限定设备正常升级及手动回滚验收的稳定版；后续新版本不会自动继承本次稳定认证，仓库的通用自动发布保护仍然关闭。
+          
+          详细验收记录：[AX6S 真机验收](https://github.com/wekingchen/luci-app-component-updater/blob/main/docs/ax6s-hardware-acceptance-checklist.md) · [设备与兼容边界](https://github.com/wekingchen/luci-app-component-updater/wiki/Compatibility-and-Devices)
           NOTES
           if gh release view "$TAG" >/dev/null 2>&1 ||
              gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
@@ -139,7 +214,7 @@ jobs:
             exit 1
           fi
           gh release create "$TAG" "dist/$IPK" "dist/$APK" dist/SHA256SUMS.txt \
-            --target "$SOURCE_SHA" --title 'LuCI Component Updater V0.5.6 Stable' \
+            --target "$SOURCE_SHA" --title 'LuCI 组件更新器 V0.5.6 正式稳定版' \
             --latest --notes-file /tmp/component-updater-stable-notes.md
           gh api "repos/$GH_REPO/releases/tags/$TAG" |
             jq -e --arg ipk "$IPK" --arg apk "$APK" '
