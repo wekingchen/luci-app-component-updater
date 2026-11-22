@@ -235,7 +235,7 @@ return view.extend({
                 ]),
                 E('p',{'class':'cu-mini-note'},'首次网页更新前，若当前管理器没有本地安装包缓存，必须上传完全相同版本的旧 APK 用于离线回滚。此后每次升级自动保存最新包，历史只保留一个可恢复版本。'),
                 E('p',{'class':'cu-mini-note'},'上传文件暂存在 /tmp；恢复文件存放于 /etc/component-updater/manager，独立于 NaiveProxy 的恢复目录。')
-            ])
+            ].filter(function(child) { return child != null; }))
         ];
     },
     repaint:function() {

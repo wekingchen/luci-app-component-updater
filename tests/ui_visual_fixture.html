@@ -31,7 +31,7 @@
 <div class="host-shell"><main class="cu-app">
 <div class="cu-page-head">
 <span class="cu-overline">组件管理 · 安全更新</span>
-<div class="cu-page-title-row"><h2>组件更新</h2><a class="cu-page-settings" href="#settings">下载设置</a></div>
+<div class="cu-page-title-row"><h2>组件更新</h2><div class="cu-page-tool-links"><a class="cu-page-settings" href="#settings">下载设置</a></div></div>
 <p>先检查可用更新，再决定安装；需要时可恢复已备份的版本。</p>
 </div>
 <section class="cu-hero" aria-label="组件更新状态">
@@ -72,6 +72,11 @@
 <a href="#">GitHub 下载与反代设置</a></footer>
 </main></div>
 <script>
+if(location.search.includes('storage')){
+  // APKv3 native sees both actions; opkg has only Download Settings.
+  document.querySelector('.cu-page-tool-links').insertAdjacentHTML('afterbegin',
+    '<a class="cu-page-settings" href="#manager">管理器更新</a>');
+}
 if(location.search.indexOf('ready')>=0){
   document.querySelector('.cu-actions').classList.add('is-ready');
   document.querySelector('.cu-btn-update').disabled = false;
@@ -152,8 +157,14 @@ if(location.search.includes('current')){
  if(tRect.height>60 || tRect.width<85)problems.push('vertical-title');
  if(iRect.top<rowRect.bottom-1)problems.push('header-description-overlap');
  if(heroRect.top<hRect.bottom-1)problems.push('header-overlaps-content');
- const settingsShortcut=document.querySelector('.cu-page-settings');
+ const settingsShortcut=document.querySelector('.cu-page-tool-links a[href="#settings"]');
  if(!settingsShortcut || settingsShortcut.getBoundingClientRect().width<58)problems.push('settings-shortcut');
+ const toolLinks=document.querySelector('.cu-page-tool-links');
+ if(/\b(null|undefined)\b/.test(toolLinks.textContent))problems.push('nullable-tool-link');
+ const managerLinks=toolLinks.querySelectorAll('a[href="#manager"]').length;
+ if(location.search.includes('storage') ? managerLinks!==1 : managerLinks!==0)
+    problems.push('wrong-package-manager-shortcut');
+ if(toolLinks.scrollWidth>toolLinks.clientWidth+2)problems.push('tool-links-overflow');
  const badge=document.querySelector('.cu-section-hint'); if(badge.scrollHeight>30)problems.push('section-hint-wrap');
  document.documentElement.dataset.uiAudit=problems.length?'fail':'pass';
  document.documentElement.dataset.uiProblems=problems.join(',');

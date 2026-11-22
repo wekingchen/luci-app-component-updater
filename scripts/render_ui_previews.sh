@@ -37,6 +37,7 @@ render mobile-390-waiting 390 920 waiting
 render mobile-390-update-ready 390 920 ready
 render mobile-390-up-to-date 390 920 current
 render mobile-390-storage-warning 390 920 storage
+render mobile-320-storage-warning 320 920 storage
 render desktop-1280-storage-warning 1280 920 storage
 render desktop-1280-waiting 1280 920 waiting
 

@@ -453,18 +453,22 @@ return view.extend({
         this.lastSignature = JSON.stringify(data);
         this.page = E('div', {}, this.renderContent(this.currentStatus, this.currentPlan));
         poll.add(this.refresh.bind(this), 5);
+        // Never pass nullable child placeholders to legacy GL.iNet LuCI E().
+        // Some OEM renderers turn a null array entry into visible "null" text.
+        var toolLinks = [];
+        if (this.currentStatus.package_manager === 'apk' &&
+            this.currentStatus.compatibility === 'ax6s-apk-native')
+            toolLinks.push(E('a', {'class':'cu-page-settings',
+                href:L.url('admin/system/component-updater/manager')}, '管理器更新'));
+        toolLinks.push(E('a', {'class':'cu-page-settings',
+            href:L.url('admin/system/component-updater/settings')}, '下载设置'));
         return E('div', {'class': 'cu-app'}, [
             E('link', {rel: 'stylesheet', href: L.resource('component-updater/design.css') + '?v=0.5.6-r3'}),
             E('div', {'class': 'cu-page-head'}, [
                 E('span', {'class': 'cu-overline'}, '组件管理 · 安全更新'),
                 E('div', {'class': 'cu-page-title-row'}, [
                     E('h2', {}, '组件更新'),
-                    E('div', {'class':'cu-page-tool-links'}, [
-                        (data[0] && data[0].package_manager === 'apk' &&
-                         data[0].compatibility === 'ax6s-apk-native') ?
-                            E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/manager')}, '管理器更新') : null,
-                        E('a', {'class':'cu-page-settings', href:L.url('admin/system/component-updater/settings')}, '下载设置')
-                    ])
+                    E('div', {'class':'cu-page-tool-links'}, toolLinks)
                 ]),
                 E('p', {}, '先检查可用更新，再决定安装；需要时可恢复已备份的版本。')
             ]),
