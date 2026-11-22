@@ -1,0 +1,165 @@
+name: 构建 MT3600BE null 显示修复候选 IPK（V0.5.6-4）
+on:
+  workflow_run:
+    workflows: ["Component Updater / CI & native IPK/APK"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mt3600be-null-ui-ipk-r4-one-time
+  cancel-in-progress: false
+
+jobs:
+  build-verified-ipk-candidate:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_SHA: a4c24204bdb84dfa8b4704e5eb51300e0421af34
+      SOURCE_CI_RUN: '44986972380'
+      TAG: luci-app-component-updater-v0.5.6-4-mt3600be-null-fix-rc1
+      IPK: luci-app-component-updater_0.5.6-4_all.ipk
+    steps:
+      - name: 检查已通过的主分支构建及候选标签不可变性
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            existing="$(gh api "repos/$GH_REPO/releases/tags/$TAG")"
+            printf '%s' "$existing" | jq -e --arg pkg "$IPK" '
+              .draft == false and .prerelease == true and
+              ([.assets[].name] | sort) == ([$pkg, "SHA256SUMS.txt"] | sort) and
+              (all(.assets[]; .state == "uploaded" and (.digest | startswith("sha256:"))))
+            ' >/dev/null || {
+              echo "::error::同名候选 Release 的资产异常；不会覆盖或重新发布。"
+              exit 1
+            }
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::候选版本已有完整资产，跳过重复构建与发布。"
+            exit 0
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::已有同名 Tag 但不是已确认的候选 Release，拒绝改写。"
+            exit 1
+          fi
+          source_run="$(gh api "repos/$GH_REPO/actions/runs/$SOURCE_CI_RUN")"
+          printf '%s' "$source_run" | jq -e --arg sha "$SOURCE_SHA" '
+            .head_sha == $sha and .head_branch == "main" and
+            .event == "push" and .status == "completed" and
+            .conclusion == "success" and
+            .name == "Component Updater / CI & native IPK/APK"
+          ' >/dev/null
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: 检出已经通过 CI 的 null 修复源码
+        if: ${{ steps.gate.outputs.skip != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: 原版前端回归、版本化构建和 IPK 载荷自检
+        if: ${{ steps.gate.outputs.skip != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/luci_ui_smoke.js
+          python3 - <<'PY'
+          import io
+          import hashlib
+          import sys
+          import tarfile
+          from pathlib import Path
+
+          sys.path.insert(0, "tools")
+          import package_ipk
+          from package_component_ipk import open_ipk
+
+          source = Path("luci-app-component-updater/htdocs/luci-static/resources/view/component-updater/overview.js")
+          original = source.read_text(encoding="utf-8")
+          old = "var managerBuild = status.package_manager === 'apk' ? 'v0.5.6-r3' : 'v0.5.6-3';"
+          new = "var managerBuild = status.package_manager === 'apk' ? 'v0.5.6-r3' : 'v0.5.6-4';"
+          assert original.count(old) == 1, "the pinned manager version marker changed"
+          assert original.count("var toolLinks = [];") == 1, "missing null-child fix"
+          assert "E('div', {'class':'cu-page-tool-links'}, toolLinks)" in original
+          source.write_text(original.replace(old, new), encoding="utf-8")
+
+          # One-off testing revision only: do not change Makefile, APK or V0.5.6 Stable.
+          package_ipk.VERSION = "0.5.6-4"
+          sys.argv = ["package_ipk.py", "--out", "dist"]
+          package_ipk.main()
+
+          output = Path("dist/luci-app-component-updater_0.5.6-4_all.ipk")
+          assert output.is_file()
+          ipk = open_ipk(output.read_bytes())
+          with tarfile.open(fileobj=io.BytesIO(ipk["control.tar.gz"]), mode="r:gz") as control:
+              text = control.extractfile("./control").read().decode()
+          assert "Package: luci-app-component-updater\n" in text
+          assert "Version: 0.5.6-4\n" in text
+          assert "Architecture: all\n" in text
+          assert "Depends: luci-base, rpcd, jsonfilter, libubox, opkg\n" in text
+          with tarfile.open(fileobj=io.BytesIO(ipk["data.tar.gz"]), mode="r:gz") as data:
+              names = set(data.getnames())
+              path = "./www/luci-static/resources/view/component-updater/overview.js"
+              assert path in names
+              body = data.extractfile(path).read().decode()
+              assert new in body
+              assert "var toolLinks = [];" in body
+              assert "E('div', {'class':'cu-page-tool-links'}, toolLinks)" in body
+              assert "}, '管理器更新') : null" not in body
+              assert "./etc/config/component-updater" in names
+              assert "./usr/libexec/rpcd/component-updater" in names
+              assert "./www/luci-static/resources/view/component-updater/settings.js" in names
+          assert output.stat().st_size > 10000
+          print("候选 IPK 格式、版本、依赖、文件归属及 null 修复均已核对：", output)
+          print("SHA256:", hashlib.sha256(output.read_bytes()).hexdigest())
+          PY
+          (cd dist && sha256sum "$IPK" > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+
+      - name: 上传可追溯构建工件
+        if: ${{ steps.gate.outputs.skip != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mt3600be-null-ui-fix-0.5.6-4-ipk
+          path: |
+            dist/luci-app-component-updater_0.5.6-4_all.ipk
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: 一次性发布中文 IPK 测试候选（不覆盖正式版）
+        if: ${{ steps.gate.outputs.skip != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" "dist/$IPK" dist/SHA256SUMS.txt \
+            --target "$SOURCE_SHA" --prerelease --latest=false \
+            --title "MT3600BE · 标题栏 null 修复测试包 V0.5.6-4（IPK）" \
+            --notes-file /dev/stdin <<'NOTES'
+          ## MT3600BE 专用 UI 修复候选（不是新的 Stable）
+
+          该 IPK 仅供 GL-MT3600BE / opkg 固件测试页面标题栏出现字面 `null` 的问题。
+
+          - **版本**：`luci-app-component-updater 0.5.6-4`，可从已安装 `0.5.6-3` 正常升级。
+          - **修复**：非 APK 设备标题栏只生成「下载设置」链接，取消会被旧 LuCI 渲染成 `null` 的空占位；保留 AX6S 专用管理器入口条件。
+          - **其它功能**：沿用正式版管理器源码、NaiveProxy 更新/恢复及已保存设置；IPK 的 postinst 会刷新 LuCI 缓存并短暂重启 rpcd/uhttpd，不主动重启 PassWall。
+          - **验证**：源码已通过主分支完整 CI；此候选再次执行前端回归、包结构、依赖及修复代码载荷自检。**尚未在 MT3600BE 真机升级确认**。
+          - **安装**：下载本页 IPK 与 `SHA256SUMS.txt`，校验后用 `opkg install /tmp/luci-app-component-updater_0.5.6-4_all.ipk` 安装；随后强制刷新 LuCI 页面，核对标题和配置。
+          - **限制**：此 Release 只有 IPK 测试候选，**不是 AX6S APK 管理器的新版本**；请勿将其用于 APK 固件，也不改变原 V0.5.6 Stable 的任何资产。
+          
+          来源：已通过 CI 的主分支提交 `a4c24204bdb84dfa8b4704e5eb51300e0421af34`，只在候选构建时将 IPK 修订号和页面页脚 IPK 版本改为 `0.5.6-4`。
+          NOTES
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          gh release view "$TAG" --json tagName,isPrerelease,isDraft,assets --jq '
+            .tagName == "luci-app-component-updater-v0.5.6-4-mt3600be-null-fix-rc1" and
+            .isPrerelease == true and .isDraft == false and
+            ([.assets[].name] | sort) == (["luci-app-component-updater_0.5.6-4_all.ipk", "SHA256SUMS.txt"] | sort)
+          ' | grep -qx true
+          echo "::notice::MT3600BE 的 IPK 测试候选已公开，不修改 Stable。"
