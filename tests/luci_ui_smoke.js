@@ -16,6 +16,18 @@ function flatten(node) {
   if (node && typeof node === 'object' && node.tag) return [node, ...flatten(node.children)];
   return [];
 }
+function assertNoNullChildren(node, location = 'root') {
+  // Unlike the production LuCI E(), the mock retains null slots on purpose.
+  if (Array.isArray(node)) {
+    node.forEach((child, index) => {
+      assert.notStrictEqual(child, null, location + '[' + index + '] would display null');
+      assert.notStrictEqual(child, undefined, location + '[' + index + '] is undefined');
+      assertNoNullChildren(child, location + '[' + index + ']');
+    });
+  } else if (node && node.tag) {
+    assertNoNullChildren(node.children, location + '/' + node.tag);
+  }
+}
 function visibleText(node) {
   if (node == null) return '';
   if (Array.isArray(node)) return node.map(visibleText).join(' ');
@@ -91,6 +103,30 @@ async function main() {
     n.children === '下载设置');
   assert(settingsShortcut, 'Settings must be discoverable above the fold');
   assert(settingsShortcut.attributes.href.endsWith('/admin/system/component-updater/settings'));
+  // MT3600BE/opkg and older backends that omit package_manager: no ghost
+  // manager link, no null child, and the Download Settings link remains.
+  for (const opkgStatus of [status, {...status,package_manager:'opkg'}]) {
+    const page = dashboard.render([opkgStatus,plan]);
+    assertNoNullChildren(page);
+    const links = flatten(page).filter(n => n.tag === 'a' &&
+      /admin\/system\/component-updater\/(?:manager|settings)$/.test(n.attributes.href || ''));
+    assert.strictEqual(links.length,1,'opkg must show only the settings shortcut');
+    assert.strictEqual(links[0].children,'下载设置');
+  }
+  const nativeApkPage = dashboard.render([{...status,package_manager:'apk',
+    compatibility:'ax6s-apk-native'},plan]);
+  assertNoNullChildren(nativeApkPage);
+  const apkLinks = flatten(nativeApkPage).filter(n => n.tag === 'a' &&
+    /admin\/system\/component-updater\/(?:manager|settings)$/.test(n.attributes.href || ''));
+  assert.deepStrictEqual(Array.from(apkLinks.map(n=>n.children)),['管理器更新','下载设置']);
+  for (const compat of ['ax6s-apk-readonly','unknown']) {
+    const page = dashboard.render([{...status,package_manager:'apk',compatibility:compat},plan]);
+    assertNoNullChildren(page);
+    const links = flatten(page).filter(n => n.tag === 'a' &&
+      /admin\/system\/component-updater\/(?:manager|settings)$/.test(n.attributes.href || ''));
+    assert.strictEqual(links.length,1,'unverified APK must not expose manager updater');
+    assert.strictEqual(links[0].children,'下载设置');
+  }
   const menu = JSON.parse(fs.readFileSync('luci-app-component-updater/root/usr/share/luci/menu.d/luci-app-component-updater.json','utf8'));
   const settingsRoute = menu['admin/system/component-updater/settings'];
   assert(settingsRoute && settingsRoute.action.type === 'view');
@@ -321,12 +357,19 @@ async function main() {
   const readyManager = {status:'ok',busy:'false',recovery_available:'false',
     recovery_required:'false',current_archive:'false',installed_version:'0.5.6-r3'};
   const managerNodes = managerPage.render(readyManager);
+  assertNoNullChildren(managerNodes);
   assert(visibleText(managerNodes).includes('管理器更新'));
   assert(visibleText(managerNodes).includes('上传新版 APK'));
   assert(visibleText(managerNodes).includes('上传当前版恢复 APK'));
   assert.strictEqual(disabledInRealDom(button(managerNodes,'确认后安装')),true);
   assert.strictEqual(disabledInRealDom(button(managerNodes,'恢复上一版')),true);
   assert.strictEqual(disabledInRealDom(button(managerNodes,'上传新版 APK')),false);
+  assertNoNullChildren(managerPage.renderBody());
+  managerPage.currentStatus={...readyManager,busy:'true',job_state:'completed'};
+  managerPage.notice='诊断提示';
+  assertNoNullChildren(managerPage.renderBody());
+  assert(visibleText(managerPage.renderBody()).includes('诊断提示'));
+  managerPage.notice=null;
   managerPage.planReady=true;
   managerPage.currentStatus={...readyManager,recovery_available:'true'};
   const activeManager = managerPage.renderBody();
